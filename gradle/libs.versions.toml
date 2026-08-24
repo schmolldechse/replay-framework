@@ -13,6 +13,8 @@ aws-sdk = "2.54.2"
 zstd-jni = "1.5.7-15"
 sshj = "0.40.0"
 hikari = "7.0.2"
+junit = "5.11.4"
+junit-platform = "1.11.4"
 
 [libraries]
 paper-api = { module = "io.papermc.paper:paper-api", version.ref = "paper" }
@@ -25,6 +27,8 @@ hikari = { module = "com.zaxxer:HikariCP", version.ref = "hikari" }
 aws-s3 = { module = "software.amazon.awssdk:s3", version.ref = "aws-sdk" }
 sshj = { module = "com.hierynomus:sshj", version.ref = "sshj" }
 zstd-jni = { module = "com.github.luben:zstd-jni", version.ref = "zstd-jni" }
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
+junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version.ref = "junit-platform" }
 
 [plugins]
 paperweight-userdev = { id = "io.papermc.paperweight.userdev", version.ref = "paperweight" }
