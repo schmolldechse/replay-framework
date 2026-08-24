@@ -9,8 +9,10 @@ import java.util.UUID;
 /**
  * Immutable request used to start one recording session.
  *
- * <p>An empty primary-player set has the domain meaning that all players
- * captured by the resolved scope are primary participants.</p>
+ * <p>An empty participant set has the domain meaning that all players
+ * captured by the resolved scope are selected participants. A non-empty set
+ * selects the listed UUIDs while packet capture for the resolved scope may
+ * still contain other players and entities.</p>
  */
 public final class RecordingRequest {
     private final String title;
@@ -18,7 +20,7 @@ public final class RecordingRequest {
     private final RecordingScope scope;
     private final CapturePolicy capturePolicy;
     private final ReplayBudget budget;
-    private final Set<UUID> primaryPlayers;
+    private final Set<UUID> participants;
 
     private RecordingRequest(Builder builder) {
         this.title = builder.title;
@@ -26,7 +28,7 @@ public final class RecordingRequest {
         this.scope = builder.scope;
         this.capturePolicy = builder.capturePolicy;
         this.budget = builder.budget;
-        this.primaryPlayers = Set.copyOf(builder.primaryPlayers);
+        this.participants = Set.copyOf(builder.participants);
     }
 
     /**
@@ -84,12 +86,12 @@ public final class RecordingRequest {
     }
 
     /**
-     * Returns primary participant UUIDs.
+     * Returns the UUIDs selected as participants for this recording.
      *
-     * @return immutable UUID set; empty means all captured players are primary
+     * @return immutable UUID set; empty means all captured players are selected
      */
-    public Set<UUID> primaryPlayers() {
-        return primaryPlayers;
+    public Set<UUID> participants() {
+        return participants;
     }
 
     /** Builder for an immutable {@link RecordingRequest}. */
@@ -99,7 +101,7 @@ public final class RecordingRequest {
         private RecordingScope scope;
         private CapturePolicy capturePolicy;
         private ReplayBudget budget;
-        private Set<UUID> primaryPlayers = new LinkedHashSet<>();
+        private Set<UUID> participants = new LinkedHashSet<>();
 
         private Builder() {
         }
@@ -160,18 +162,18 @@ public final class RecordingRequest {
         }
 
         /**
-         * Replaces the primary participant set with a defensive copy.
+         * Replaces the selected participant set with a defensive copy.
          *
-         * @param primaryPlayers player UUIDs; an empty collection is valid
+         * @param participants player UUIDs; an empty collection selects all captured players
          * @return this builder
          */
-        public Builder primaryPlayers(Collection<UUID> primaryPlayers) {
-            Objects.requireNonNull(primaryPlayers, "primaryPlayers");
+        public Builder participants(Collection<UUID> participants) {
+            Objects.requireNonNull(participants, "participants");
             Set<UUID> copy = new LinkedHashSet<>();
-            for (UUID player : primaryPlayers) {
-                copy.add(Objects.requireNonNull(player, "primaryPlayers entry"));
+            for (UUID player : participants) {
+                copy.add(Objects.requireNonNull(player, "participants entry"));
             }
-            this.primaryPlayers = copy;
+            this.participants = copy;
             return this;
         }
 

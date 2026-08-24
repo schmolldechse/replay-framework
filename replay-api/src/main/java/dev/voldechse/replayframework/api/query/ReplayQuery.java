@@ -3,13 +3,11 @@ package dev.voldechse.replayframework.api.query;
 import dev.voldechse.replayframework.api.metadata.QueryCapabilities;
 import dev.voldechse.replayframework.api.metadata.ReplayMetadataKey;
 import dev.voldechse.replayframework.api.recording.RecordingStatus;
-import dev.voldechse.replayframework.api.replay.ReplayParticipantRole;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.UUID;
 
 /**
  * Immutable PostgreSQL-independent replay query AST.
@@ -21,7 +19,6 @@ public final class ReplayQuery {
     private final String adapterId;
     private final Instant createdFromInclusive;
     private final Instant createdToExclusive;
-    private final ParticipantFilter participant;
     private final String titleEquals;
     private final List<MetadataCriterion> metadataCriteria;
     private final List<SortSpec> sort;
@@ -33,7 +30,6 @@ public final class ReplayQuery {
         this.adapterId = builder.adapterId;
         this.createdFromInclusive = builder.createdFromInclusive;
         this.createdToExclusive = builder.createdToExclusive;
-        this.participant = builder.participant;
         this.titleEquals = builder.titleEquals;
         this.metadataCriteria = List.copyOf(builder.metadataCriteria);
         this.sort = List.copyOf(builder.sort);
@@ -87,15 +83,6 @@ public final class ReplayQuery {
     }
 
     /**
-     * Returns the optional participant filter.
-     *
-     * @return optional participant filter
-     */
-    public Optional<ParticipantFilter> participant() {
-        return Optional.ofNullable(participant);
-    }
-
-    /**
      * Returns the optional exact title filter.
      *
      * @return optional title
@@ -146,7 +133,6 @@ public final class ReplayQuery {
         private String adapterId;
         private Instant createdFromInclusive;
         private Instant createdToExclusive;
-        private ParticipantFilter participant;
         private String titleEquals;
         private final List<MetadataCriterion> metadataCriteria = new ArrayList<>();
         private final List<SortSpec> sort = new ArrayList<>();
@@ -195,34 +181,6 @@ public final class ReplayQuery {
             if (!fromInclusive.isBefore(toExclusive)) {
                 throw new IllegalArgumentException("fromInclusive must be before toExclusive");
             }
-            return this;
-        }
-
-        /**
-         * Sets a participant filter without restricting its role.
-         *
-         * @param playerId participant UUID
-         * @return this builder
-         */
-        public Builder participant(UUID playerId) {
-            return participant(playerId, Optional.empty());
-        }
-
-        /**
-         * Sets a participant filter with a role restriction.
-         *
-         * @param playerId participant UUID
-         * @param role participant role
-         * @return this builder
-         */
-        public Builder participant(UUID playerId, ReplayParticipantRole role) {
-            return participant(playerId, Optional.of(Objects.requireNonNull(role, "role")));
-        }
-
-        private Builder participant(UUID playerId, Optional<ReplayParticipantRole> role) {
-            this.participant = new ParticipantFilter(
-                    Objects.requireNonNull(playerId, "playerId"),
-                    Objects.requireNonNull(role, "role"));
             return this;
         }
 
@@ -327,20 +285,6 @@ public final class ReplayQuery {
          */
         public ReplayQuery build() {
             return new ReplayQuery(this);
-        }
-    }
-
-    /**
-     * Participant and optional role filter.
-     *
-     * @param playerId participant UUID
-     * @param role optional participant role
-     */
-    public record ParticipantFilter(UUID playerId, Optional<ReplayParticipantRole> role) {
-        /** Validates participant filter values. */
-        public ParticipantFilter {
-            Objects.requireNonNull(playerId, "playerId");
-            Objects.requireNonNull(role, "role");
         }
     }
 
