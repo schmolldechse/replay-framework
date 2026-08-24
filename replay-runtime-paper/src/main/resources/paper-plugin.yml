@@ -1,0 +1,4 @@
+name: ReplayFramework
+version: '${frameworkVersion}'
+main: dev.voldechse.replayframework.runtime.ReplayPaperPlugin
+api-version: '26.2'
