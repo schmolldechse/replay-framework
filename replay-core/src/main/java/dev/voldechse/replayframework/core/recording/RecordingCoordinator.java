@@ -47,6 +47,7 @@ final class RecordingCoordinator {
     private final ScopeResolver scopeResolver;
     private final RecordingTarget recordingTarget;
     private final FinalizationHandler finalizationHandler;
+    private final RecordingLeaseManager leaseManager;
     private final Executor initializationExecutor;
     private final Map<RecordingSessionId, DefaultRecordingSession> sessions =
             new ConcurrentHashMap<>();
@@ -61,6 +62,7 @@ final class RecordingCoordinator {
             ScopeResolver scopeResolver,
             RecordingTarget recordingTarget,
             FinalizationHandler finalizationHandler,
+            RecordingLeaseManager leaseManager,
             Executor initializationExecutor) {
         this.adapter = Objects.requireNonNull(adapter, "adapter");
         this.captureRouter = Objects.requireNonNull(captureRouter, "captureRouter");
@@ -68,6 +70,27 @@ final class RecordingCoordinator {
         this.scopeResolver = Objects.requireNonNull(scopeResolver, "scopeResolver");
         this.recordingTarget = Objects.requireNonNull(recordingTarget, "recordingTarget");
         this.finalizationHandler = Objects.requireNonNull(finalizationHandler, "finalizationHandler");
+        this.leaseManager = Objects.requireNonNull(leaseManager, "leaseManager");
+        this.initializationExecutor = Objects.requireNonNull(
+                initializationExecutor, "initializationExecutor");
+    }
+
+    /** Compatibility constructor for isolated pre-lease test compositions. */
+    RecordingCoordinator(
+            ReplayAdapter adapter,
+            CaptureRouter captureRouter,
+            ReplayRepository replayRepository,
+            ScopeResolver scopeResolver,
+            RecordingTarget recordingTarget,
+            FinalizationHandler finalizationHandler,
+            Executor initializationExecutor) {
+        this.adapter = Objects.requireNonNull(adapter, "adapter");
+        this.captureRouter = Objects.requireNonNull(captureRouter, "captureRouter");
+        this.replayRepository = Objects.requireNonNull(replayRepository, "replayRepository");
+        this.scopeResolver = Objects.requireNonNull(scopeResolver, "scopeResolver");
+        this.recordingTarget = Objects.requireNonNull(recordingTarget, "recordingTarget");
+        this.finalizationHandler = Objects.requireNonNull(finalizationHandler, "finalizationHandler");
+        this.leaseManager = null;
         this.initializationExecutor = Objects.requireNonNull(
                 initializationExecutor, "initializationExecutor");
     }
@@ -192,6 +215,36 @@ final class RecordingCoordinator {
     }
 
     private void initializeAfterCreate(
+            RecordingRequest request,
+            RecordingSessionId sessionId,
+            ReplayId replayId,
+            CompletableFuture<DefaultRecordingSession> result) {
+        if (leaseManager != null) {
+            final CompletionStage<dev.voldechse.replayframework.core.port.LeaseRepository.LeaseRow>
+                    leaseStage;
+            try {
+                leaseStage = Objects.requireNonNull(
+                        leaseManager.acquire(replayId, this::onLeaseLost),
+                        "lease manager acquire result");
+            } catch (Throwable failure) {
+                failInitialization(replayId, result, ReplayFailureCode.DATABASE_ERROR,
+                        "recording lease", failure);
+                return;
+            }
+            leaseStage.whenCompleteAsync((ignored, leaseFailure) -> {
+                if (leaseFailure != null) {
+                    failInitialization(replayId, result, ReplayFailureCode.DATABASE_ERROR,
+                            "recording lease", unwrap(leaseFailure));
+                    return;
+                }
+                initializeAfterLease(request, sessionId, replayId, result);
+            }, initializationExecutor);
+            return;
+        }
+        initializeAfterLease(request, sessionId, replayId, result);
+    }
+
+    private void initializeAfterLease(
             RecordingRequest request,
             RecordingSessionId sessionId,
             ReplayId replayId,
@@ -417,6 +470,7 @@ final class RecordingCoordinator {
             return;
         }
         sessions.remove(session.id(), session);
+        releaseLeaseQuietly(session.replayId());
         session.completeFinalization(null, cause);
         try {
             initializationExecutor.execute(() -> persistFailureTransition(
@@ -437,6 +491,7 @@ final class RecordingCoordinator {
             return;
         }
         sessions.remove(session.id(), session);
+        releaseLeaseQuietly(session.replayId());
         try {
             initializationExecutor.execute(() -> persistFailureTransition(
                     session.replayId(), expectedStatus, code, description));
@@ -453,15 +508,35 @@ final class RecordingCoordinator {
             ReplayFailureCode code,
             String description) {
         try {
-            replayRepository.transition(new ReplayRepository.ReplayTransition(
-                    replayId,
-                    expectedStatus,
-                    RecordingStatus.FAILED,
-                    Optional.empty(),
-                    Optional.empty(),
-                    Optional.empty(),
-                    Optional.of(new ReplayRepository.FailureDetails(code, description, Instant.now())),
-                    Optional.empty()));
+            CompletionStage<Optional<ReplayRepository.ReplayRow>> currentStage =
+                    Objects.requireNonNull(replayRepository.find(replayId), "replay repository find result");
+            currentStage.whenComplete((current, findFailure) -> {
+                if (findFailure != null || current == null || current.isEmpty()) {
+                    return;
+                }
+                RecordingStatus currentStatus = current.orElseThrow().status();
+                if (currentStatus != RecordingStatus.INITIALIZING
+                        && currentStatus != RecordingStatus.RECORDING
+                        && currentStatus != RecordingStatus.FINALIZING) {
+                    return;
+                }
+                try {
+                    replayRepository.transition(new ReplayRepository.ReplayTransition(
+                            replayId,
+                            currentStatus,
+                            RecordingStatus.FAILED,
+                            Optional.empty(),
+                            Optional.empty(),
+                            Optional.empty(),
+                            Optional.of(new ReplayRepository.FailureDetails(
+                                    code, description, Instant.now())),
+                            Optional.empty()));
+                } catch (ReplayRepository.StatusTransitionConflictException ignored) {
+                    // A concurrent terminal path has already resolved the row.
+                } catch (Throwable ignored) {
+                    // The local session remains failed when diagnostic persistence rejects the update.
+                }
+            });
         } catch (Throwable ignored) {
             // The live session remains FAILED even if asynchronous persistence
             // cannot be started or the database port rejects this transition.
@@ -494,6 +569,7 @@ final class RecordingCoordinator {
             String stage,
             Throwable cause,
             String description) {
+        releaseLeaseQuietly(replayId);
         try {
             replayRepository.transition(new ReplayRepository.ReplayTransition(
                     replayId,
@@ -515,6 +591,7 @@ final class RecordingCoordinator {
             ReplayFailureCode code,
             String stage,
             Throwable cause) {
+        releaseLeaseQuietly(replayId);
         try {
             replayRepository.transition(new ReplayRepository.ReplayTransition(
                     replayId,
@@ -528,6 +605,33 @@ final class RecordingCoordinator {
                     Optional.empty()));
         } catch (Throwable ignored) {
             // Local failure state remains authoritative for the live session.
+        }
+    }
+
+    private void onLeaseLost(ReplayId replayId, Throwable cause) {
+        for (DefaultRecordingSession session : sessions.values()) {
+            if (replayId.equals(session.replayId())) {
+                failSession(
+                        session,
+                        session.status(),
+                        ReplayFailureCode.DATABASE_ERROR,
+                        "recording lease lost",
+                        cause);
+                return;
+            }
+        }
+    }
+
+    private void releaseLeaseQuietly(ReplayId replayId) {
+        if (leaseManager == null) {
+            return;
+        }
+        try {
+            leaseManager.release(replayId).whenComplete((ignored, failure) -> {
+                // Failure persistence is handled by the owning terminal path.
+            });
+        } catch (Throwable ignored) {
+            // Lease release is best effort after a recording failure.
         }
     }
 
