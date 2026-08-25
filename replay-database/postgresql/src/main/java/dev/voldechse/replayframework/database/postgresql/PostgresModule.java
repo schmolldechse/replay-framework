@@ -60,6 +60,9 @@ public final class PostgresModule extends AbstractModule {
     HikariDataSource provideDataSource(Configuration settings) {
         HikariConfig hikari = new HikariConfig();
         hikari.setJdbcUrl(settings.jdbcUrl());
+        // Paper plugin classloaders are isolated from DriverManager's
+        // application loader; resolve the bundled JDBC driver explicitly.
+        hikari.setDriverClassName("org.postgresql.Driver");
         hikari.setUsername(settings.username());
         hikari.setPassword(settings.password());
         hikari.setPoolName("replay-postgres");

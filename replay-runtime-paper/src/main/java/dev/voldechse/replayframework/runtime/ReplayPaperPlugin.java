@@ -4,12 +4,16 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
+import com.google.inject.Key;
+import com.google.inject.name.Names;
 import dev.voldechse.replayframework.adapter.ReplayAdapter;
 import dev.voldechse.replayframework.adapter.paper.v26_2.Paper26PacketRegistry;
 import dev.voldechse.replayframework.adapter.paper.v26_2.Paper26ReplayAdapter;
 import dev.voldechse.replayframework.adapter.paper.v26_2.capture.Paper26CaptureBridge;
 import dev.voldechse.replayframework.adapter.paper.v26_2.capture.PaperConnectionAccessor;
 import dev.voldechse.replayframework.adapter.paper.v26_2.checkpoint.Paper26CheckpointEncoder;
+import dev.voldechse.replayframework.adapter.paper.v26_2.checkpoint.Paper26NativePacketCodec;
+import dev.voldechse.replayframework.adapter.paper.v26_2.checkpoint.Paper26SnapshotProvider;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26PlaybackBridge;
 import dev.voldechse.replayframework.api.ReplayFramework;
 import dev.voldechse.replayframework.api.ReplayFrameworkProvider;
@@ -31,11 +35,14 @@ import dev.voldechse.replayframework.storage.ReplayStorage;
 import dev.voldechse.replayframework.storage.s3.S3ReplayStorage;
 import dev.voldechse.replayframework.storage.sftp.SftpReplayStorage;
 import java.util.Objects;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -48,13 +55,28 @@ public final class ReplayPaperPlugin extends JavaPlugin {
     private final AtomicBoolean serviceRegistered = new AtomicBoolean();
     private ExecutorService bootstrapExecutor;
     private CompletableFuture<RuntimeState> bootstrapFuture;
+    private volatile PaperCheckpointResources checkpointResources;
     private volatile RuntimeState runtimeState;
 
     @Override
     public void onEnable() {
+        final Paper26ReplayAdapter adapter;
+        try {
+            // Paper-bound protocol and world ports are created before the
+            // bootstrap worker starts so no NMS factory runs off-thread.
+            adapter = createPaperAdapter();
+        } catch (Throwable failure) {
+            closeCheckpointResources();
+            getLogger().severe("Replay Framework adapter bootstrap failed: "
+                    + failure.getClass().getSimpleName());
+            disableAfterBootstrapFailure();
+            return;
+        }
         bootstrapExecutor = Executors.newSingleThreadExecutor(
                 Thread.ofPlatform().name("replay-bootstrap-", 0).factory());
-        bootstrapFuture = CompletableFuture.supplyAsync(this::createRuntimeState, bootstrapExecutor);
+        bootstrapFuture = CompletableFuture.supplyAsync(
+                () -> createRuntimeState(adapter),
+                bootstrapExecutor);
         bootstrapFuture.whenComplete((state, failure) -> getServer().getScheduler().runTask(
                 this,
                 () -> completeBootstrap(state, failure)));
@@ -69,7 +91,10 @@ public final class ReplayPaperPlugin extends JavaPlugin {
         RuntimeState current = runtimeState;
         if (current != null) {
             runtimeState = null;
-            closeAsync(current);
+            // Paper may close the plugin classloader immediately after this
+            // callback returns, so the owned graph must be resolved and
+            // closed while the loader is still available.
+            current.close(getLogger()::warning);
         }
 
         CompletableFuture<RuntimeState> pending = bootstrapFuture;
@@ -77,9 +102,13 @@ public final class ReplayPaperPlugin extends JavaPlugin {
             pending.whenComplete((state, failure) -> {
                 if (state != null) {
                     closeAsync(state);
+                } else {
+                    closeCheckpointResources();
                 }
             });
             pending.cancel(true);
+        } else if (current == null) {
+            closeCheckpointResources();
         }
 
         ExecutorService executor = bootstrapExecutor;
@@ -88,11 +117,10 @@ public final class ReplayPaperPlugin extends JavaPlugin {
         }
     }
 
-    private RuntimeState createRuntimeState() {
+    private RuntimeState createRuntimeState(ReplayAdapter adapter) {
         Gson gson = new GsonBuilder().create();
         ReplayRuntimeConfiguration configuration = new ReplayConfigurationLoader(gson)
                 .load(getDataFolder().toPath());
-        ReplayAdapter adapter = createPaperAdapter();
         ReplayRuntimeModule module = new ReplayRuntimeModule(
                 configuration,
                 adapter,
@@ -100,48 +128,69 @@ public final class ReplayPaperPlugin extends JavaPlugin {
                 message -> getLogger().warning(message));
         try {
             Injector injector = Guice.createInjector(module);
-            return RuntimeState.from(injector, module);
+            return RuntimeState.from(injector, module, this::closeCheckpointResources);
         } catch (Throwable failure) {
             module.close();
             throw failure;
         }
     }
 
-    private ReplayAdapter createPaperAdapter() {
+    private Paper26ReplayAdapter createPaperAdapter() {
         PaperConnectionAccessor accessor = new PaperConnectionAccessor(this);
         Paper26PacketRegistry registry = Paper26PacketRegistry.discover();
         Paper26CaptureBridge captureBridge = new Paper26CaptureBridge(accessor, registry);
-        // A missing world snapshot must fail the checkpoint operation rather
-        // than silently turning a partial state into a playable replay.
-        Paper26CheckpointEncoder checkpointEncoder = new Paper26CheckpointEncoder(
-                registry,
-                request -> CompletableFuture.failedFuture(new IllegalStateException(
-                        "Paper 26.2 checkpoint snapshot provider is unavailable")),
-                blueprint -> {
-                    throw new IllegalStateException(
-                            "Paper 26.2 native checkpoint codec is unavailable");
-                },
-                Runnable::run);
-        AtomicReference<Paper26ReplayAdapter> adapterReference = new AtomicReference<>();
-        Paper26ReplayAdapter adapter = new Paper26ReplayAdapter(
-                captureBridge,
-                checkpointEncoder,
-                player -> {
-                    Paper26ReplayAdapter current = adapterReference.get();
-                    if (current == null) {
-                        throw new IllegalStateException("Paper adapter is not initialized");
-                    }
-                    return new Paper26PlaybackBridge(
-                            accessor,
-                            player,
-                            current.descriptor(),
-                            current.packetRegistry(),
-                            failure -> getLogger().warning(
-                                    "Paper playback bridge failed: "
-                                            + failure.getClass().getSimpleName()));
-                });
-        adapterReference.set(adapter);
-        return adapter;
+        Paper26SnapshotProvider snapshotProvider = new Paper26SnapshotProvider(this);
+        Paper26NativePacketCodec nativePacketCodec = null;
+        ExecutorService checkpointExecutor = null;
+        try {
+            nativePacketCodec = Paper26NativePacketCodec.create(registry);
+            checkpointExecutor = new ThreadPoolExecutor(
+                    1,
+                    1,
+                    0L,
+                    TimeUnit.MILLISECONDS,
+                    new ArrayBlockingQueue<>(128),
+                    Thread.ofPlatform().name("replay-checkpoint-", 0).factory(),
+                    new ThreadPoolExecutor.AbortPolicy());
+            Paper26CheckpointEncoder checkpointEncoder = new Paper26CheckpointEncoder(
+                    registry,
+                    snapshotProvider,
+                    nativePacketCodec,
+                    checkpointExecutor);
+            AtomicReference<Paper26ReplayAdapter> adapterReference = new AtomicReference<>();
+            Paper26ReplayAdapter adapter = new Paper26ReplayAdapter(
+                    captureBridge,
+                    checkpointEncoder,
+                    player -> {
+                        Paper26ReplayAdapter current = adapterReference.get();
+                        if (current == null) {
+                            throw new IllegalStateException("Paper adapter is not initialized");
+                        }
+                        return new Paper26PlaybackBridge(
+                                accessor,
+                                player,
+                                current.descriptor(),
+                                current.packetRegistry(),
+                                failure -> getLogger().warning(
+                                        "Paper playback bridge failed: "
+                                                + failure.getClass().getSimpleName()));
+                    });
+            adapterReference.set(adapter);
+            checkpointResources = new PaperCheckpointResources(
+                    snapshotProvider,
+                    nativePacketCodec,
+                    checkpointExecutor);
+            return adapter;
+        } catch (Throwable failure) {
+            snapshotProvider.close();
+            if (nativePacketCodec != null) {
+                nativePacketCodec.close();
+            }
+            if (checkpointExecutor != null) {
+                checkpointExecutor.shutdownNow();
+            }
+            throw failure;
+        }
     }
 
     private void completeBootstrap(RuntimeState state, Throwable failure) {
@@ -153,8 +202,9 @@ public final class ReplayPaperPlugin extends JavaPlugin {
         }
         if (failure != null) {
             Throwable cause = unwrap(failure);
+            closeCheckpointResources();
             getLogger().severe("Replay Framework bootstrap failed: "
-                    + cause.getClass().getSimpleName());
+                    + safeFailureSummary(cause));
             disableAfterBootstrapFailure();
             return;
         }
@@ -184,7 +234,7 @@ public final class ReplayPaperPlugin extends JavaPlugin {
             ReplayFrameworkProvider.clear();
             state.close(getLogger()::warning);
             getLogger().severe("Replay Framework publication failed: "
-                    + bootstrapFailure.getClass().getSimpleName());
+                    + safeFailureSummary(bootstrapFailure));
             disableAfterBootstrapFailure();
         }
     }
@@ -211,7 +261,19 @@ public final class ReplayPaperPlugin extends JavaPlugin {
             state.close(getLogger()::warning);
             return;
         }
-        executor.execute(() -> state.close(getLogger()::warning));
+        try {
+            executor.execute(() -> state.close(getLogger()::warning));
+        } catch (RuntimeException rejected) {
+            state.close(getLogger()::warning);
+        }
+    }
+
+    private void closeCheckpointResources() {
+        PaperCheckpointResources resources = checkpointResources;
+        if (resources != null) {
+            resources.close();
+            checkpointResources = null;
+        }
     }
 
     private static Throwable unwrap(Throwable failure) {
@@ -222,19 +284,44 @@ public final class ReplayPaperPlugin extends JavaPlugin {
         return failure;
     }
 
+    private static String safeFailureSummary(Throwable failure) {
+        String message = failure.getMessage();
+        if (message == null || message.isBlank()) {
+            return failure.getClass().getSimpleName();
+        }
+        String sanitized = message
+                .replaceAll("(?i)(password|token|secret)(\\s*[=:]\\s*)[^,\\]\\r\\n]+",
+                        "$1$2<redacted>")
+                .replaceAll("\\r?\\n", " | ");
+        if (sanitized.length() > 2000) {
+            sanitized = sanitized.substring(0, 2000) + "…";
+        }
+        return failure.getClass().getSimpleName() + ": " + sanitized;
+    }
+
     private static final class RuntimeState {
         private final Injector injector;
         private final ReplayRuntimeModule module;
+        private final Runnable checkpointResourcesCloser;
         private final AtomicBoolean closed = new AtomicBoolean();
         private volatile DefaultReplayFramework framework;
 
-        private RuntimeState(Injector injector, ReplayRuntimeModule module) {
+        private RuntimeState(
+                Injector injector,
+                ReplayRuntimeModule module,
+                Runnable checkpointResourcesCloser) {
             this.injector = Objects.requireNonNull(injector, "injector");
             this.module = Objects.requireNonNull(module, "module");
+            this.checkpointResourcesCloser = Objects.requireNonNull(
+                    checkpointResourcesCloser,
+                    "checkpointResourcesCloser");
         }
 
-        private static RuntimeState from(Injector injector, ReplayRuntimeModule module) {
-            return new RuntimeState(injector, module);
+        private static RuntimeState from(
+                Injector injector,
+                ReplayRuntimeModule module,
+                Runnable checkpointResourcesCloser) {
+            return new RuntimeState(injector, module, checkpointResourcesCloser);
         }
 
         private Injector injector() {
@@ -260,9 +347,12 @@ public final class ReplayPaperPlugin extends JavaPlugin {
             closeStep("leases", () -> injector.getInstance(RecordingLeaseManager.class).close(), logger);
             closeStep("segment cache", () -> injector.getInstance(DiskSegmentCache.class).close(), logger);
             closeStep("events", () -> injector.getInstance(ReplayEventDispatcher.class).close(), logger);
+            closeStep("paper checkpoint resources", checkpointResourcesCloser, logger);
             closeStep("storage", () -> closeStorage(injector.getInstance(ReplayStorage.class)), logger);
             closeStep("database", () -> injector.getInstance(HibernateSessionFactory.class).close(), logger);
-            closeStep("recording scheduler", () -> injector.getInstance(ScheduledExecutorService.class).shutdown(), logger);
+            closeStep("recording scheduler", () -> injector.getInstance(
+                    Key.get(ScheduledExecutorService.class,
+                            Names.named("replay-recording-scheduler"))).shutdown(), logger);
             closeStep("runtime executor", module::close, logger);
         }
 
@@ -279,8 +369,34 @@ public final class ReplayPaperPlugin extends JavaPlugin {
                 action.run();
             } catch (Throwable failure) {
                 logger.accept("Replay Framework " + name + " shutdown failed: "
-                        + failure.getClass().getSimpleName());
+                        + safeFailureSummary(failure));
             }
+        }
+    }
+
+    private static final class PaperCheckpointResources implements AutoCloseable {
+        private final Paper26SnapshotProvider snapshotProvider;
+        private final Paper26NativePacketCodec nativePacketCodec;
+        private final ExecutorService checkpointExecutor;
+        private final AtomicBoolean closed = new AtomicBoolean();
+
+        private PaperCheckpointResources(
+                Paper26SnapshotProvider snapshotProvider,
+                Paper26NativePacketCodec nativePacketCodec,
+                ExecutorService checkpointExecutor) {
+            this.snapshotProvider = Objects.requireNonNull(snapshotProvider, "snapshotProvider");
+            this.nativePacketCodec = Objects.requireNonNull(nativePacketCodec, "nativePacketCodec");
+            this.checkpointExecutor = Objects.requireNonNull(checkpointExecutor, "checkpointExecutor");
+        }
+
+        @Override
+        public void close() {
+            if (!closed.compareAndSet(false, true)) {
+                return;
+            }
+            snapshotProvider.close();
+            nativePacketCodec.close();
+            checkpointExecutor.shutdownNow();
         }
     }
 }

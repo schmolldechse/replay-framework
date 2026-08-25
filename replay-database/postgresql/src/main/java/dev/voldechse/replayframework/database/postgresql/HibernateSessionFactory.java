@@ -55,7 +55,7 @@ public final class HibernateSessionFactory implements AutoCloseable {
         Objects.requireNonNull(gson, "gson");
 
         try {
-            Flyway.configure()
+            Flyway.configure(HibernateSessionFactory.class.getClassLoader())
                     .dataSource(dataSource)
                     .locations("classpath:db/migration")
                     .baselineOnMigrate(false)
