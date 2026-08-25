@@ -69,8 +69,9 @@ public final class Paper26CheckpointEncoder implements CheckpointEncoder {
     /**
      * Encodes one complete initial checkpoint without blocking the caller.
      *
-     * <p>Only initial checkpoints are assigned an ordinal by this task. Core
-     * owns the ordinal of later periodic checkpoints.</p>
+     * <p>The adapter returns ordinal zero for the initial checkpoint and a
+     * valid provisional ordinal for later checkpoints. Core owns the
+     * session-global ordinal sequence and replaces the provisional value.</p>
      *
      * @param request validated checkpoint request
      * @return asynchronously encoded immutable checkpoint
@@ -78,9 +79,11 @@ public final class Paper26CheckpointEncoder implements CheckpointEncoder {
     @Override
     public CompletionStage<ReplayCheckpoint> encode(CheckpointRequest request) {
         Objects.requireNonNull(request, "request");
-        if (request.kind() != CheckpointKind.INITIAL) {
+        if (request.kind() != CheckpointKind.INITIAL
+                && request.kind() != CheckpointKind.PERIODIC
+                && request.kind() != CheckpointKind.DIMENSION_CHANGE) {
             return CompletableFuture.failedFuture(new IllegalArgumentException(
-                    "Paper26CheckpointEncoder only assigns ordinals to INITIAL checkpoints"));
+                    "unsupported checkpoint kind: " + request.kind()));
         }
 
         final CompletionStage<CheckpointSnapshot> snapshotStage;
@@ -131,7 +134,8 @@ public final class Paper26CheckpointEncoder implements CheckpointEncoder {
                     encoded.payload()));
         }
 
-        return new ReplayCheckpoint(0, request.elapsedNanos(), frames);
+        int provisionalOrdinal = request.kind() == CheckpointKind.INITIAL ? 0 : 1;
+        return new ReplayCheckpoint(provisionalOrdinal, request.elapsedNanos(), frames);
     }
 
     private void validateEncodedPacket(PacketBlueprint blueprint, EncodedPacket encoded) {

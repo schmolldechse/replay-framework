@@ -20,6 +20,7 @@ public final class RecordingRequest {
     private final RecordingScope scope;
     private final CapturePolicy capturePolicy;
     private final ReplayBudget budget;
+    private final RecordingOptions options;
     private final Set<UUID> participants;
 
     private RecordingRequest(Builder builder) {
@@ -28,6 +29,7 @@ public final class RecordingRequest {
         this.scope = builder.scope;
         this.capturePolicy = builder.capturePolicy;
         this.budget = builder.budget;
+        this.options = builder.options;
         this.participants = Set.copyOf(builder.participants);
     }
 
@@ -86,6 +88,15 @@ public final class RecordingRequest {
     }
 
     /**
+     * Returns the immutable non-budget recording options.
+     *
+     * @return recording options
+     */
+    public RecordingOptions options() {
+        return options;
+    }
+
+    /**
      * Returns the UUIDs selected as participants for this recording.
      *
      * @return immutable UUID set; empty means all captured players are selected
@@ -101,6 +112,7 @@ public final class RecordingRequest {
         private RecordingScope scope;
         private CapturePolicy capturePolicy;
         private ReplayBudget budget;
+        private RecordingOptions options = RecordingOptions.defaults();
         private Set<UUID> participants = new LinkedHashSet<>();
 
         private Builder() {
@@ -161,6 +173,12 @@ public final class RecordingRequest {
             return this;
         }
 
+        /** Sets the immutable non-budget recording options. */
+        public Builder options(RecordingOptions options) {
+            this.options = Objects.requireNonNull(options, "options");
+            return this;
+        }
+
         /**
          * Replaces the selected participant set with a defensive copy.
          *
@@ -193,6 +211,7 @@ public final class RecordingRequest {
             Objects.requireNonNull(scope, "scope");
             Objects.requireNonNull(capturePolicy, "capturePolicy");
             Objects.requireNonNull(budget, "budget");
+            Objects.requireNonNull(options, "options");
             return new RecordingRequest(this);
         }
     }

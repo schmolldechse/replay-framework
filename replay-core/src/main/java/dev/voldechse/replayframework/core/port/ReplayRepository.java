@@ -237,7 +237,7 @@ public interface ReplayRepository {
         }
     }
 
-    /** Indicates that a query contains metadata criteria not compiled yet by this task. */
+    /** Indicates that a query contains metadata criteria not supported by this compiler. */
     final class MetadataQueryUnavailableException extends RuntimeException {
         public MetadataQueryUnavailableException() {
             super("custom metadata query compilation is not available in this persistence stage");

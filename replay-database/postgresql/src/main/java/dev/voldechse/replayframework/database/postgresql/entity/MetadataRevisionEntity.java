@@ -19,7 +19,8 @@ import org.hibernate.type.SqlTypes;
  * Immutable persistence row for one metadata mutation snapshot.
  *
  * <p>Revision zero remains on {@code ReplayEntity}; rows represented here
- * start at revision one and are inserted, never updated, by Task 13.</p>
+ * start at revision one and are inserted, never updated, by the metadata
+ * persistence workflow.</p>
  */
 @Entity
 @Table(

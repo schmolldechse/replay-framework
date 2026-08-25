@@ -18,6 +18,7 @@ import dev.voldechse.replayframework.core.capture.CaptureRouter;
 import dev.voldechse.replayframework.core.port.ReplayRepository;
 import dev.voldechse.replayframework.format.ReplayCheckpoint;
 import java.time.Instant;
+import java.nio.file.Path;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -172,16 +173,20 @@ final class RecordingCoordinator {
             delegated.whenComplete((completed, failure) -> {
                 if (failure != null) {
                     result.completeExceptionally(failure);
+                    session.completeFinalization(null, failure);
                     return;
                 }
                 if (session.status() == RecordingStatus.AVAILABLE
                         || session.status() == RecordingStatus.FAILED) {
                     sessions.remove(session.id(), session);
                 }
-                result.complete(completed == null ? session : completed);
+                RecordingSession finalSession = completed == null ? session : completed;
+                result.complete(finalSession);
+                session.completeFinalization(finalSession, null);
             });
             return result;
         } catch (Throwable failure) {
+            session.completeFinalization(null, failure);
             return CompletableFuture.failedFuture(failure);
         }
     }
@@ -338,6 +343,7 @@ final class RecordingCoordinator {
             }
             try {
                 session.activate();
+                installAppender(request, session);
                 result.complete(session);
             } catch (Throwable activationFailure) {
                 sessions.remove(sessionId);
@@ -348,6 +354,76 @@ final class RecordingCoordinator {
                 result.completeExceptionally(activationFailure);
             }
         }, initializationExecutor);
+    }
+
+    private void installAppender(RecordingRequest request, DefaultRecordingSession session) {
+        if (recordingTarget.stagingDirectoryFactory() == null) {
+            // The compatibility target does not provide a staging workspace.
+            // A production composition must supply a validated staging
+            // factory; without it this coordinator deliberately does not
+            // fabricate an artifact path.
+            return;
+        }
+        Path workspace = Objects.requireNonNull(
+                recordingTarget.stagingDirectoryFactory().apply(session.replayId()),
+                "stagingDirectoryFactory returned null");
+        CheckpointScheduler scheduler = new CheckpointScheduler(
+                request.options().checkpointInterval(),
+                adapter.checkpointEncoder(),
+                request.scope(),
+                (elapsedNanos, serverTick, kind) -> new CheckpointEncoder.CheckpointRequest(
+                        request.scope(), elapsedNanos, serverTick, kind));
+        RecordingSegmentAppender appender = new RecordingSegmentAppender(
+                workspace,
+                adapter.descriptor().adapterId(),
+                session.recordingStartCaptureTimeNanos(),
+                session.queue(),
+                session.initialCheckpoint(),
+                request.budget(),
+                scheduler,
+                adapter.checkpointSignals(),
+                session::requestBudgetStop,
+                (code, cause) -> onAppenderFailure(session, code, cause),
+                artifacts -> onAppenderSealed(session, artifacts));
+        session.attachAppender(appender);
+        session.startAppender();
+    }
+
+    private void onAppenderSealed(
+            DefaultRecordingSession session,
+            RecordingSegmentAppender.RecordingArtifacts artifacts) {
+        try {
+            if (session.status() == RecordingStatus.FAILED
+                    || session.status() == RecordingStatus.AVAILABLE) {
+                return;
+            }
+            session.attachSealedArtifacts(artifacts);
+            ReplayCompletionReason reason = session.requestedCompletionReason()
+                    .or(() -> artifacts.completionReason())
+                    .orElse(ReplayCompletionReason.MANUAL);
+            requestFinalization(session, reason);
+        } catch (Throwable failure) {
+            onAppenderFailure(session, ReplayFailureCode.CORRUPT_DATA, failure);
+        }
+    }
+
+    private void onAppenderFailure(
+            DefaultRecordingSession session,
+            ReplayFailureCode code,
+            Throwable cause) {
+        RecordingStatus expected = session.status();
+        String description = diagnostic(session.replayId(), session.id(), "recording writer", cause);
+        if (!session.markWriterFailed(code, description)) {
+            return;
+        }
+        sessions.remove(session.id(), session);
+        session.completeFinalization(null, cause);
+        try {
+            initializationExecutor.execute(() -> persistFailureTransition(
+                    session.replayId(), expected, code, description));
+        } catch (Throwable ignored) {
+            // The live session is already FAILED; persistence remains best effort.
+        }
     }
 
     private void failSession(
@@ -366,7 +442,8 @@ final class RecordingCoordinator {
                     session.replayId(), expectedStatus, code, description));
         } catch (Throwable ignored) {
             // The session is already failed locally. A rejected diagnostic
-            // task must not re-enter CaptureRouter or throw into Netty.
+            // diagnostic callback must not re-enter CaptureRouter or throw
+            // into Netty.
         }
     }
 
@@ -509,14 +586,22 @@ final class RecordingCoordinator {
     /** Opaque storage selection supplied by runtime composition. */
     record RecordingTarget(
             ReplayStorageBackend storageBackend,
-            Function<ReplayId, String> storageKeyFactory) {
+            Function<ReplayId, String> storageKeyFactory,
+            Function<ReplayId, Path> stagingDirectoryFactory) {
+        /** Compatibility composition without a staging workspace. */
+        RecordingTarget(
+                ReplayStorageBackend storageBackend,
+                Function<ReplayId, String> storageKeyFactory) {
+            this(storageBackend, storageKeyFactory, null);
+        }
+
         RecordingTarget {
             Objects.requireNonNull(storageBackend, "storageBackend");
             Objects.requireNonNull(storageKeyFactory, "storageKeyFactory");
         }
     }
 
-    /** Task-21 finalizer boundary; Task 19 only delegates to it once. */
+    /** Finalization boundary; the coordinator delegates to it exactly once. */
     @FunctionalInterface
     interface FinalizationHandler {
         CompletionStage<RecordingSession> finalize(

@@ -9,7 +9,7 @@ import java.util.Objects;
  * Package-private wire codec shared by segment and checkpoint bodies.
  *
  * <p>The record layout is deliberately kept in one place so both artifact
- * types preserve the exact Task-7 frame representation.</p>
+ * types preserve the exact wire frame representation.</p>
  */
 final class ReplayFrameCodec {
 

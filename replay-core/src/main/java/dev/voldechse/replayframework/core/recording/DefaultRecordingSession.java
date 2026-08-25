@@ -37,11 +37,18 @@ final class DefaultRecordingSession implements RecordingSession, CaptureSink {
     private final AtomicReference<String> failureDescription = new AtomicReference<>();
     private final AtomicReference<CompletableFuture<RecordingSession>> stopFuture =
             new AtomicReference<>();
+    private final AtomicReference<RecordingSegmentAppender> appender =
+            new AtomicReference<>();
+    private final AtomicReference<RecordingSegmentAppender.RecordingArtifacts> sealedArtifacts =
+            new AtomicReference<>();
+    private final AtomicReference<ReplayCompletionReason> requestedCompletionReason =
+            new AtomicReference<>();
     private final AtomicLong totalBytes = new AtomicLong();
     private final AtomicLong packetCount = new AtomicLong();
     private final AtomicLong segmentCount = new AtomicLong();
     private final AtomicLong checkpointCount = new AtomicLong(1L);
     private final AtomicLong recordingStartNanos = new AtomicLong();
+    private final AtomicLong sealedDurationNanos = new AtomicLong(-1L);
 
     DefaultRecordingSession(
             RecordingSessionId id,
@@ -84,7 +91,10 @@ final class DefaultRecordingSession implements RecordingSession, CaptureSink {
     @Override
     public Metrics metrics() {
         long start = recordingStartNanos.get();
-        long durationNanos = start == 0L ? 0L : elapsedSince(start);
+        long durationNanos = sealedDurationNanos.get();
+        if (durationNanos < 0L) {
+            durationNanos = start == 0L ? 0L : elapsedSince(start);
+        }
         return new Metrics(
                 Duration.ofNanos(durationNanos),
                 totalBytes.get(),
@@ -109,7 +119,6 @@ final class DefaultRecordingSession implements RecordingSession, CaptureSink {
         if (existing != null) {
             return existing;
         }
-
         CompletableFuture<RecordingSession> created = new CompletableFuture<>();
         if (!stopFuture.compareAndSet(null, created)) {
             return stopFuture.get();
@@ -122,17 +131,9 @@ final class DefaultRecordingSession implements RecordingSession, CaptureSink {
 
         queue.closeForEnqueue();
         coordinator.unregister(id);
-        try {
-            coordinator.requestFinalization(this, ReplayCompletionReason.MANUAL)
-                    .whenComplete((result, failure) -> {
-                        if (failure != null) {
-                            created.completeExceptionally(failure);
-                        } else {
-                            created.complete(result == null ? this : result);
-                        }
-                    });
-        } catch (Throwable failure) {
-            created.completeExceptionally(failure);
+        requestedCompletionReason.compareAndSet(null, ReplayCompletionReason.MANUAL);
+        if (appender.get() == null) {
+            delegateFinalization(ReplayCompletionReason.MANUAL);
         }
         return created;
     }
@@ -164,6 +165,95 @@ final class DefaultRecordingSession implements RecordingSession, CaptureSink {
         recordingStartNanos.compareAndSet(0L, System.nanoTime());
     }
 
+    /** Installs the single session writer after RECORDING became visible. */
+    void attachAppender(RecordingSegmentAppender recordingAppender) {
+        Objects.requireNonNull(recordingAppender, "recordingAppender");
+        if (!appender.compareAndSet(null, recordingAppender)) {
+            throw new IllegalStateException("recording session already has a writer");
+        }
+    }
+
+    /** Starts the writer without exposing its thread or implementation type. */
+    void startAppender() {
+        RecordingSegmentAppender recordingAppender = appender.get();
+        if (recordingAppender == null) {
+            throw new IllegalStateException("recording session has no writer");
+        }
+        recordingAppender.startWriter();
+    }
+
+    /** Monotonic capture timestamp used to rebase packets in the writer. */
+    long recordingStartCaptureTimeNanos() {
+        return recordingStartNanos.get();
+    }
+
+    /** Begins a clean budget finalization and closes only new queue admission. */
+    void requestBudgetStop(ReplayCompletionReason reason) {
+        Objects.requireNonNull(reason, "reason");
+        requestedCompletionReason.compareAndSet(null, reason);
+        CompletableFuture<RecordingSession> ignored = getOrCreateStopFuture();
+        if (!status.compareAndSet(RecordingStatus.RECORDING, RecordingStatus.FINALIZING)) {
+            return;
+        }
+        queue.closeForEnqueue();
+        coordinator.unregister(id);
+        if (appender.get() == null) {
+            delegateFinalization(reason);
+        }
+    }
+
+    /** Stores sealed local artifacts before finalization receives the session. */
+    void attachSealedArtifacts(RecordingSegmentAppender.RecordingArtifacts artifacts) {
+        Objects.requireNonNull(artifacts, "artifacts");
+        if (!sealedArtifacts.compareAndSet(null, artifacts)) {
+            throw new IllegalStateException("recording artifacts were already attached");
+        }
+        sealedDurationNanos.set(artifacts.durationNanos());
+        segmentCount.set(artifacts.segmentCount());
+        checkpointCount.set(artifacts.checkpointCount());
+    }
+
+    Optional<RecordingSegmentAppender.RecordingArtifacts> sealedArtifacts() {
+        return Optional.ofNullable(sealedArtifacts.get());
+    }
+
+    Optional<ReplayCompletionReason> requestedCompletionReason() {
+        return Optional.ofNullable(requestedCompletionReason.get());
+    }
+
+    /** Records an appender failure even when the session already drains. */
+    boolean markWriterFailed(ReplayFailureCode code, String description) {
+        Objects.requireNonNull(code, "code");
+        String safeDescription = requireDescription(description);
+        for (;;) {
+            RecordingStatus current = status.get();
+            if (current == RecordingStatus.FAILED || current == RecordingStatus.AVAILABLE
+                    || current == RecordingStatus.DELETING) {
+                return false;
+            }
+            if (status.compareAndSet(current, RecordingStatus.FAILED)) {
+                failureCode.compareAndSet(null, code);
+                failureDescription.compareAndSet(null, safeDescription);
+                queue.closeForEnqueue();
+                coordinator.unregister(id);
+                return true;
+            }
+        }
+    }
+
+    /** Completes the public stop stage after the finalizer callback returns. */
+    void completeFinalization(RecordingSession result, Throwable failure) {
+        CompletableFuture<RecordingSession> future = stopFuture.get();
+        if (future == null) {
+            return;
+        }
+        if (failure != null) {
+            future.completeExceptionally(failure);
+        } else {
+            future.complete(result == null ? this : result);
+        }
+    }
+
     /**
      * Marks the first initialization/capture failure. FINALIZING and terminal
      * states are never reset by a late callback.
@@ -187,22 +277,22 @@ final class DefaultRecordingSession implements RecordingSession, CaptureSink {
         }
     }
 
-    /** Internal state used by Task 20/21 to access the prepared checkpoint. */
+    /** Internal state used by the writer and finalizer to access the prepared checkpoint. */
     ReplayCheckpoint initialCheckpoint() {
         return initialCheckpoint;
     }
 
-    /** Internal request snapshot for the later writer/finalizer. */
+    /** Internal request snapshot for the writer and finalizer. */
     RecordingRequest request() {
         return request;
     }
 
-    /** Internal queue hand-off for the Task-20 writer. */
+    /** Internal queue hand-off for the recording writer. */
     SessionPacketQueue queue() {
         return queue;
     }
 
-    /** Internal scope snapshot for diagnostics and the later writer. */
+    /** Internal scope snapshot for diagnostics and the recording writer. */
     ResolvedRecordingScope resolvedScope() {
         return resolvedScope;
     }
@@ -212,14 +302,15 @@ final class DefaultRecordingSession implements RecordingSession, CaptureSink {
         segmentCount.incrementAndGet();
     }
 
-    /** Records one additional checkpoint produced by the later checkpoint worker. */
+    /** Records one additional checkpoint produced by the checkpoint worker. */
     void recordCheckpoint() {
         checkpointCount.incrementAndGet();
     }
 
     /**
-     * Completes the finalizer-owned lifecycle edge. Task 19 never calls this;
-     * it is the narrow hand-off used by Task 21 after manifest publication.
+     * Completes the finalizer-owned lifecycle edge after manifest publication.
+     * This narrow hand-off is intentionally separate from ordinary recording
+     * state transitions.
      */
     boolean markAvailable() {
         return status.compareAndSet(RecordingStatus.FINALIZING, RecordingStatus.AVAILABLE);
@@ -240,6 +331,27 @@ final class DefaultRecordingSession implements RecordingSession, CaptureSink {
         queue.closeForEnqueue();
         coordinator.unregister(id);
         return true;
+    }
+
+    private CompletableFuture<RecordingSession> getOrCreateStopFuture() {
+        CompletableFuture<RecordingSession> existing = stopFuture.get();
+        if (existing != null) {
+            return existing;
+        }
+        CompletableFuture<RecordingSession> created = new CompletableFuture<>();
+        if (stopFuture.compareAndSet(null, created)) {
+            return created;
+        }
+        return stopFuture.get();
+    }
+
+    private void delegateFinalization(ReplayCompletionReason reason) {
+        try {
+            coordinator.requestFinalization(this, reason)
+                    .whenComplete((result, failure) -> completeFinalization(result, failure));
+        } catch (Throwable failure) {
+            completeFinalization(null, failure);
+        }
     }
 
     private static long elapsedSince(long startNanos) {

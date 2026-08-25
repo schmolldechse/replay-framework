@@ -1,6 +1,7 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.capture;
 
 import dev.voldechse.replayframework.adapter.CaptureBridge;
+import dev.voldechse.replayframework.adapter.CheckpointSignalSource;
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.PacketRegistry;
@@ -32,6 +33,7 @@ public final class Paper26SyntheticStateCollector implements AutoCloseable {
     private final RecordingScope scope;
     private final Function<CaptureBridge.CapturePacket, ObservedStateKey> observationDecoder;
     private final Function<StateDelta, SyntheticStatePacket> deltaEncoder;
+    private final CheckpointSignalSource checkpointSignals;
     private final ReentrantLock lock = new ReentrantLock();
     private final Set<ObservedStateKey> observed = new HashSet<>();
     private final Set<ObservedStateKey> emitted = new HashSet<>();
@@ -44,10 +46,21 @@ public final class Paper26SyntheticStateCollector implements AutoCloseable {
             RecordingScope scope,
             Function<CaptureBridge.CapturePacket, ObservedStateKey> observationDecoder,
             Function<StateDelta, SyntheticStatePacket> deltaEncoder) {
+        this(registry, scope, observationDecoder, deltaEncoder, CheckpointSignalSource.noop());
+    }
+
+    /** Creates a collector with an adapter-local semantic checkpoint source. */
+    public Paper26SyntheticStateCollector(
+            PacketRegistry registry,
+            RecordingScope scope,
+            Function<CaptureBridge.CapturePacket, ObservedStateKey> observationDecoder,
+            Function<StateDelta, SyntheticStatePacket> deltaEncoder,
+            CheckpointSignalSource checkpointSignals) {
         this.registry = Objects.requireNonNull(registry, "registry");
         this.scope = Objects.requireNonNull(scope, "scope");
         this.observationDecoder = Objects.requireNonNull(observationDecoder, "observationDecoder");
         this.deltaEncoder = Objects.requireNonNull(deltaEncoder, "deltaEncoder");
+        this.checkpointSignals = Objects.requireNonNull(checkpointSignals, "checkpointSignals");
     }
 
     /** Records one real outbound state observation for the current server tick. */
@@ -66,6 +79,11 @@ public final class Paper26SyntheticStateCollector implements AutoCloseable {
                 return;
             }
 
+            if (isDimensionTransition(descriptor.typeName())
+                    && checkpointSignals instanceof CheckpointSignalSource.Emitter emitter) {
+                emitter.emitDimensionChange(packet.captureTimeNanos(), packet.serverTick());
+            }
+
             ObservedStateKey key = Objects.requireNonNull(
                     observationDecoder.apply(packet),
                     "observationDecoder returned null");
@@ -81,6 +99,13 @@ public final class Paper26SyntheticStateCollector implements AutoCloseable {
             observed.add(key);
         } finally {
             lock.unlock();
+        }
+    }
+
+    /** Emits a transition discovered by a Paper event hook rather than a packet. */
+    public void signalDimensionChange(long captureTimeNanos, long serverTick) {
+        if (checkpointSignals instanceof CheckpointSignalSource.Emitter emitter) {
+            emitter.emitDimensionChange(captureTimeNanos, serverTick);
         }
     }
 
@@ -208,6 +233,11 @@ public final class Paper26SyntheticStateCollector implements AutoCloseable {
         if (closed) {
             throw new IllegalStateException("synthetic state collector is closed");
         }
+    }
+
+    private static boolean isDimensionTransition(String descriptorTypeName) {
+        return descriptorTypeName.equals("play.clientbound.minecraft:login")
+                || descriptorTypeName.equals("play.clientbound.minecraft:respawn");
     }
 
     /** Identity of an observed or synthetic state change within one tick. */
