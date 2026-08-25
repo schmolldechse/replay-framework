@@ -138,6 +138,11 @@ final class DefaultPlaybackService implements PlaybackService {
         return coordinator.active(Objects.requireNonNull(id, "id"));
     }
 
+    /** Stops new viewer work and closes all sessions owned by this runtime. */
+    void shutdown() {
+        coordinator.closeAll();
+    }
+
     private CompletionStage<ReplayArtifactReader.VerifiedReplay> loadReplay(
             PlaybackRequest request) {
         return CompletableFuture.supplyAsync(

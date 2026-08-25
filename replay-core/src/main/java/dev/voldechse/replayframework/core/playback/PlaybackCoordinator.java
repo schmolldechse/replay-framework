@@ -63,4 +63,17 @@ final class PlaybackCoordinator {
         byViewerId.remove(viewerId, sessionId);
         bySessionId.remove(sessionId);
     }
+
+    /** Closes every currently registered viewer session during runtime shutdown. */
+    void closeAll() {
+        for (PlaybackSession session : java.util.List.copyOf(bySessionId.values())) {
+            try {
+                session.close();
+            } catch (RuntimeException ignored) {
+                // Individual session cleanup must not prevent remaining viewers from closing.
+            }
+        }
+        bySessionId.clear();
+        byViewerId.clear();
+    }
 }

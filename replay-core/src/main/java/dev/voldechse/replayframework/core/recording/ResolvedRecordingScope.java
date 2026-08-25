@@ -86,6 +86,18 @@ final class ResolvedRecordingScope {
         membership.set(Objects.requireNonNull(nextMembership, "nextMembership"));
     }
 
+    /** Returns the same resolved boundary with the request-specific policy applied. */
+    ResolvedRecordingScope withCapturePolicy(CapturePolicy nextPolicy) {
+        return new ResolvedRecordingScope(
+                requested,
+                initialServerTick,
+                worlds,
+                regions,
+                Objects.requireNonNull(nextPolicy, "nextPolicy"),
+                participants,
+                membership.get());
+    }
+
     /**
      * Applies scope and policy without any external calls. Unknown semantic
      * context is rejected rather than guessed from a type name or payload.

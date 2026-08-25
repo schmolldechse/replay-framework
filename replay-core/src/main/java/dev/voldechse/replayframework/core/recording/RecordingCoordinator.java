@@ -5,6 +5,7 @@ import com.google.inject.Inject;
 import dev.voldechse.replayframework.adapter.AdapterDescriptor;
 import dev.voldechse.replayframework.adapter.CheckpointEncoder;
 import dev.voldechse.replayframework.adapter.ReplayAdapter;
+import dev.voldechse.replayframework.api.event.ReplayEventPublisher;
 import dev.voldechse.replayframework.api.id.RecordingSessionId;
 import dev.voldechse.replayframework.api.id.ReplayId;
 import dev.voldechse.replayframework.api.recording.RecordingRequest;
@@ -30,6 +31,7 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
@@ -40,7 +42,7 @@ import java.util.function.Function;
  * only registers a sink while it is still in INITIALIZING, where it rejects
  * packets until the catalog transition to RECORDING succeeds.</p>
  */
-final class RecordingCoordinator {
+public final class RecordingCoordinator {
     private final ReplayAdapter adapter;
     private final CaptureRouter captureRouter;
     private final ReplayRepository replayRepository;
@@ -49,6 +51,7 @@ final class RecordingCoordinator {
     private final FinalizationHandler finalizationHandler;
     private final RecordingLeaseManager leaseManager;
     private final Executor initializationExecutor;
+    private final Consumer<ReplayEventPublisher.ReplayEvent> eventSink;
     private final Map<RecordingSessionId, DefaultRecordingSession> sessions =
             new ConcurrentHashMap<>();
     private final AtomicBoolean closed = new AtomicBoolean();
@@ -64,6 +67,29 @@ final class RecordingCoordinator {
             FinalizationHandler finalizationHandler,
             RecordingLeaseManager leaseManager,
             Executor initializationExecutor) {
+        this(
+                adapter,
+                captureRouter,
+                replayRepository,
+                scopeResolver,
+                recordingTarget,
+                finalizationHandler,
+                leaseManager,
+                initializationExecutor,
+                ignored -> {
+                });
+    }
+
+    RecordingCoordinator(
+            ReplayAdapter adapter,
+            CaptureRouter captureRouter,
+            ReplayRepository replayRepository,
+            ScopeResolver scopeResolver,
+            RecordingTarget recordingTarget,
+            FinalizationHandler finalizationHandler,
+            RecordingLeaseManager leaseManager,
+            Executor initializationExecutor,
+            Consumer<ReplayEventPublisher.ReplayEvent> eventSink) {
         this.adapter = Objects.requireNonNull(adapter, "adapter");
         this.captureRouter = Objects.requireNonNull(captureRouter, "captureRouter");
         this.replayRepository = Objects.requireNonNull(replayRepository, "replayRepository");
@@ -73,6 +99,7 @@ final class RecordingCoordinator {
         this.leaseManager = Objects.requireNonNull(leaseManager, "leaseManager");
         this.initializationExecutor = Objects.requireNonNull(
                 initializationExecutor, "initializationExecutor");
+        this.eventSink = Objects.requireNonNull(eventSink, "eventSink");
     }
 
     /** Compatibility constructor for isolated pre-lease test compositions. */
@@ -93,6 +120,8 @@ final class RecordingCoordinator {
         this.leaseManager = null;
         this.initializationExecutor = Objects.requireNonNull(
                 initializationExecutor, "initializationExecutor");
+        this.eventSink = ignored -> {
+        };
     }
 
     /** Starts one isolated recording without blocking the caller. */
@@ -188,6 +217,7 @@ final class RecordingCoordinator {
     CompletionStage<RecordingSession> requestFinalization(
             DefaultRecordingSession session,
             ReplayCompletionReason reason) {
+        RecordingStatus previousStatus = session.status();
         try {
             CompletionStage<RecordingSession> delegated = Objects.requireNonNull(
                     finalizationHandler.finalize(session, reason),
@@ -204,6 +234,24 @@ final class RecordingCoordinator {
                     sessions.remove(session.id(), session);
                 }
                 RecordingSession finalSession = completed == null ? session : completed;
+                RecordingStatus finalStatus = session.status();
+                if (previousStatus != finalStatus) {
+                    publishEvent(new ReplayEventPublisher.RecordingStatusChanged(
+                            session.id(),
+                            session.replayId(),
+                            previousStatus,
+                            finalStatus,
+                            Instant.now()));
+                }
+                if (finalStatus == RecordingStatus.AVAILABLE) {
+                    publishEvent(new ReplayEventPublisher.RecordingCompleted(
+                            session.id(),
+                            session.replayId(),
+                            finalStatus,
+                            Optional.of(reason),
+                            Optional.empty(),
+                            Instant.now()));
+                }
                 result.complete(finalSession);
                 session.completeFinalization(finalSession, null);
             });
@@ -284,7 +332,12 @@ final class RecordingCoordinator {
                         "scope resolution", new IllegalStateException("scope resolver returned null"));
                 return;
             }
-            encodeInitialCheckpoint(request, sessionId, replayId, resolvedScope, result);
+            encodeInitialCheckpoint(
+                    request,
+                    sessionId,
+                    replayId,
+                    resolvedScope.withCapturePolicy(request.capturePolicy()),
+                    result);
         }, initializationExecutor);
     }
 
@@ -396,6 +449,12 @@ final class RecordingCoordinator {
             }
             try {
                 session.activate();
+                publishEvent(new ReplayEventPublisher.RecordingStatusChanged(
+                        session.id(),
+                        session.replayId(),
+                        RecordingStatus.INITIALIZING,
+                        RecordingStatus.RECORDING,
+                        Instant.now()));
                 installAppender(request, session);
                 result.complete(session);
             } catch (Throwable activationFailure) {
@@ -469,6 +528,7 @@ final class RecordingCoordinator {
         if (!session.markWriterFailed(code, description)) {
             return;
         }
+        publishFailure(session, expected, code);
         sessions.remove(session.id(), session);
         releaseLeaseQuietly(session.replayId());
         session.completeFinalization(null, cause);
@@ -490,6 +550,7 @@ final class RecordingCoordinator {
         if (!session.markFailed(code, description)) {
             return;
         }
+        publishFailure(session, expectedStatus, code);
         sessions.remove(session.id(), session);
         releaseLeaseQuietly(session.replayId());
         try {
@@ -644,6 +705,33 @@ final class RecordingCoordinator {
             current = current.getCause();
         }
         return false;
+    }
+
+    private void publishFailure(
+            DefaultRecordingSession session,
+            RecordingStatus previous,
+            ReplayFailureCode code) {
+        publishEvent(new ReplayEventPublisher.RecordingStatusChanged(
+                session.id(),
+                session.replayId(),
+                previous,
+                RecordingStatus.FAILED,
+                Instant.now()));
+        publishEvent(new ReplayEventPublisher.RecordingCompleted(
+                session.id(),
+                session.replayId(),
+                RecordingStatus.FAILED,
+                Optional.empty(),
+                Optional.of(code),
+                Instant.now()));
+    }
+
+    private void publishEvent(ReplayEventPublisher.ReplayEvent event) {
+        try {
+            eventSink.accept(event);
+        } catch (RuntimeException ignored) {
+            // Event observers are diagnostic consumers and cannot change recording state.
+        }
     }
 
     private static Throwable unwrap(Throwable failure) {
