@@ -63,6 +63,7 @@ public interface CaptureBridge {
      * @param phase protocol phase
      * @param packetId adapter-specific clientbound packet ID
      * @param payload payload before transport compression and encryption
+     * @param context adapter-decoded semantic facts; unknown values are empty
      */
     record CapturePacket(
             UUID recipientId,
@@ -71,7 +72,25 @@ public interface CaptureBridge {
             int sequence,
             PacketPhase phase,
             int packetId,
-            byte[] payload) {
+            byte[] payload,
+            CaptureContext context) {
+
+        /**
+         * Keeps older adapter fixtures source-compatible while explicitly
+         * marking their semantic context as unknown. This constructor is not
+         * allowed to infer packet meaning from raw payload bytes.
+         */
+        public CapturePacket(
+                UUID recipientId,
+                long captureTimeNanos,
+                long serverTick,
+                int sequence,
+                PacketPhase phase,
+                int packetId,
+                byte[] payload) {
+            this(recipientId, captureTimeNanos, serverTick, sequence, phase, packetId,
+                    payload, CaptureContext.unknown());
+        }
 
         /** Validates and defensively copies the captured packet data. */
         public CapturePacket {
@@ -88,6 +107,7 @@ public interface CaptureBridge {
             }
             Objects.requireNonNull(payload, "payload");
             payload = payload.clone();
+            Objects.requireNonNull(context, "context");
         }
 
         /**

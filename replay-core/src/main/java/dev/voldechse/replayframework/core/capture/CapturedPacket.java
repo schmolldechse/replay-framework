@@ -1,6 +1,7 @@
 package dev.voldechse.replayframework.core.capture;
 
 import dev.voldechse.replayframework.adapter.CaptureBridge;
+import dev.voldechse.replayframework.adapter.CaptureContext;
 import dev.voldechse.replayframework.format.PacketPhase;
 import java.util.Arrays;
 import java.util.Objects;
@@ -19,7 +20,24 @@ public record CapturedPacket(
         int sequence,
         PacketPhase phase,
         int packetId,
-        byte[] payload) {
+        byte[] payload,
+        CaptureContext context) {
+
+    /**
+     * Keeps existing core fixtures source-compatible while carrying an
+     * explicitly unknown adapter context.
+     */
+    public CapturedPacket(
+            UUID recipientId,
+            long captureTimeNanos,
+            long serverTick,
+            int sequence,
+            PacketPhase phase,
+            int packetId,
+            byte[] payload) {
+        this(recipientId, captureTimeNanos, serverTick, sequence, phase, packetId,
+                payload, CaptureContext.unknown());
+    }
 
     /** Validates packet metadata and takes ownership of a defensive payload copy. */
     public CapturedPacket {
@@ -36,6 +54,7 @@ public record CapturedPacket(
         }
         Objects.requireNonNull(payload, "payload");
         payload = payload.clone();
+        Objects.requireNonNull(context, "context");
     }
 
     /** Converts the adapter-owned event into the core-owned capture value once. */
@@ -48,7 +67,8 @@ public record CapturedPacket(
                 packet.sequence(),
                 packet.phase(),
                 packet.packetId(),
-                packet.payload());
+                packet.payload(),
+                packet.context());
     }
 
     /** Returns a copy so a sink cannot mutate the packet shared with other sinks. */
@@ -71,12 +91,14 @@ public record CapturedPacket(
                 && packetId == that.packetId
                 && recipientId.equals(that.recipientId)
                 && phase == that.phase
+                && context.equals(that.context)
                 && Arrays.equals(payload, that.payload);
     }
 
     @Override
     public int hashCode() {
-        int result = Objects.hash(recipientId, captureTimeNanos, serverTick, sequence, phase, packetId);
+        int result = Objects.hash(
+                recipientId, captureTimeNanos, serverTick, sequence, phase, packetId, context);
         return 31 * result + Arrays.hashCode(payload);
     }
 
@@ -88,6 +110,7 @@ public record CapturedPacket(
                 + ", sequence=" + sequence
                 + ", phase=" + phase
                 + ", packetId=" + packetId
+                + ", context=" + context
                 + ", payloadLength=" + payload.length
                 + "]";
     }

@@ -78,7 +78,8 @@ final class ReplayOutboundHandler extends ChannelOutboundHandlerAdapter {
                     sequence,
                     wirePacket.phase(),
                     wirePacket.packetId(),
-                    wirePacket.payload()));
+                    wirePacket.payload(),
+                    accessor.captureContext(connection, message, descriptor)));
         } catch (Throwable failure) {
             reportFailure(failure);
         } finally {
