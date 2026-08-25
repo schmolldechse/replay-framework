@@ -4,11 +4,13 @@ import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.PacketRegistry;
 import dev.voldechse.replayframework.format.PacketPhase;
+import dev.voldechse.replayframework.format.RawPacketFrame;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelOutboundHandler;
 import io.netty.channel.ChannelPipeline;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -16,6 +18,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Consumer;
 import net.minecraft.network.Connection;
 import net.minecraft.network.PacketEncoder;
 import net.minecraft.network.ProtocolInfo;
@@ -145,6 +148,116 @@ public final class PaperConnectionAccessor {
                 handler.installationFailed(failure);
             }
         });
+    }
+
+    /**
+     * Resolves one open Paper player connection for the playback boundary.
+     * The returned handle is a snapshot; callers must still handle a channel
+     * closing before their event-loop operation runs.
+     */
+    public ConnectionHandle connectionFor(Player player) {
+        Objects.requireNonNull(player, "player");
+        return connectionOf(player);
+    }
+
+    /**
+     * Installs a viewer gate immediately before the capture observer. All
+     * pipeline mutations remain event-loop local and installation failures are
+     * routed to the caller instead of escaping into Netty.
+     */
+    public void installPlaybackGate(
+            ConnectionHandle connection,
+            String handlerName,
+            ChannelOutboundHandler gate,
+            Consumer<Throwable> installationFailureHandler) {
+        Objects.requireNonNull(connection, "connection");
+        requireHandlerName(handlerName);
+        Objects.requireNonNull(gate, "gate");
+        Objects.requireNonNull(installationFailureHandler, "installationFailureHandler");
+
+        connection.channel().eventLoop().execute(() -> {
+            try {
+                ChannelPipeline pipeline = connection.channel().pipeline();
+                if (pipeline.get(handlerName) != null) {
+                    throw incompatible("reserved playback handler name is already in use", null);
+                }
+
+                if (pipeline.get(Paper26CaptureBridge.HANDLER_NAME) != null) {
+                    pipeline.addBefore(Paper26CaptureBridge.HANDLER_NAME, handlerName, gate);
+                    return;
+                }
+
+                ChannelHandlerContext encoderContext = pipeline.context(PacketEncoder.class);
+                if (encoderContext == null
+                        || !(encoderContext.handler() instanceof PacketEncoder<?>)) {
+                    throw incompatible("Paper packet encoder is not installed", null);
+                }
+                pipeline.addAfter(encoderContext.name(), handlerName, gate);
+            } catch (Throwable failure) {
+                reportInstallationFailure(installationFailureHandler, failure);
+            }
+        });
+    }
+
+    /**
+     * Decodes a raw PLAY clientbound frame with the codec currently bound to
+     * the target connection. Transport compression and encryption are not part
+     * of a replay payload and are intentionally not involved here.
+     */
+    public Object decodeReplayFrame(
+            ConnectionHandle connection,
+            RawPacketFrame frame,
+            PacketRegistry registry) {
+        Objects.requireNonNull(connection, "connection");
+        Objects.requireNonNull(frame, "frame");
+        Objects.requireNonNull(registry, "registry");
+        if (!connection.channel().isOpen()) {
+            throw incompatible("Paper playback channel is closed", null);
+        }
+        if (frame.phase() != PacketPhase.PLAY) {
+            throw incompatible("replay frame is not in PLAY phase", null);
+        }
+        PacketDescriptor descriptor = registry.find(
+                        frame.phase(), PacketDescriptor.Direction.CLIENTBOUND, frame.packetId())
+                .orElseThrow(() -> incompatible("replay packet ID is not in the verified registry", null));
+        if (!registry.replayAllowed(
+                frame.phase(), PacketDescriptor.Direction.CLIENTBOUND, frame.packetId())
+                || !descriptor.replayable()) {
+            throw incompatible("replay packet is blocked by the verified registry", null);
+        }
+
+        ChannelHandler encoder = connection.channel().pipeline().get(PACKET_ENCODER_NAME);
+        if (!(encoder instanceof PacketEncoder<?> packetEncoder)) {
+            throw incompatible("Paper packet encoder is not installed", null);
+        }
+
+        ProtocolInfo<?> protocolInfo = protocolInfoOf(packetEncoder);
+        if (protocolInfo.id() != net.minecraft.network.ConnectionProtocol.PLAY
+                || protocolInfo.flow() != PacketFlow.CLIENTBOUND) {
+            throw incompatible("Paper playback codec is not PLAY clientbound", null);
+        }
+
+        ByteBuf buffer = Unpooled.buffer();
+        try {
+            writeVarInt(buffer, frame.packetId());
+            buffer.writeBytes(frame.payload());
+            Object decoded = decode(protocolInfo, buffer);
+            if (buffer.isReadable()) {
+                throw incompatible("replay packet payload has trailing bytes", null);
+            }
+            if (!(decoded instanceof Packet<?> packet)
+                    || packet.type() == null
+                    || packet.type().flow() != PacketFlow.CLIENTBOUND) {
+                throw incompatible("Paper playback codec returned an invalid packet", null);
+            }
+            return packet;
+        } catch (IncompatibleAdapterException exception) {
+            throw exception;
+        } catch (RuntimeException | LinkageError exception) {
+            throw incompatible("Paper 26.2 replay codec failed for packet ID " + frame.packetId(), exception);
+        } finally {
+            buffer.release();
+        }
     }
 
     /** Removes a named handler on the channel event loop; missing handlers are safe. */
@@ -299,6 +412,11 @@ public final class PaperConnectionAccessor {
         ((net.minecraft.network.codec.StreamCodec) protocolInfo.codec()).encode(buffer, packet);
     }
 
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static Object decode(ProtocolInfo<?> protocolInfo, ByteBuf buffer) {
+        return ((net.minecraft.network.codec.StreamCodec) protocolInfo.codec()).decode(buffer);
+    }
+
     private static PacketDescriptor.Direction directionOf(PacketFlow flow) {
         if (flow == PacketFlow.CLIENTBOUND) {
             return PacketDescriptor.Direction.CLIENTBOUND;
@@ -336,6 +454,17 @@ public final class PaperConnectionAccessor {
         throw incompatible("Paper packet ID exceeds VarInt bounds", null);
     }
 
+    private static void writeVarInt(ByteBuf buffer, int value) {
+        if (value < 0) {
+            throw incompatible("replay packet ID is negative", null);
+        }
+        while ((value & ~0x7F) != 0) {
+            buffer.writeByte((value & 0x7F) | 0x80);
+            value >>>= 7;
+        }
+        buffer.writeByte(value);
+    }
+
     private static Field protocolInfoField() {
         try {
             Field field = PacketEncoder.class.getDeclaredField("protocolInfo");
@@ -349,7 +478,17 @@ public final class PaperConnectionAccessor {
     private static void requireHandlerName(String handlerName) {
         Objects.requireNonNull(handlerName, "handlerName");
         if (handlerName.isEmpty() || PACKET_ENCODER_NAME.equals(handlerName)) {
-            throw new IllegalArgumentException("invalid capture handler name");
+            throw new IllegalArgumentException("invalid packet handler name");
+        }
+    }
+
+    private static void reportInstallationFailure(
+            Consumer<Throwable> installationFailureHandler,
+            Throwable failure) {
+        try {
+            installationFailureHandler.accept(failure);
+        } catch (Throwable ignored) {
+            // A diagnostic callback must never escape the Netty event loop.
         }
     }
 
