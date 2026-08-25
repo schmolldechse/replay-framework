@@ -17,6 +17,9 @@ import dev.voldechse.replayframework.core.event.ReplayEventDispatcher;
 import dev.voldechse.replayframework.core.port.LeaseRepository;
 import dev.voldechse.replayframework.core.port.ReplayRepository;
 import dev.voldechse.replayframework.format.ReplayIndexWriter;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.util.Objects;
@@ -68,11 +71,52 @@ public final class RecordingRuntimeModule extends AbstractModule {
     RecordingCoordinator.RecordingTarget provideRecordingTarget() {
         Path stagingRoot = workspaceRoot.resolve("recordings").normalize();
         Function<dev.voldechse.replayframework.api.id.ReplayId, Path> staging = replayId ->
-                stagingRoot.resolve(replayId.toString()).normalize();
+                prepareStagingDirectory(stagingRoot, replayId);
         return new RecordingCoordinator.RecordingTarget(
                 storageBackend,
                 dev.voldechse.replayframework.api.id.ReplayId::toString,
                 staging);
+    }
+
+    private static Path prepareStagingDirectory(
+            Path stagingRoot,
+            dev.voldechse.replayframework.api.id.ReplayId replayId) {
+        Objects.requireNonNull(stagingRoot, "stagingRoot");
+        Objects.requireNonNull(replayId, "replayId");
+        Path root = stagingRoot.toAbsolutePath().normalize();
+        Path directory = root.resolve(replayId.toString()).normalize();
+        if (!directory.startsWith(root)) {
+            throw new SecurityException("recording workspace escapes its staging root");
+        }
+        try {
+            rejectExistingWorkspaceLink(root, "recording staging root");
+            Files.createDirectories(root);
+            rejectExistingWorkspaceLink(root, "recording staging root");
+            rejectExistingWorkspaceEntry(directory);
+            Files.createDirectories(directory);
+        } catch (IOException failure) {
+            throw new IllegalStateException("could not create recording workspace", failure);
+        }
+        rejectExistingWorkspaceLink(directory, "recording workspace");
+        return directory;
+    }
+
+    private static void rejectExistingWorkspaceLink(Path path, String description) {
+        if (Files.isSymbolicLink(path)) {
+            throw new SecurityException(description + " must not be a symbolic link");
+        }
+        if (Files.exists(path, LinkOption.NOFOLLOW_LINKS)
+                && !Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IllegalArgumentException(description + " must be a directory");
+        }
+    }
+
+    private static void rejectExistingWorkspaceEntry(Path path) {
+        if (Files.exists(path, LinkOption.NOFOLLOW_LINKS)
+                && (!Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)
+                || Files.isSymbolicLink(path))) {
+            throw new SecurityException("recording workspace must be a non-link directory");
+        }
     }
 
     @Provides
@@ -98,6 +142,7 @@ public final class RecordingRuntimeModule extends AbstractModule {
 
     @Provides
     @Singleton
+    @Named("replay-recording-scheduler")
     ScheduledExecutorService provideRecordingScheduler() {
         ThreadFactory factory = Thread.ofPlatform().name("replay-recording-heartbeat-", 0).factory();
         return Executors.newScheduledThreadPool(1, factory);

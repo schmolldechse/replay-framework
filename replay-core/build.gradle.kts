@@ -11,6 +11,7 @@ dependencies {
     compileOnly(libs.guice)
     compileOnly(libs.paper.api)
     testCompileOnly(libs.paper.api)
+    testCompileOnly(libs.guice)
     testImplementation(libs.junit.jupiter)
     testImplementation(project(":replay-storage:local"))
     testRuntimeOnly(libs.guice)
