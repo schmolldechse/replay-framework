@@ -2,6 +2,8 @@ plugins {
     `java-library`
 }
 
+group = "dev.voldechse.replayframework.adapter"
+
 dependencies {
     api(project(":replay-api"))
     api(project(":replay-format"))

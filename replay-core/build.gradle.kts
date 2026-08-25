@@ -5,6 +5,7 @@ plugins {
 dependencies {
     implementation(project(":replay-api"))
     implementation(project(":replay-format"))
+    implementation(project(":replay-adapter:api"))
     implementation(project(":replay-storage:api"))
     implementation(libs.gson)
     compileOnly(libs.guice)
