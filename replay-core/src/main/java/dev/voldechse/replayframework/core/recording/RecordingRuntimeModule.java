@@ -13,6 +13,7 @@ import dev.voldechse.replayframework.api.recording.RecordingService;
 import dev.voldechse.replayframework.api.replay.ReplayStorageBackend;
 import dev.voldechse.replayframework.core.artifact.ReplayArtifactPublisher;
 import dev.voldechse.replayframework.core.capture.CaptureRouter;
+import dev.voldechse.replayframework.core.diagnostics.ReplayDiagnostics;
 import dev.voldechse.replayframework.core.event.ReplayEventDispatcher;
 import dev.voldechse.replayframework.core.port.LeaseRepository;
 import dev.voldechse.replayframework.core.port.ReplayRepository;
@@ -180,7 +181,8 @@ public final class RecordingRuntimeModule extends AbstractModule {
             RecordingLeaseManager leaseManager,
             Executor executor,
             ReplayEventDispatcher events,
-            RecordingCoordinatorReference reference) {
+            RecordingCoordinatorReference reference,
+            ReplayDiagnostics diagnostics) {
         RecordingCoordinator coordinator = new RecordingCoordinator(
                 replayAdapter,
                 captureRouter,
@@ -190,7 +192,8 @@ public final class RecordingRuntimeModule extends AbstractModule {
                 finalizer,
                 leaseManager,
                 executor,
-                events::publish);
+                events::publish,
+                diagnostics);
         reference.bind(coordinator);
         return coordinator;
     }

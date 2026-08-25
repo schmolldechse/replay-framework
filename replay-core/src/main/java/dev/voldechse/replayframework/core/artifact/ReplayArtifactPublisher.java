@@ -1,6 +1,7 @@
 package dev.voldechse.replayframework.core.artifact;
 
 import dev.voldechse.replayframework.api.id.ReplayId;
+import dev.voldechse.replayframework.core.diagnostics.ReplayDiagnostics;
 import dev.voldechse.replayframework.format.ReplayManifest;
 import dev.voldechse.replayframework.format.ReplayManifest.ArtifactFile;
 import dev.voldechse.replayframework.format.ReplayManifest.ArtifactType;
@@ -38,6 +39,7 @@ public final class ReplayArtifactPublisher {
     private final ArtifactIntegrityVerifier integrityVerifier;
     private final Executor executor;
     private final Path workDirectory;
+    private final ReplayDiagnostics diagnostics;
 
     /**
      * Creates a publisher whose blocking file work is isolated from the server thread.
@@ -54,6 +56,22 @@ public final class ReplayArtifactPublisher {
             ArtifactIntegrityVerifier integrityVerifier,
             Executor executor,
             Path workDirectory) {
+        this(
+                storage,
+                manifestCodec,
+                integrityVerifier,
+                executor,
+                workDirectory,
+                new ReplayDiagnostics());
+    }
+
+    public ReplayArtifactPublisher(
+            ReplayStorage storage,
+            ReplayManifestCodec manifestCodec,
+            ArtifactIntegrityVerifier integrityVerifier,
+            Executor executor,
+            Path workDirectory,
+            ReplayDiagnostics diagnostics) {
         this.storage = Objects.requireNonNull(storage, "storage");
         this.manifestCodec = Objects.requireNonNull(manifestCodec, "manifestCodec");
         this.integrityVerifier = Objects.requireNonNull(integrityVerifier, "integrityVerifier");
@@ -61,6 +79,7 @@ public final class ReplayArtifactPublisher {
         this.workDirectory = Objects.requireNonNull(workDirectory, "workDirectory")
                 .toAbsolutePath()
                 .normalize();
+        this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics");
     }
 
     /**
@@ -83,7 +102,7 @@ public final class ReplayArtifactPublisher {
                                         0,
                                         List.of()))
                                 .thenCompose(files -> writeManifest(work, request, files)
-                                        .thenCompose(manifest -> storage.put(
+                                                .thenCompose(manifest -> measuredPut(
                                                         staging,
                                                         ArtifactKey.of(MANIFEST_PATH),
                                                         work.resolve(MANIFEST_PATH))
@@ -122,7 +141,7 @@ public final class ReplayArtifactPublisher {
                                     snapshot);
                         },
                         executor)
-                .thenCompose(prepared -> storage.put(
+                .thenCompose(prepared -> measuredPut(
                                 staging,
                                 ArtifactKey.of(prepared.file().path()),
                                 prepared.source())
@@ -136,6 +155,33 @@ public final class ReplayArtifactPublisher {
                                     position + 1,
                                     nextFiles);
                         }));
+    }
+
+    private CompletionStage<Void> measuredPut(
+            StagingReplay staging,
+            ArtifactKey key,
+            Path source) {
+        final long size;
+        try {
+            size = Files.size(source);
+        } catch (IOException failure) {
+            return CompletableFuture.failedFuture(failure);
+        }
+        ReplayDiagnostics.StorageOperation operation = diagnostics.beginStorageOperation(size);
+        final CompletionStage<Void> put;
+        try {
+            put = Objects.requireNonNull(storage.put(staging, key, source), "storage.put result");
+        } catch (Throwable failure) {
+            operation.fail();
+            return CompletableFuture.failedFuture(failure);
+        }
+        return put.whenComplete((ignored, failure) -> {
+            if (failure == null) {
+                operation.complete();
+            } else {
+                operation.fail();
+            }
+        });
     }
 
     private ArtifactFile describe(ArtifactSpec spec) {

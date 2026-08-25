@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.inject.AbstractModule;
 import com.google.inject.Provides;
 import com.google.inject.Singleton;
+import com.google.inject.name.Named;
 import dev.voldechse.replayframework.adapter.ReplayAdapter;
 import dev.voldechse.replayframework.api.event.ReplayEventPublisher;
 import dev.voldechse.replayframework.api.metadata.ReplayMetadataService;
@@ -13,6 +14,7 @@ import dev.voldechse.replayframework.core.artifact.ArtifactIntegrityVerifier;
 import dev.voldechse.replayframework.core.artifact.ReplayArtifactPublisher;
 import dev.voldechse.replayframework.core.artifact.ReplayArtifactReader;
 import dev.voldechse.replayframework.core.event.ReplayEventDispatcher;
+import dev.voldechse.replayframework.core.diagnostics.ReplayDiagnostics;
 import dev.voldechse.replayframework.core.metadata.DefaultReplayMetadataService;
 import dev.voldechse.replayframework.core.playback.PlaybackRuntimeModule;
 import dev.voldechse.replayframework.core.playback.cache.SegmentCache;
@@ -33,6 +35,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
@@ -42,6 +45,7 @@ public final class ReplayRuntimeModule extends AbstractModule implements AutoClo
     private final ReplayAdapter adapter;
     private final Gson gson;
     private final ExecutorService runtimeExecutor;
+    private final ScheduledExecutorService shutdownScheduler;
     private final Consumer<String> logger;
 
     public ReplayRuntimeModule(
@@ -54,6 +58,7 @@ public final class ReplayRuntimeModule extends AbstractModule implements AutoClo
         this.gson = Objects.requireNonNull(gson, "gson");
         this.logger = Objects.requireNonNull(logger, "logger");
         this.runtimeExecutor = newRuntimeExecutor();
+        this.shutdownScheduler = newShutdownScheduler();
     }
 
     @Override
@@ -68,6 +73,7 @@ public final class ReplayRuntimeModule extends AbstractModule implements AutoClo
         bind(ReplayRuntimeConfiguration.PlaybackSettings.class)
                 .toInstance(configuration.playback());
         bind(Gson.class).toInstance(gson);
+        bind(ReplayDiagnostics.class).in(Singleton.class);
         bind(Executor.class).toInstance(runtimeExecutor);
         bind(ReplayAdapter.class).toInstance(adapter);
         bind(ReplayService.class).to(DefaultReplayService.class).in(Singleton.class);
@@ -87,6 +93,13 @@ public final class ReplayRuntimeModule extends AbstractModule implements AutoClo
     @Singleton
     Clock provideClock() {
         return Clock.systemUTC();
+    }
+
+    @Provides
+    @Singleton
+    @Named("replay-shutdown-scheduler")
+    ScheduledExecutorService provideShutdownScheduler() {
+        return shutdownScheduler;
     }
 
     @Provides
@@ -112,13 +125,15 @@ public final class ReplayRuntimeModule extends AbstractModule implements AutoClo
     ReplayArtifactReader provideArtifactReader(
             dev.voldechse.replayframework.storage.ReplayStorage storage,
             ReplayManifestCodec manifestCodec,
-            ArtifactIntegrityVerifier verifier) {
+            ArtifactIntegrityVerifier verifier,
+            ReplayDiagnostics diagnostics) {
         return new ReplayArtifactReader(
                 storage,
                 manifestCodec,
                 verifier,
                 runtimeExecutor,
-                configuration.playback().workDirectory());
+                configuration.playback().workDirectory(),
+                diagnostics);
     }
 
     @Provides
@@ -126,7 +141,8 @@ public final class ReplayRuntimeModule extends AbstractModule implements AutoClo
     ReplayArtifactPublisher provideArtifactPublisher(
             dev.voldechse.replayframework.storage.ReplayStorage storage,
             ReplayManifestCodec manifestCodec,
-            ArtifactIntegrityVerifier verifier) {
+            ArtifactIntegrityVerifier verifier,
+            ReplayDiagnostics diagnostics) {
         Path workDirectory = configuration.recording().workspaceRoot()
                 .resolve("artifact-publisher")
                 .normalize();
@@ -135,17 +151,21 @@ public final class ReplayRuntimeModule extends AbstractModule implements AutoClo
                 manifestCodec,
                 verifier,
                 runtimeExecutor,
-                workDirectory);
+                workDirectory,
+                diagnostics);
     }
 
     @Provides
     @Singleton
-    DiskSegmentCache provideDiskSegmentCache(ReplayArtifactReader reader) {
+    DiskSegmentCache provideDiskSegmentCache(
+            ReplayArtifactReader reader,
+            ReplayDiagnostics diagnostics) {
         return new DiskSegmentCache(
                 configuration.playback().cacheRoot(),
                 configuration.playback().cacheMaxBytes(),
                 reader,
-                runtimeExecutor);
+                runtimeExecutor,
+                diagnostics);
     }
 
     @Provides
@@ -176,6 +196,7 @@ public final class ReplayRuntimeModule extends AbstractModule implements AutoClo
     @Override
     public void close() {
         runtimeExecutor.shutdown();
+        shutdownScheduler.shutdown();
     }
 
     private PostgresModule.Configuration toPostgresConfiguration() {
@@ -206,5 +227,10 @@ public final class ReplayRuntimeModule extends AbstractModule implements AutoClo
                 new ArrayBlockingQueue<>(512),
                 factory,
                 new ThreadPoolExecutor.AbortPolicy());
+    }
+
+    private static ScheduledExecutorService newShutdownScheduler() {
+        ThreadFactory factory = Thread.ofPlatform().name("replay-shutdown-", 0).factory();
+        return java.util.concurrent.Executors.newSingleThreadScheduledExecutor(factory);
     }
 }

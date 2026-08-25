@@ -8,6 +8,9 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /** Coordinates in-memory playback ownership for one runtime instance. */
 final class PlaybackCoordinator {
@@ -16,12 +19,20 @@ final class PlaybackCoordinator {
             new ConcurrentHashMap<>();
     private final ConcurrentMap<UUID, PlaybackSessionId> byViewerId =
             new ConcurrentHashMap<>();
+    private final AtomicBoolean closed = new AtomicBoolean();
+    private final Object lifecycleLock = new Object();
 
     /** Reserves one viewer for a session before asynchronous opening begins. */
     void reserve(PlaybackSessionId sessionId, UUID viewerId) {
         Objects.requireNonNull(sessionId, "sessionId");
         Objects.requireNonNull(viewerId, "viewerId");
-        PlaybackSessionId existing = byViewerId.putIfAbsent(viewerId, sessionId);
+        PlaybackSessionId existing;
+        synchronized (lifecycleLock) {
+            if (closed.get()) {
+                throw new IllegalStateException("playback coordinator is shut down");
+            }
+            existing = byViewerId.putIfAbsent(viewerId, sessionId);
+        }
         if (existing != null) {
             throw new IllegalStateException(
                     "viewer already has an active playback session: " + viewerId
@@ -32,13 +43,18 @@ final class PlaybackCoordinator {
     /** Registers a session only after its viewer reservation has been established. */
     void register(PlaybackSession session) {
         Objects.requireNonNull(session, "session");
-        PlaybackSessionId reserved = byViewerId.get(session.viewerId());
-        if (!session.id().equals(reserved)) {
-            throw new IllegalStateException("playback session has no matching viewer reservation");
-        }
-        PlaybackSession existing = bySessionId.putIfAbsent(session.id(), session);
-        if (existing != null) {
-            throw new IllegalStateException("playback session is already registered: " + session.id());
+        synchronized (lifecycleLock) {
+            if (closed.get()) {
+                throw new IllegalStateException("playback coordinator is shut down");
+            }
+            PlaybackSessionId reserved = byViewerId.get(session.viewerId());
+            if (!session.id().equals(reserved)) {
+                throw new IllegalStateException("playback session has no matching viewer reservation");
+            }
+            PlaybackSession existing = bySessionId.putIfAbsent(session.id(), session);
+            if (existing != null) {
+                throw new IllegalStateException("playback session is already registered: " + session.id());
+            }
         }
     }
 
@@ -65,15 +81,28 @@ final class PlaybackCoordinator {
     }
 
     /** Closes every currently registered viewer session during runtime shutdown. */
-    void closeAll() {
-        for (PlaybackSession session : java.util.List.copyOf(bySessionId.values())) {
+    CompletionStage<Void> closeAll() {
+        java.util.List<PlaybackSession> sessions;
+        synchronized (lifecycleLock) {
+            closed.set(true);
+            sessions = java.util.List.copyOf(bySessionId.values());
+        }
+        java.util.List<CompletionStage<?>> closes = new java.util.ArrayList<>();
+        for (PlaybackSession session : sessions) {
             try {
-                session.close();
+                closes.add(session.close().handle((ignored, failure) -> null));
             } catch (RuntimeException ignored) {
                 // Individual session cleanup must not prevent remaining viewers from closing.
             }
         }
         bySessionId.clear();
         byViewerId.clear();
+        if (closes.isEmpty()) {
+            return CompletableFuture.completedFuture(null);
+        }
+        CompletableFuture<?>[] stages = closes.stream()
+                .map(CompletionStage::toCompletableFuture)
+                .toArray(CompletableFuture[]::new);
+        return CompletableFuture.allOf(stages);
     }
 }

@@ -2,6 +2,7 @@ package dev.voldechse.replayframework.core.playback.cache;
 
 import dev.voldechse.replayframework.core.artifact.ArtifactIntegrityVerifier;
 import dev.voldechse.replayframework.core.artifact.ReplayArtifactReader;
+import dev.voldechse.replayframework.core.diagnostics.ReplayDiagnostics;
 import dev.voldechse.replayframework.format.ReplayManifest;
 
 import java.io.IOException;
@@ -31,6 +32,7 @@ public final class DiskSegmentCache implements SegmentCache, AutoCloseable {
     private final ReplayArtifactReader artifactReader;
     private final Executor ioExecutor;
     private final ArtifactIntegrityVerifier integrityVerifier = new ArtifactIntegrityVerifier();
+    private final ReplayDiagnostics diagnostics;
     private final Object lock = new Object();
     private final LinkedHashMap<String, CacheEntry> entries = new LinkedHashMap<>(16, 0.75f, true);
     private final ConcurrentHashMap<String, CompletableFuture<CacheEntry>> inFlight =
@@ -51,6 +53,15 @@ public final class DiskSegmentCache implements SegmentCache, AutoCloseable {
             long maxBytes,
             ReplayArtifactReader artifactReader,
             Executor ioExecutor) {
+        this(cacheRoot, maxBytes, artifactReader, ioExecutor, new ReplayDiagnostics());
+    }
+
+    public DiskSegmentCache(
+            Path cacheRoot,
+            long maxBytes,
+            ReplayArtifactReader artifactReader,
+            Executor ioExecutor,
+            ReplayDiagnostics diagnostics) {
         this.cacheRoot = Objects.requireNonNull(cacheRoot, "cacheRoot")
                 .toAbsolutePath()
                 .normalize();
@@ -60,6 +71,7 @@ public final class DiskSegmentCache implements SegmentCache, AutoCloseable {
         this.maxBytes = maxBytes;
         this.artifactReader = Objects.requireNonNull(artifactReader, "artifactReader");
         this.ioExecutor = Objects.requireNonNull(ioExecutor, "ioExecutor");
+        this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics");
         this.segmentsRoot = this.cacheRoot.resolve("segments").normalize();
         this.inflightRoot = this.cacheRoot.resolve("inflight").normalize();
         if (!segmentsRoot.startsWith(this.cacheRoot)
@@ -127,6 +139,7 @@ public final class DiskSegmentCache implements SegmentCache, AutoCloseable {
             CacheEntry current = entries.get(digest);
             if (current != null && current.path.equals(path)) {
                 current.leases++;
+                diagnostics.cacheHit();
                 return current.lease(() -> release(current));
             }
             if (segment.artifact().sizeBytes() > maxBytes) {
@@ -146,6 +159,7 @@ public final class DiskSegmentCache implements SegmentCache, AutoCloseable {
             entries.put(digest, created);
             currentBytes = addExact(currentBytes, created.sizeBytes);
             created.leases++;
+            diagnostics.cacheHit();
             return created.lease(() -> release(created));
         }
     }
@@ -154,6 +168,7 @@ public final class DiskSegmentCache implements SegmentCache, AutoCloseable {
             ReplayArtifactReader.VerifiedReplay replay,
             SegmentRef segment) {
         String digest = segment.artifact().sha256();
+        diagnostics.cacheMiss();
         CompletableFuture<CacheEntry> future = inFlight.computeIfAbsent(
                 digest,
                 ignored -> startFetch(replay, segment, digest));

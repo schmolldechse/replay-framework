@@ -132,6 +132,7 @@ final class DefaultRecordingSession implements RecordingSession, CaptureSink {
         queue.closeForEnqueue();
         coordinator.unregister(id);
         requestedCompletionReason.compareAndSet(null, ReplayCompletionReason.MANUAL);
+        coordinator.sessionUpdated(this);
         if (appender.get() == null) {
             delegateFinalization(ReplayCompletionReason.MANUAL);
         }
@@ -155,6 +156,8 @@ final class DefaultRecordingSession implements RecordingSession, CaptureSink {
         queue.enqueue(packet);
         packetCount.incrementAndGet();
         totalBytes.addAndGet(packet.payload().length);
+        coordinator.packetCaptured();
+        coordinator.sessionUpdated(this);
     }
 
     /** Activates this sink only after the repository transition succeeded. */
@@ -163,6 +166,7 @@ final class DefaultRecordingSession implements RecordingSession, CaptureSink {
             throw new IllegalStateException("recording session cannot be activated from " + status.get());
         }
         recordingStartNanos.compareAndSet(0L, System.nanoTime());
+        coordinator.sessionUpdated(this);
     }
 
     /** Installs the single session writer after RECORDING became visible. */
@@ -188,18 +192,20 @@ final class DefaultRecordingSession implements RecordingSession, CaptureSink {
     }
 
     /** Begins a clean budget finalization and closes only new queue admission. */
-    void requestBudgetStop(ReplayCompletionReason reason) {
+    CompletionStage<RecordingSession> requestBudgetStop(ReplayCompletionReason reason) {
         Objects.requireNonNull(reason, "reason");
         requestedCompletionReason.compareAndSet(null, reason);
-        CompletableFuture<RecordingSession> ignored = getOrCreateStopFuture();
+        CompletableFuture<RecordingSession> future = getOrCreateStopFuture();
         if (!status.compareAndSet(RecordingStatus.RECORDING, RecordingStatus.FINALIZING)) {
-            return;
+            return future;
         }
         queue.closeForEnqueue();
         coordinator.unregister(id);
+        coordinator.sessionUpdated(this);
         if (appender.get() == null) {
             delegateFinalization(reason);
         }
+        return future;
     }
 
     /** Stores sealed local artifacts before finalization receives the session. */
@@ -236,6 +242,7 @@ final class DefaultRecordingSession implements RecordingSession, CaptureSink {
                 failureDescription.compareAndSet(null, safeDescription);
                 queue.closeForEnqueue();
                 coordinator.unregister(id);
+                coordinator.sessionUpdated(this);
                 return true;
             }
         }
@@ -252,6 +259,11 @@ final class DefaultRecordingSession implements RecordingSession, CaptureSink {
         } else {
             future.complete(result == null ? this : result);
         }
+    }
+
+    /** Returns the idempotent completion stage owned by the finalization path. */
+    CompletionStage<RecordingSession> finalizationStage() {
+        return getOrCreateStopFuture();
     }
 
     /**
@@ -272,6 +284,7 @@ final class DefaultRecordingSession implements RecordingSession, CaptureSink {
                 failureDescription.compareAndSet(null, safeDescription);
                 queue.closeForEnqueue();
                 coordinator.unregister(id);
+                coordinator.sessionUpdated(this);
                 return true;
             }
         }
@@ -313,7 +326,11 @@ final class DefaultRecordingSession implements RecordingSession, CaptureSink {
      * state transitions.
      */
     boolean markAvailable() {
-        return status.compareAndSet(RecordingStatus.FINALIZING, RecordingStatus.AVAILABLE);
+        boolean changed = status.compareAndSet(RecordingStatus.FINALIZING, RecordingStatus.AVAILABLE);
+        if (changed) {
+            coordinator.sessionUpdated(this);
+        }
+        return changed;
     }
 
     /**
@@ -330,7 +347,29 @@ final class DefaultRecordingSession implements RecordingSession, CaptureSink {
         failureDescription.compareAndSet(null, safeDescription);
         queue.closeForEnqueue();
         coordinator.unregister(id);
+        coordinator.sessionUpdated(this);
         return true;
+    }
+
+    /** Marks any non-terminal state failed when the runtime timeout expires. */
+    boolean markShutdownFailed() {
+        for (;;) {
+            RecordingStatus current = status.get();
+            if (current == RecordingStatus.AVAILABLE
+                    || current == RecordingStatus.FAILED
+                    || current == RecordingStatus.DELETING) {
+                return false;
+            }
+            if (status.compareAndSet(current, RecordingStatus.FAILED)) {
+                failureCode.compareAndSet(null, ReplayFailureCode.SERVER_CRASH);
+                failureDescription.compareAndSet(
+                        null, "recording finalization exceeded shutdown timeout");
+                queue.closeForEnqueue();
+                coordinator.unregister(id);
+                coordinator.sessionUpdated(this);
+                return true;
+            }
+        }
     }
 
     private CompletableFuture<RecordingSession> getOrCreateStopFuture() {

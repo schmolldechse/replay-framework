@@ -6,6 +6,7 @@ import com.google.inject.Singleton;
 import dev.voldechse.replayframework.adapter.ReplayAdapter;
 import dev.voldechse.replayframework.api.playback.PlaybackService;
 import dev.voldechse.replayframework.core.artifact.ReplayArtifactReader;
+import dev.voldechse.replayframework.core.diagnostics.ReplayDiagnostics;
 import dev.voldechse.replayframework.core.event.ReplayEventDispatcher;
 import dev.voldechse.replayframework.core.playback.cache.SegmentCache;
 import dev.voldechse.replayframework.core.port.ReplayRepository;
@@ -39,7 +40,8 @@ public final class PlaybackRuntimeModule extends AbstractModule {
             ReplaySegmentReader segmentReader,
             Executor ioExecutor,
             PlaybackCoordinator coordinator,
-            PlaybackEventDispatcher eventDispatcher) {
+            PlaybackEventDispatcher eventDispatcher,
+            ReplayDiagnostics diagnostics) {
         return new DefaultPlaybackService(
                 repository,
                 artifactReader,
@@ -51,7 +53,8 @@ public final class PlaybackRuntimeModule extends AbstractModule {
                 ioExecutor,
                 ioExecutor,
                 coordinator,
-                eventDispatcher);
+                eventDispatcher,
+                diagnostics);
     }
 
     @Provides

@@ -15,6 +15,7 @@ import dev.voldechse.replayframework.api.playback.PlaybackStatus;
 import dev.voldechse.replayframework.api.recording.RecordingStatus;
 import dev.voldechse.replayframework.api.recording.ReplayFailureCode;
 import dev.voldechse.replayframework.core.artifact.ReplayArtifactReader;
+import dev.voldechse.replayframework.core.diagnostics.ReplayDiagnostics;
 import dev.voldechse.replayframework.core.playback.buffer.PlaybackBuffer;
 import dev.voldechse.replayframework.core.playback.cache.SegmentCache;
 import dev.voldechse.replayframework.core.port.ReplayRepository;
@@ -70,6 +71,7 @@ final class DefaultPlaybackService implements PlaybackService {
     private final Executor commandExecutor;
     private final PlaybackCoordinator coordinator;
     private final PlaybackEventDispatcher eventDispatcher;
+    private final ReplayDiagnostics diagnostics;
 
     DefaultPlaybackService(
             ReplayRepository replayRepository,
@@ -83,6 +85,34 @@ final class DefaultPlaybackService implements PlaybackService {
             Executor commandExecutor,
             PlaybackCoordinator coordinator,
             PlaybackEventDispatcher eventDispatcher) {
+        this(
+                replayRepository,
+                artifactReader,
+                adapter,
+                sharedSegmentCache,
+                indexReader,
+                checkpointReader,
+                segmentReader,
+                ioExecutor,
+                commandExecutor,
+                coordinator,
+                eventDispatcher,
+                new ReplayDiagnostics());
+    }
+
+    DefaultPlaybackService(
+            ReplayRepository replayRepository,
+            ReplayArtifactReader artifactReader,
+            ReplayAdapter adapter,
+            SegmentCache sharedSegmentCache,
+            ReplayIndexReader indexReader,
+            ReplayCheckpointReader checkpointReader,
+            ReplaySegmentReader segmentReader,
+            Executor ioExecutor,
+            Executor commandExecutor,
+            PlaybackCoordinator coordinator,
+            PlaybackEventDispatcher eventDispatcher,
+            ReplayDiagnostics diagnostics) {
         this.replayRepository = Objects.requireNonNull(replayRepository, "replayRepository");
         this.artifactReader = Objects.requireNonNull(artifactReader, "artifactReader");
         this.adapter = Objects.requireNonNull(adapter, "adapter");
@@ -94,6 +124,7 @@ final class DefaultPlaybackService implements PlaybackService {
         this.commandExecutor = Objects.requireNonNull(commandExecutor, "commandExecutor");
         this.coordinator = Objects.requireNonNull(coordinator, "coordinator");
         this.eventDispatcher = Objects.requireNonNull(eventDispatcher, "eventDispatcher");
+        this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics");
     }
 
     @Override
@@ -139,8 +170,9 @@ final class DefaultPlaybackService implements PlaybackService {
     }
 
     /** Stops new viewer work and closes all sessions owned by this runtime. */
-    void shutdown() {
-        coordinator.closeAll();
+    CompletionStage<Void> shutdown() {
+        diagnostics.beginQuiesce();
+        return coordinator.closeAll();
     }
 
     private CompletionStage<ReplayArtifactReader.VerifiedReplay> loadReplay(
@@ -224,6 +256,7 @@ final class DefaultPlaybackService implements PlaybackService {
                             resources.timeline.get(),
                             coordinator);
                     coordinator.register(session);
+                    diagnostics.playbackStarted(session);
                     return (PlaybackSession) session;
                 });
     }
@@ -413,6 +446,7 @@ final class DefaultPlaybackService implements PlaybackService {
                         previous,
                         current,
                         snapshot);
+                updateDiagnostics(sessionId);
             }
 
             @Override
@@ -427,6 +461,7 @@ final class DefaultPlaybackService implements PlaybackService {
                         previous,
                         current,
                         snapshot);
+                updateDiagnostics(sessionId);
             }
 
             @Override
@@ -438,11 +473,13 @@ final class DefaultPlaybackService implements PlaybackService {
                         requestedPosition,
                         snapshot.position(),
                         snapshot);
+                updateDiagnostics(sessionId);
             }
 
             @Override
             public void onBufferChanged(PlaybackSnapshot snapshot) {
                 eventDispatcher.bufferChanged(sessionId, replayId, viewerId, snapshot);
+                updateDiagnostics(sessionId);
             }
 
             @Override
@@ -454,8 +491,13 @@ final class DefaultPlaybackService implements PlaybackService {
                         snapshot,
                         failureCode(failure));
                 coordinator.release(sessionId, viewerId);
+                diagnostics.playbackFinished(sessionId);
             }
         };
+    }
+
+    private void updateDiagnostics(PlaybackSessionId sessionId) {
+        coordinator.active(sessionId).ifPresent(diagnostics::playbackUpdated);
     }
 
     private static Optional<ReplayFailureCode> failureCode(Throwable failure) {

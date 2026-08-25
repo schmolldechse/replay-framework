@@ -1,6 +1,7 @@
 package dev.voldechse.replayframework.core.artifact;
 
 import dev.voldechse.replayframework.api.id.ReplayId;
+import dev.voldechse.replayframework.core.diagnostics.ReplayDiagnostics;
 import dev.voldechse.replayframework.format.CorruptReplayArtifactException;
 import dev.voldechse.replayframework.format.ReplayManifest;
 import dev.voldechse.replayframework.format.ReplayManifest.ArtifactFile;
@@ -36,6 +37,7 @@ public final class ReplayArtifactReader {
     private final ArtifactIntegrityVerifier integrityVerifier;
     private final Executor executor;
     private final Path workDirectory;
+    private final ReplayDiagnostics diagnostics;
 
     /**
      * Creates a reader with a private local download workspace.
@@ -52,6 +54,22 @@ public final class ReplayArtifactReader {
             ArtifactIntegrityVerifier integrityVerifier,
             Executor executor,
             Path workDirectory) {
+        this(
+                storage,
+                manifestCodec,
+                integrityVerifier,
+                executor,
+                workDirectory,
+                new ReplayDiagnostics());
+    }
+
+    public ReplayArtifactReader(
+            ReplayStorage storage,
+            ReplayManifestCodec manifestCodec,
+            ArtifactIntegrityVerifier integrityVerifier,
+            Executor executor,
+            Path workDirectory,
+            ReplayDiagnostics diagnostics) {
         this.storage = Objects.requireNonNull(storage, "storage");
         this.manifestCodec = Objects.requireNonNull(manifestCodec, "manifestCodec");
         this.integrityVerifier = Objects.requireNonNull(integrityVerifier, "integrityVerifier");
@@ -59,6 +77,7 @@ public final class ReplayArtifactReader {
         this.workDirectory = Objects.requireNonNull(workDirectory, "workDirectory")
                 .toAbsolutePath()
                 .normalize();
+        this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics");
     }
 
     /**
@@ -70,7 +89,7 @@ public final class ReplayArtifactReader {
     public CompletionStage<VerifiedReplay> openVerified(ReplayId replayId) {
         Objects.requireNonNull(replayId, "replayId");
         return CompletableFuture.supplyAsync(this::createManifestDownload, executor)
-                .thenCompose(manifestTarget -> storage.exists(replayId, ArtifactKey.of(MANIFEST_PATH))
+                .thenCompose(manifestTarget -> measuredExists(replayId, ArtifactKey.of(MANIFEST_PATH))
                         .thenCompose(exists -> {
                             if (!exists) {
                                 deleteQuietly(manifestTarget);
@@ -78,7 +97,7 @@ public final class ReplayArtifactReader {
                                         new ReplayUnavailableException(
                                                 "replay manifest is not published: " + replayId));
                             }
-                            return storage.fetch(
+                            return measuredFetch(
                                             replayId,
                                             ArtifactKey.of(MANIFEST_PATH),
                                             Optional.empty(),
@@ -110,7 +129,7 @@ public final class ReplayArtifactReader {
         return CompletableFuture.supplyAsync(
                         () -> createArtifactDownload(normalizedTarget),
                         executor)
-                .thenCompose(download -> storage.fetch(
+                .thenCompose(download -> measuredFetch(
                                 replay.replayId(),
                                 ArtifactKey.of(expected.path()),
                                 Optional.empty(),
@@ -123,6 +142,47 @@ public final class ReplayArtifactReader {
                                 executor))
                         .thenApply(ignored -> normalizedTarget)
                         .whenComplete((ignored, failure) -> deleteQuietly(download)));
+    }
+
+    private CompletionStage<Boolean> measuredExists(ReplayId replayId, ArtifactKey key) {
+        ReplayDiagnostics.StorageOperation operation = diagnostics.beginStorageOperation(0L);
+        final CompletionStage<Boolean> exists;
+        try {
+            exists = Objects.requireNonNull(storage.exists(replayId, key), "storage.exists result");
+        } catch (Throwable failure) {
+            operation.fail();
+            return CompletableFuture.failedFuture(failure);
+        }
+        return exists.whenComplete((ignored, failure) -> {
+            if (failure == null) {
+                operation.complete();
+            } else {
+                operation.fail();
+            }
+        });
+    }
+
+    private CompletionStage<Path> measuredFetch(
+            ReplayId replayId,
+            ArtifactKey key,
+            Optional<dev.voldechse.replayframework.storage.ByteRange> range,
+            Path target) {
+        ReplayDiagnostics.StorageOperation operation = diagnostics.beginStorageOperation(0L);
+        final CompletionStage<Path> fetch;
+        try {
+            fetch = Objects.requireNonNull(
+                    storage.fetch(replayId, key, range, target), "storage.fetch result");
+        } catch (Throwable failure) {
+            operation.fail();
+            return CompletableFuture.failedFuture(failure);
+        }
+        return fetch.whenComplete((ignored, failure) -> {
+            if (failure == null) {
+                operation.complete();
+            } else {
+                operation.fail();
+            }
+        });
     }
 
     private VerifiedReplay readVerifiedManifest(ReplayId replayId, Path fetched) {

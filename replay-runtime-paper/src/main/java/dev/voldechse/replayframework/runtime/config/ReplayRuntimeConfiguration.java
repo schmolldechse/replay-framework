@@ -12,16 +12,32 @@ public final class ReplayRuntimeConfiguration {
     private final StorageSettings storage;
     private final RecordingSettings recording;
     private final PlaybackSettings playback;
+    private final ShutdownSettings shutdown;
 
+    /**
+     * Compatibility constructor for callers created before shutdown timeout
+     * became part of the runtime configuration.
+     */
     public ReplayRuntimeConfiguration(
             PostgresSettings postgresql,
             StorageSettings storage,
             RecordingSettings recording,
             PlaybackSettings playback) {
+        this(postgresql, storage, recording, playback,
+                new ShutdownSettings(Duration.ofSeconds(30)));
+    }
+
+    public ReplayRuntimeConfiguration(
+            PostgresSettings postgresql,
+            StorageSettings storage,
+            RecordingSettings recording,
+            PlaybackSettings playback,
+            ShutdownSettings shutdown) {
         this.postgresql = Objects.requireNonNull(postgresql, "postgresql");
         this.storage = Objects.requireNonNull(storage, "storage");
         this.recording = Objects.requireNonNull(recording, "recording");
         this.playback = Objects.requireNonNull(playback, "playback");
+        this.shutdown = Objects.requireNonNull(shutdown, "shutdown");
     }
 
     public PostgresSettings postgresql() {
@@ -40,6 +56,10 @@ public final class ReplayRuntimeConfiguration {
         return playback;
     }
 
+    public ShutdownSettings shutdown() {
+        return shutdown;
+    }
+
     @Override
     public String toString() {
         return "ReplayRuntimeConfiguration["
@@ -47,6 +67,7 @@ public final class ReplayRuntimeConfiguration {
                 + ", storage=" + storage
                 + ", recording=" + recording
                 + ", playback=" + playback
+                + ", shutdown=" + shutdown
                 + ']';
     }
 
@@ -436,6 +457,24 @@ public final class ReplayRuntimeConfiguration {
         public String toString() {
             return "PlaybackSettings[workDirectory=<configured>, cacheRoot=<configured>, cacheMaxBytes="
                     + cacheMaxBytes + ']';
+        }
+    }
+
+    /** Runtime lifecycle settings that are independent from replay content. */
+    public static final class ShutdownSettings {
+        private final Duration timeout;
+
+        public ShutdownSettings(Duration timeout) {
+            this.timeout = requirePositive(timeout, "timeout");
+        }
+
+        public Duration timeout() {
+            return timeout;
+        }
+
+        @Override
+        public String toString() {
+            return "ShutdownSettings[timeout=" + timeout + ']';
         }
     }
 

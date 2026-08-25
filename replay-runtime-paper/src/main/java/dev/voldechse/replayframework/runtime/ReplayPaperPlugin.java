@@ -23,6 +23,7 @@ import dev.voldechse.replayframework.api.playback.PlaybackService;
 import dev.voldechse.replayframework.api.recording.RecordingService;
 import dev.voldechse.replayframework.api.replay.ReplayService;
 import dev.voldechse.replayframework.core.event.ReplayEventDispatcher;
+import dev.voldechse.replayframework.core.diagnostics.ReplayDiagnostics;
 import dev.voldechse.replayframework.core.playback.PlaybackRuntimeLifecycle;
 import dev.voldechse.replayframework.core.playback.cache.DiskSegmentCache;
 import dev.voldechse.replayframework.core.recording.RecordingLeaseManager;
@@ -35,6 +36,7 @@ import dev.voldechse.replayframework.storage.ReplayStorage;
 import dev.voldechse.replayframework.storage.s3.S3ReplayStorage;
 import dev.voldechse.replayframework.storage.sftp.SftpReplayStorage;
 import java.util.Objects;
+import java.time.Duration;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -94,7 +96,13 @@ public final class ReplayPaperPlugin extends JavaPlugin {
             // Paper may close the plugin classloader immediately after this
             // callback returns, so the owned graph must be resolved and
             // closed while the loader is still available.
-            current.close(getLogger()::warning);
+            ReplayShutdownCoordinator.ShutdownResult result = current.awaitShutdown();
+            if (result != null) {
+                getLogger().info("Replay Framework shutdown completed: withinTimeout="
+                        + result.completedWithinTimeout()
+                        + ", forcedRecordings=" + result.forcedRecordingFailures()
+                        + ", elapsed=" + result.elapsed());
+            }
         }
 
         CompletableFuture<RuntimeState> pending = bootstrapFuture;
@@ -128,7 +136,12 @@ public final class ReplayPaperPlugin extends JavaPlugin {
                 message -> getLogger().warning(message));
         try {
             Injector injector = Guice.createInjector(module);
-            return RuntimeState.from(injector, module, this::closeCheckpointResources);
+            return RuntimeState.from(
+                    injector,
+                    module,
+                    this::closeCheckpointResources,
+                    configuration.shutdown().timeout(),
+                    getLogger()::warning);
         } catch (Throwable failure) {
             module.close();
             throw failure;
@@ -212,13 +225,14 @@ public final class ReplayPaperPlugin extends JavaPlugin {
             RecordingRuntimeLifecycle recording = state.injector()
                     .getInstance(RecordingRuntimeLifecycle.class);
             recording.start();
+            state.installShutdownCoordinator();
             DefaultReplayFramework framework = new DefaultReplayFramework(
                     state.injector().getInstance(RecordingService.class),
                     state.injector().getInstance(PlaybackService.class),
                     state.injector().getInstance(ReplayService.class),
                     state.injector().getInstance(ReplayMetadataService.class),
                     state.injector().getInstance(ReplayEventPublisher.class),
-                    () -> closeAsync(state));
+                    () -> state.startShutdown());
             state.installFramework(framework);
             ReplayFrameworkProvider.install(framework);
             getServer().getServicesManager().register(
@@ -256,6 +270,10 @@ public final class ReplayPaperPlugin extends JavaPlugin {
     }
 
     private void closeAsync(RuntimeState state) {
+        if (state.hasShutdownCoordinator()) {
+            state.startShutdown();
+            return;
+        }
         ExecutorService executor = bootstrapExecutor;
         if (executor == null || executor.isShutdown()) {
             state.close(getLogger()::warning);
@@ -303,25 +321,40 @@ public final class ReplayPaperPlugin extends JavaPlugin {
         private final Injector injector;
         private final ReplayRuntimeModule module;
         private final Runnable checkpointResourcesCloser;
+        private final Duration shutdownTimeout;
+        private final Consumer<String> logger;
         private final AtomicBoolean closed = new AtomicBoolean();
+        private final AtomicBoolean sharedResourcesClosed = new AtomicBoolean();
         private volatile DefaultReplayFramework framework;
+        private volatile ReplayShutdownCoordinator shutdownCoordinator;
 
         private RuntimeState(
                 Injector injector,
                 ReplayRuntimeModule module,
-                Runnable checkpointResourcesCloser) {
+                Runnable checkpointResourcesCloser,
+                Duration shutdownTimeout,
+                Consumer<String> logger) {
             this.injector = Objects.requireNonNull(injector, "injector");
             this.module = Objects.requireNonNull(module, "module");
             this.checkpointResourcesCloser = Objects.requireNonNull(
                     checkpointResourcesCloser,
                     "checkpointResourcesCloser");
+            this.shutdownTimeout = Objects.requireNonNull(shutdownTimeout, "shutdownTimeout");
+            this.logger = Objects.requireNonNull(logger, "logger");
         }
 
         private static RuntimeState from(
                 Injector injector,
                 ReplayRuntimeModule module,
-                Runnable checkpointResourcesCloser) {
-            return new RuntimeState(injector, module, checkpointResourcesCloser);
+                Runnable checkpointResourcesCloser,
+                Duration shutdownTimeout,
+                Consumer<String> logger) {
+            return new RuntimeState(
+                    injector,
+                    module,
+                    checkpointResourcesCloser,
+                    shutdownTimeout,
+                    logger);
         }
 
         private Injector injector() {
@@ -336,6 +369,73 @@ public final class ReplayPaperPlugin extends JavaPlugin {
             this.framework = Objects.requireNonNull(framework, "framework");
         }
 
+        private void installShutdownCoordinator() {
+            ReplayDiagnostics diagnostics = injector.getInstance(ReplayDiagnostics.class);
+            ScheduledExecutorService scheduler = injector.getInstance(Key.get(
+                    ScheduledExecutorService.class,
+                    Names.named("replay-shutdown-scheduler")));
+            shutdownCoordinator = new ReplayShutdownCoordinator(
+                    shutdownTimeout,
+                    scheduler,
+                    new ReplayShutdownCoordinator.ShutdownActions() {
+                        @Override
+                        public java.util.concurrent.CompletionStage<Void> beginRecordingShutdown() {
+                            return injector.getInstance(RecordingRuntimeLifecycle.class)
+                                    .shutdownForServer();
+                        }
+
+                        @Override
+                        public java.util.concurrent.CompletionStage<Void> failOutstandingRecordings() {
+                            return injector.getInstance(RecordingRuntimeLifecycle.class)
+                                    .failOutstandingForShutdownTimeout();
+                        }
+
+                        @Override
+                        public java.util.concurrent.CompletionStage<Void> closePlaybacks() {
+                            return injector.getInstance(PlaybackRuntimeLifecycle.class)
+                                    .shutdownForRuntime();
+                        }
+
+                        @Override
+                        public java.util.concurrent.CompletionStage<Void> releaseLeases() {
+                            injector.getInstance(RecordingLeaseManager.class).close();
+                            return CompletableFuture.completedFuture(null);
+                        }
+
+                        @Override
+                        public void closeSharedResources() {
+                            RuntimeState.this.closeSharedResources();
+                        }
+                    },
+                    diagnostics::snapshot);
+        }
+
+        private boolean hasShutdownCoordinator() {
+            return shutdownCoordinator != null;
+        }
+
+        private void startShutdown() {
+            ReplayShutdownCoordinator coordinator = shutdownCoordinator;
+            if (coordinator == null) {
+                close(logger);
+                return;
+            }
+            coordinator.shutdown().exceptionally(failure -> {
+                logger.accept("Replay Framework shutdown failed: "
+                        + safeFailureSummary(failure));
+                return null;
+            });
+        }
+
+        private ReplayShutdownCoordinator.ShutdownResult awaitShutdown() {
+            ReplayShutdownCoordinator coordinator = shutdownCoordinator;
+            if (coordinator == null) {
+                close(logger);
+                return null;
+            }
+            return coordinator.await(shutdownTimeout);
+        }
+
         private void close(Consumer<String> logger) {
             if (!closed.compareAndSet(false, true)) {
                 return;
@@ -345,6 +445,17 @@ public final class ReplayPaperPlugin extends JavaPlugin {
             closeStep("playback", () -> injector.getInstance(PlaybackRuntimeLifecycle.class).close(), logger);
             closeStep("recording", () -> injector.getInstance(RecordingRuntimeLifecycle.class).close(), logger);
             closeStep("leases", () -> injector.getInstance(RecordingLeaseManager.class).close(), logger);
+            closeSharedResources(logger);
+        }
+
+        private void closeSharedResources() {
+            closeSharedResources(logger);
+        }
+
+        private void closeSharedResources(Consumer<String> logger) {
+            if (!sharedResourcesClosed.compareAndSet(false, true)) {
+                return;
+            }
             closeStep("segment cache", () -> injector.getInstance(DiskSegmentCache.class).close(), logger);
             closeStep("events", () -> injector.getInstance(ReplayEventDispatcher.class).close(), logger);
             closeStep("paper checkpoint resources", checkpointResourcesCloser, logger);

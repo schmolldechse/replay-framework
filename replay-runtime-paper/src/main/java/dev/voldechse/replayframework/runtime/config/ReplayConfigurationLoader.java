@@ -58,12 +58,14 @@ public final class ReplayConfigurationLoader {
             JsonElement parsed = JsonParser.parseString(
                     Files.readString(configFile, StandardCharsets.UTF_8));
             JsonObject rootObject = object(parsed, "root");
-            rejectUnknown(rootObject, Set.of("postgresql", "storage", "recording", "playback"), "root");
+            rejectUnknown(rootObject, Set.of(
+                    "postgresql", "storage", "recording", "playback", "shutdown"), "root");
             return new ReplayRuntimeConfiguration(
                     parsePostgresql(requiredObject(rootObject, "postgresql", "root")),
                     parseStorage(requiredObject(rootObject, "storage", "root"), root),
                     parseRecording(requiredObject(rootObject, "recording", "root"), root),
-                    parsePlayback(requiredObject(rootObject, "playback", "root"), root));
+                    parsePlayback(requiredObject(rootObject, "playback", "root"), root),
+                    parseShutdown(rootObject));
         } catch (IOException | RuntimeException failure) {
             if (failure instanceof IllegalArgumentException argument) {
                 throw argument;
@@ -239,6 +241,17 @@ public final class ReplayConfigurationLoader {
                 integer(object, "maxParallelFetches", "playback"));
     }
 
+    private ReplayRuntimeConfiguration.ShutdownSettings parseShutdown(JsonObject root) {
+        JsonElement value = root.get("shutdown");
+        if (value == null) {
+            return new ReplayRuntimeConfiguration.ShutdownSettings(Duration.ofSeconds(30));
+        }
+        JsonObject object = object(value, "shutdown");
+        rejectUnknown(object, Set.of("timeout"), "shutdown");
+        return new ReplayRuntimeConfiguration.ShutdownSettings(
+                duration(object, "timeout", "shutdown"));
+    }
+
     private void writeDefault(Path target) throws IOException {
         JsonObject defaults = defaultJson();
         String json = gson.newBuilder().setPrettyPrinting().create().toJson(defaults) + System.lineSeparator();
@@ -332,6 +345,10 @@ public final class ReplayConfigurationLoader {
         playback.addProperty("diskBudgetBytes", 2147483648L);
         playback.addProperty("maxParallelFetches", 4);
         root.add("playback", playback);
+
+        JsonObject shutdown = new JsonObject();
+        shutdown.addProperty("timeout", "PT30S");
+        root.add("shutdown", shutdown);
         return root;
     }
 
