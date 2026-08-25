@@ -27,6 +27,8 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import net.kyori.adventure.key.Key;
+import net.minecraft.network.protocol.game.ClientboundChangeDifficultyPacket;
+import net.minecraft.world.Difficulty;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.Test;
 
@@ -235,7 +237,7 @@ final class Paper26CheckpointFixtureTest {
                 family,
                 worldKey,
                 targetKey,
-                new Object());
+                new ClientboundChangeDifficultyPacket(Difficulty.NORMAL, false));
     }
 
     private static Paper26SyntheticStateCollector.StateDelta stateDelta(

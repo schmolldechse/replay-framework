@@ -44,7 +44,10 @@ public final class Paper26PacketRegistry implements PacketRegistry {
             Map.entry(type("minecraft:block_update"), stateful()),
             Map.entry(type("minecraft:forget_level_chunk"), stateful()),
             Map.entry(type("minecraft:section_blocks_update"), stateful()),
-            Map.entry(type("minecraft:block_changed_ack"), stateful()),
+            // This acknowledgement carries no reconstructible client state.
+            // It remains registered so capture and playback reject it
+            // explicitly instead of treating it as a durable checkpoint value.
+            Map.entry(type("minecraft:block_changed_ack"), unsupported()),
             Map.entry(type("minecraft:change_difficulty"), stateful()),
             Map.entry(type("minecraft:game_rule_values"), stateful()),
             Map.entry(type("minecraft:initialize_border"), stateful()),

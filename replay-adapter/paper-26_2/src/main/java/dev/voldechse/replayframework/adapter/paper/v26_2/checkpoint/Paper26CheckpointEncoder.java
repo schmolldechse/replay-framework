@@ -19,6 +19,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
+import net.minecraft.network.protocol.Packet;
 
 /**
  * Adapter-internal checkpoint orchestrator for the Paper 26.2 packet format.
@@ -380,7 +381,7 @@ public final class Paper26CheckpointEncoder implements CheckpointEncoder {
             CheckpointPacketFamily family,
             String worldKey,
             String targetKey,
-            Object nativePacket) {
+            Packet<?> nativePacket) {
         public PacketBlueprint {
             descriptorTypeName = requireStableText(descriptorTypeName, "descriptorTypeName");
             Objects.requireNonNull(family, "family");
