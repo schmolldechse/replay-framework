@@ -46,6 +46,35 @@ final class PlaybackTimeline implements AutoCloseable {
         void close();
     }
 
+    /** Internal observer for state transitions produced by the timeline. */
+    interface Listener {
+        default void onStatusChanged(
+                PlaybackStatus previous,
+                PlaybackStatus current,
+                PlaybackSnapshot snapshot) {
+        }
+
+        default void onSpeedChanged(
+                PlaybackSpeed previous,
+                PlaybackSpeed current,
+                PlaybackSnapshot snapshot) {
+        }
+
+        default void onSeeked(Duration requestedPosition, PlaybackSnapshot snapshot) {
+        }
+
+        default void onBufferChanged(PlaybackSnapshot snapshot) {
+        }
+
+        default void onCompleted(PlaybackSnapshot snapshot, Throwable failure) {
+        }
+
+        static Listener noOp() {
+            return new Listener() {
+            };
+        }
+    }
+
     record BufferProgress(Duration bufferedBehind, Duration bufferedAhead) {
         BufferProgress {
             Objects.requireNonNull(bufferedBehind, "bufferedBehind");
@@ -61,6 +90,7 @@ final class PlaybackTimeline implements AutoCloseable {
     private final PlaybackBridge bridge;
     private final Executor commandExecutor;
     private final LongSupplier nowNanos;
+    private final Listener listener;
     private final Object stateLock = new Object();
     private final PlaybackClock clock;
     private final SeekEngine seekEngine;
@@ -69,6 +99,8 @@ final class PlaybackTimeline implements AutoCloseable {
     private boolean desiredPlaying;
     private boolean prepared;
     private boolean closed;
+    private boolean completionNotified;
+    private boolean resourcesClosed;
     private long operationGeneration;
     private BufferProgress lastProgress = new BufferProgress(Duration.ZERO, Duration.ZERO);
 
@@ -80,6 +112,26 @@ final class PlaybackTimeline implements AutoCloseable {
             PlaybackBufferOptions options,
             Executor commandExecutor,
             LongSupplier nowNanos) {
+        this(
+                duration,
+                index,
+                data,
+                bridge,
+                options,
+                commandExecutor,
+                nowNanos,
+                Listener.noOp());
+    }
+
+    PlaybackTimeline(
+            Duration duration,
+            ReplayIndex index,
+            PlaybackData data,
+            PlaybackBridge bridge,
+            PlaybackBufferOptions options,
+            Executor commandExecutor,
+            LongSupplier nowNanos,
+            Listener listener) {
         this.durationNanos = toNanos(duration, "duration");
         if (durationNanos < 0L) {
             throw new IllegalArgumentException("duration must not be negative");
@@ -90,6 +142,7 @@ final class PlaybackTimeline implements AutoCloseable {
         this.commandExecutor = new SerialExecutor(
                 Objects.requireNonNull(commandExecutor, "commandExecutor"));
         this.nowNanos = Objects.requireNonNull(nowNanos, "nowNanos");
+        this.listener = Objects.requireNonNull(listener, "listener");
         this.clock = new PlaybackClock(durationNanos, PlaybackSpeed.NORMAL, nowNanos);
         this.seekEngine = new SeekEngine(
                 Objects.requireNonNull(index, "index"),
@@ -144,6 +197,7 @@ final class PlaybackTimeline implements AutoCloseable {
 
     void play() {
         commandExecutor.execute(() -> {
+            StatusTransition transition;
             synchronized (stateLock) {
                 if (isTerminal()) {
                     return;
@@ -153,24 +207,25 @@ final class PlaybackTimeline implements AutoCloseable {
                 }
                 desiredPlaying = true;
                 if (!prepared) {
-                    status = PlaybackStatus.PREPARING;
-                    return;
-                }
-                if (status == PlaybackStatus.BUFFERING) {
+                    transition = setStatusLocked(PlaybackStatus.PREPARING);
+                } else if (status == PlaybackStatus.BUFFERING) {
                     scheduler.start();
                     scheduler.wake();
-                    return;
+                    transition = null;
+                } else {
+                    clock.play(nowNanos.getAsLong());
+                    transition = setStatusLocked(PlaybackStatus.PLAYING);
+                    scheduler.start();
+                    scheduler.wake();
                 }
-                clock.play(nowNanos.getAsLong());
-                status = PlaybackStatus.PLAYING;
-                scheduler.start();
-                scheduler.wake();
             }
+            notifyStatus(transition);
         });
     }
 
     void pause() {
         commandExecutor.execute(() -> {
+            StatusTransition transition;
             synchronized (stateLock) {
                 if (isTerminal()) {
                     return;
@@ -179,28 +234,38 @@ final class PlaybackTimeline implements AutoCloseable {
                 clock.pause(nowNanos.getAsLong());
                 if (status == PlaybackStatus.PLAYING
                         || status == PlaybackStatus.BUFFERING) {
-                    status = PlaybackStatus.PAUSED;
+                    transition = setStatusLocked(PlaybackStatus.PAUSED);
+                } else {
+                    transition = null;
                 }
                 scheduler.wake();
             }
+            notifyStatus(transition);
         });
     }
 
     void speed(PlaybackSpeed speed) {
         Objects.requireNonNull(speed, "speed");
         commandExecutor.execute(() -> {
+            SpeedTransition transition = null;
             synchronized (stateLock) {
                 if (isTerminal()) {
                     return;
                 }
+                PlaybackSpeed previous = clock.speed();
                 clock.setSpeed(speed, nowNanos.getAsLong());
+                if (previous != speed) {
+                    transition = new SpeedTransition(previous, speed, snapshotLocked());
+                }
                 scheduler.wake();
             }
+            notifySpeed(transition);
         });
     }
 
     CompletionStage<PlaybackSnapshot> prepare() {
         return enqueueAsync(() -> {
+            StatusTransition preparing;
             synchronized (stateLock) {
                 if (closed || status == PlaybackStatus.FAILED) {
                     return failedTerminal();
@@ -208,28 +273,35 @@ final class PlaybackTimeline implements AutoCloseable {
                 if (prepared) {
                     return CompletableFuture.completedFuture(snapshotLocked());
                 }
-                status = PlaybackStatus.BUFFERING;
+                preparing = setStatusLocked(PlaybackStatus.BUFFERING);
             }
+            notifyStatus(preparing);
             long generation = nextOperation();
             return seekEngine.seekTo(Duration.ZERO, clock.speed(), false)
                     .thenApplyAsync(result -> {
+                        StatusTransition preparedTransition;
+                        BufferProgress previousProgress;
+                        PlaybackSnapshot snapshot;
                         synchronized (stateLock) {
                             if (generation != operationGeneration || isTerminal()) {
                                 throw new IllegalStateException(
                                         "playback preparation is no longer current");
                             }
-                            applySeekResult(result);
+                            previousProgress = applySeekResult(result);
                             prepared = true;
                             if (desiredPlaying && result.positionNanos() < durationNanos) {
                                 clock.play(nowNanos.getAsLong());
-                                status = PlaybackStatus.PLAYING;
+                                preparedTransition = setStatusLocked(PlaybackStatus.PLAYING);
                                 scheduler.start();
                                 scheduler.wake();
                             } else {
-                                status = PlaybackStatus.PAUSED;
+                                preparedTransition = setStatusLocked(PlaybackStatus.PAUSED);
                             }
-                            return snapshotLocked();
+                            snapshot = snapshotLocked();
                         }
+                        notifyBuffer(previousProgress, snapshot);
+                        notifyStatus(preparedTransition);
+                        return snapshot;
                     }, commandExecutor)
                     .exceptionallyCompose(failure -> failPreparation(failure));
         });
@@ -266,18 +338,32 @@ final class PlaybackTimeline implements AutoCloseable {
 
     CompletionStage<PlaybackSnapshot> closeAsync() {
         return enqueueAsync(() -> {
+            StatusTransition closedTransition;
             synchronized (stateLock) {
                 if (closed) {
                     return CompletableFuture.completedFuture(snapshotLocked());
                 }
                 closed = true;
                 desiredPlaying = false;
-                status = PlaybackStatus.CLOSED;
+                closedTransition = setStatusLocked(PlaybackStatus.CLOSED);
                 operationGeneration++;
             }
+            notifyStatus(closedTransition);
             CompletionStage<Void> stopped = scheduler.stop();
             return stopped
-                    .thenRunAsync(this::closeResources, commandExecutor)
+                    .thenRunAsync(() -> {
+                        RuntimeException failure = null;
+                        try {
+                            closeResources();
+                        } catch (RuntimeException exception) {
+                            failure = exception;
+                        }
+                        PlaybackSnapshot snapshot = snapshot();
+                        notifyCompleted(snapshot, failure);
+                        if (failure != null) {
+                            throw failure;
+                        }
+                    }, commandExecutor)
                     .thenApplyAsync(ignored -> snapshot(), commandExecutor);
         });
     }
@@ -288,13 +374,18 @@ final class PlaybackTimeline implements AutoCloseable {
     }
 
     PlaybackSnapshot snapshot() {
+        BufferProgress previousProgress;
+        PlaybackSnapshot snapshot;
         synchronized (stateLock) {
+            previousProgress = lastProgress;
             if (!closed) {
                 lastProgress = data.progress(Duration.ofNanos(clock.positionNanos(
                         nowNanos.getAsLong())));
             }
-            return snapshotLocked();
+            snapshot = snapshotLocked();
         }
+        notifyBuffer(previousProgress, snapshot);
+        return snapshot;
     }
 
     void runSchedulerOnce(long nowNanos) {
@@ -307,67 +398,208 @@ final class PlaybackTimeline implements AutoCloseable {
 
     private CompletionStage<PlaybackSnapshot> beginSeek(Duration target) {
         final boolean resume;
+        final Duration requestedPosition = normalizeRequestedPosition(target);
+        StatusTransition bufferingTransition;
         synchronized (stateLock) {
             if (isTerminal()) {
                 return failedTerminal();
             }
             resume = desiredPlaying;
             clock.pause(nowNanos.getAsLong());
-            status = PlaybackStatus.BUFFERING;
+            bufferingTransition = setStatusLocked(PlaybackStatus.BUFFERING);
         }
+        notifyStatus(bufferingTransition);
         long generation = nextOperation();
         return seekEngine.seekTo(target, clock.speed(), resume)
                 .thenApplyAsync(result -> {
+                    StatusTransition finalTransition;
+                    BufferProgress previousProgress;
+                    PlaybackSnapshot snapshot;
                     synchronized (stateLock) {
                         if (generation != operationGeneration || isTerminal()) {
                             throw new IllegalStateException("seek is no longer current");
                         }
-                        applySeekResult(result);
+                        previousProgress = applySeekResult(result);
                         if (result.positionNanos() >= durationNanos) {
                             desiredPlaying = false;
-                            status = PlaybackStatus.ENDED;
+                            finalTransition = setStatusLocked(PlaybackStatus.ENDED);
                         } else if (!desiredPlaying) {
-                            status = PlaybackStatus.PAUSED;
+                            finalTransition = setStatusLocked(PlaybackStatus.PAUSED);
                         } else {
                             clock.play(nowNanos.getAsLong());
-                            status = PlaybackStatus.PLAYING;
+                            finalTransition = setStatusLocked(PlaybackStatus.PLAYING);
                             scheduler.start();
                             scheduler.wake();
                         }
-                        return snapshotLocked();
+                        snapshot = snapshotLocked();
                     }
+                    notifyBuffer(previousProgress, snapshot);
+                    notifyStatus(finalTransition);
+                    notifySeek(requestedPosition, snapshot);
+                    if (snapshot.status() == PlaybackStatus.ENDED) {
+                        notifyCompleted(snapshot, null);
+                    }
+                    return snapshot;
                 }, commandExecutor)
                 .exceptionallyCompose(failure -> failOperation(failure));
     }
 
-    private void applySeekResult(SeekEngine.SeekResult result) {
+    private BufferProgress applySeekResult(SeekEngine.SeekResult result) {
+        BufferProgress previousProgress = lastProgress;
         clock.seekTo(result.positionNanos(), nowNanos.getAsLong());
         scheduler.resetCursor(result.emittedFrames());
         lastProgress = data.progress(Duration.ofNanos(result.positionNanos()));
+        return previousProgress;
     }
 
     private CompletionStage<PlaybackSnapshot> failPreparation(Throwable failure) {
+        FailureTransition transition;
         synchronized (stateLock) {
-            failLocked(failure);
-            return CompletableFuture.failedFuture(unwrap(failure));
+            transition = failLocked(failure);
         }
+        finishFailure(transition);
+        return CompletableFuture.failedFuture(unwrap(failure));
     }
 
     private CompletionStage<PlaybackSnapshot> failOperation(Throwable failure) {
+        FailureTransition transition;
         synchronized (stateLock) {
-            failLocked(failure);
-            return CompletableFuture.failedFuture(unwrap(failure));
+            transition = failLocked(failure);
+        }
+        finishFailure(transition);
+        return CompletableFuture.failedFuture(unwrap(failure));
+    }
+
+    private FailureTransition failLocked(Throwable failure) {
+        if (isTerminal()) {
+            return null;
+        }
+        desiredPlaying = false;
+        StatusTransition statusTransition = setStatusLocked(PlaybackStatus.FAILED);
+        operationGeneration++;
+        return new FailureTransition(statusTransition, unwrap(failure));
+    }
+
+    private void finishFailure(FailureTransition transition) {
+        if (transition == null) {
+            return;
+        }
+        notifyStatus(transition.statusTransition());
+        scheduler.stop().thenRunAsync(() -> {
+            RuntimeException cleanupFailure = null;
+            try {
+                closeResources();
+            } catch (RuntimeException exception) {
+                cleanupFailure = exception;
+            }
+            PlaybackSnapshot snapshot = snapshot();
+            notifyCompleted(snapshot, transition.failure());
+            if (cleanupFailure != null) {
+                if (transition.failure() != null && transition.failure() != cleanupFailure) {
+                    cleanupFailure.addSuppressed(transition.failure());
+                }
+                throw cleanupFailure;
+            }
+        }, commandExecutor);
+    }
+
+    private StatusTransition setStatusLocked(PlaybackStatus next) {
+        Objects.requireNonNull(next, "next");
+        if (status == next) {
+            return null;
+        }
+        PlaybackStatus previous = status;
+        status = next;
+        return new StatusTransition(previous, next, snapshotLocked());
+    }
+
+    private void notifyStatus(StatusTransition transition) {
+        if (transition == null) {
+            return;
+        }
+        try {
+            listener.onStatusChanged(
+                    transition.previous(),
+                    transition.current(),
+                    transition.snapshot());
+        } catch (RuntimeException ignored) {
+            // Internal observers must not change timeline state.
         }
     }
 
-    private void failLocked(Throwable failure) {
-        if (closed || status == PlaybackStatus.CLOSED) {
+    private void notifySpeed(SpeedTransition transition) {
+        if (transition == null) {
             return;
         }
-        desiredPlaying = false;
-        status = PlaybackStatus.FAILED;
-        operationGeneration++;
-        scheduler.stop().thenRunAsync(this::closeResources, commandExecutor);
+        try {
+            listener.onSpeedChanged(
+                    transition.previous(),
+                    transition.current(),
+                    transition.snapshot());
+        } catch (RuntimeException ignored) {
+            // Internal observers must not change timeline state.
+        }
+    }
+
+    private void notifySeek(Duration requestedPosition, PlaybackSnapshot snapshot) {
+        try {
+            listener.onSeeked(requestedPosition, snapshot);
+        } catch (RuntimeException ignored) {
+            // Internal observers must not change timeline state.
+        }
+    }
+
+    private void notifyBuffer(BufferProgress previous, PlaybackSnapshot snapshot) {
+        BufferProgress current = new BufferProgress(
+                snapshot.bufferedBehind(),
+                snapshot.bufferedAhead());
+        if (previous.equals(current)) {
+            return;
+        }
+        try {
+            listener.onBufferChanged(snapshot);
+        } catch (RuntimeException ignored) {
+            // Internal observers must not change timeline state.
+        }
+    }
+
+    private void notifyCompleted(PlaybackSnapshot snapshot, Throwable failure) {
+        synchronized (stateLock) {
+            if (completionNotified) {
+                return;
+            }
+            completionNotified = true;
+        }
+        try {
+            listener.onCompleted(snapshot, failure);
+        } catch (RuntimeException ignored) {
+            // Internal observers must not change timeline state.
+        }
+    }
+
+    private static Duration normalizeRequestedPosition(Duration target) {
+        try {
+            return Duration.ofNanos(Math.max(0L, target.toNanos()));
+        } catch (ArithmeticException exception) {
+            return target.isNegative()
+                    ? Duration.ZERO
+                    : Duration.ofNanos(Long.MAX_VALUE);
+        }
+    }
+
+    private record StatusTransition(
+            PlaybackStatus previous,
+            PlaybackStatus current,
+            PlaybackSnapshot snapshot) {
+    }
+
+    private record SpeedTransition(
+            PlaybackSpeed previous,
+            PlaybackSpeed current,
+            PlaybackSnapshot snapshot) {
+    }
+
+    private record FailureTransition(StatusTransition statusTransition, Throwable failure) {
     }
 
     private long nextOperation() {
@@ -377,7 +609,9 @@ final class PlaybackTimeline implements AutoCloseable {
     }
 
     private boolean isTerminal() {
-        return closed || status == PlaybackStatus.CLOSED || status == PlaybackStatus.FAILED;
+        return closed
+                || status == PlaybackStatus.CLOSED
+                || status == PlaybackStatus.FAILED;
     }
 
     private CompletionStage<PlaybackSnapshot> failedTerminal() {
@@ -397,6 +631,12 @@ final class PlaybackTimeline implements AutoCloseable {
     }
 
     private void closeResources() {
+        synchronized (stateLock) {
+            if (resourcesClosed) {
+                return;
+            }
+            resourcesClosed = true;
+        }
         RuntimeException failure = null;
         try {
             data.close();
@@ -509,24 +749,28 @@ final class PlaybackTimeline implements AutoCloseable {
         @Override
         public void onBuffering() {
             commandExecutor.execute(() -> {
+                StatusTransition transition = null;
                 synchronized (stateLock) {
                     if (!isTerminal() && desiredPlaying) {
                         clock.pause(nowNanos.getAsLong());
-                        status = PlaybackStatus.BUFFERING;
+                        transition = setStatusLocked(PlaybackStatus.BUFFERING);
                     }
                 }
+                notifyStatus(transition);
             });
         }
 
         @Override
         public void onBufferReady() {
             commandExecutor.execute(() -> {
+                StatusTransition transition = null;
                 synchronized (stateLock) {
                     if (!isTerminal() && desiredPlaying && status == PlaybackStatus.BUFFERING) {
                         clock.play(nowNanos.getAsLong());
-                        status = PlaybackStatus.PLAYING;
+                        transition = setStatusLocked(PlaybackStatus.PLAYING);
                     }
                 }
+                notifyStatus(transition);
             });
         }
 
@@ -540,12 +784,19 @@ final class PlaybackTimeline implements AutoCloseable {
         @Override
         public void onEnded() {
             commandExecutor.execute(() -> {
+                StatusTransition transition = null;
+                PlaybackSnapshot snapshot = null;
                 synchronized (stateLock) {
                     if (!isTerminal()) {
                         desiredPlaying = false;
                         clock.pause(nowNanos.getAsLong());
-                        status = PlaybackStatus.ENDED;
+                        transition = setStatusLocked(PlaybackStatus.ENDED);
+                        snapshot = snapshotLocked();
                     }
+                }
+                notifyStatus(transition);
+                if (snapshot != null) {
+                    notifyCompleted(snapshot, null);
                 }
             });
         }
@@ -553,9 +804,11 @@ final class PlaybackTimeline implements AutoCloseable {
         @Override
         public void onFailure(Throwable failure) {
             commandExecutor.execute(() -> {
+                FailureTransition transition;
                 synchronized (stateLock) {
-                    failLocked(failure);
+                    transition = failLocked(failure);
                 }
+                finishFailure(transition);
             });
         }
     }
