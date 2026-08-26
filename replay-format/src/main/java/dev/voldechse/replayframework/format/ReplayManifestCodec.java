@@ -29,7 +29,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
-/** Deterministic Gson codec for revision-one replay manifests. */
+/** Deterministic Gson codec for revision-three neutral replay manifests. */
 public final class ReplayManifestCodec {
 
     private final TypeAdapter<String> stringAdapter;
@@ -240,6 +240,9 @@ public final class ReplayManifestCodec {
             }
         }
         reader.endObject();
+        if (formatRevisionSeen && formatRevision != ReplayManifest.CURRENT_FORMAT_REVISION) {
+            throw corrupt("unsupported manifest format revision (detected " + formatRevision + ")");
+        }
         if (!replayIdSeen || !adapterIdSeen || !protocolVersionSeen
                 || !registryFingerprintSeen || !formatRevisionSeen
                 || !durationNanosSeen || !filesSeen) {

@@ -40,14 +40,18 @@ final class PacketScheduler {
     private final PlaybackTimeline.PlaybackData data;
     private final PlaybackBridge bridge;
     private final Listener listener;
+    private final long prefetchRefreshNanos;
     private final AtomicBoolean availabilityPending = new AtomicBoolean();
-    private final AtomicBoolean availabilityReady = new AtomicBoolean();
     private final AtomicBoolean framesPending = new AtomicBoolean();
+    private final AtomicBoolean bufferReadyPending = new AtomicBoolean();
+    private final AtomicBoolean minimumResumeSatisfied = new AtomicBoolean();
     private final AtomicBoolean failureReported = new AtomicBoolean();
     private final AtomicBoolean endedReported = new AtomicBoolean();
     private final Object lifecycleLock = new Object();
     private volatile boolean stopped;
+    private volatile boolean emissionSuspended;
     private volatile Thread worker;
+    private volatile long nextPrefetchPositionNanos = Long.MIN_VALUE;
     private CompletableFuture<Void> stopCompletion = new CompletableFuture<>();
     private long cursorElapsedNanos = -1L;
     private long cursorServerTick = -1L;
@@ -58,10 +62,24 @@ final class PacketScheduler {
             PlaybackTimeline.PlaybackData data,
             PlaybackBridge bridge,
             Listener listener) {
+        this(clock, data, bridge, listener, Duration.ofSeconds(30));
+    }
+
+    PacketScheduler(
+            PlaybackClock clock,
+            PlaybackTimeline.PlaybackData data,
+            PlaybackBridge bridge,
+            Listener listener,
+            Duration preloadAhead) {
         this.clock = Objects.requireNonNull(clock, "clock");
         this.data = Objects.requireNonNull(data, "data");
         this.bridge = Objects.requireNonNull(bridge, "bridge");
         this.listener = Objects.requireNonNull(listener, "listener");
+        long preloadNanos = Objects.requireNonNull(preloadAhead, "preloadAhead").toNanos();
+        if (preloadNanos <= 0L) {
+            throw new IllegalArgumentException("preloadAhead must be positive");
+        }
+        this.prefetchRefreshNanos = Math.max(1L, preloadNanos / 2L);
     }
 
     void start() {
@@ -80,6 +98,20 @@ final class PacketScheduler {
         }
     }
 
+    void acknowledgeBufferReady() {
+        bufferReadyPending.set(false);
+    }
+
+    void suspendEmission() {
+        emissionSuspended = true;
+        invalidatePrefetch();
+    }
+
+    void resumeEmission() {
+        emissionSuspended = false;
+        wake();
+    }
+
     CompletionStage<Void> stop() {
         synchronized (lifecycleLock) {
             if (!stopped) {
@@ -93,14 +125,21 @@ final class PacketScheduler {
         return stopCompletion;
     }
 
-    void resetCursor(List<RawPacketFrame> emittedFrames) {
-        Objects.requireNonNull(emittedFrames, "emittedFrames");
+    void resetCursor(List<RawPacketFrame> emittedDeltaFrames, long checkpointNanos) {
+        Objects.requireNonNull(emittedDeltaFrames, "emittedDeltaFrames");
+        if (checkpointNanos < 0L) {
+            throw new IllegalArgumentException("checkpointNanos must not be negative");
+        }
         endedReported.set(false);
-        RawPacketFrame last = emittedFrames.stream()
+        invalidatePrefetch();
+        RawPacketFrame last = emittedDeltaFrames.stream()
                 .max(FRAME_ORDER)
                 .orElse(null);
         if (last == null) {
-            cursorElapsedNanos = -1L;
+            // Checkpoint records use their own local sequence numbers.  They
+            // must never become the cursor for the segment stream: a segment
+            // may still contain a delta at the same replay time.
+            cursorElapsedNanos = checkpointNanos;
             cursorServerTick = -1L;
             cursorSequence = -1;
             return;
@@ -111,50 +150,27 @@ final class PacketScheduler {
     }
 
     void runOnce(long nowNanos) {
-        if (stopped) {
+        if (stopped || emissionSuspended) {
             return;
         }
-        boolean dataReadyWhilePaused = availabilityReady.compareAndSet(true, false);
-        if (!clock.playing()
-                && !(dataReadyWhilePaused && shouldContinueBuffering())) {
-            return;
+        if (clock.playing()) {
+            bufferReadyPending.set(false);
+        }
+        if (!clock.playing()) {
+            if (!shouldContinueBuffering()) {
+                bufferReadyPending.set(false);
+                return;
+            }
+            if (bufferReadyPending.get()
+                    || availabilityPending.get()
+                    || framesPending.get()) {
+                return;
+            }
         }
         long positionNanos = clock.positionNanos(nowNanos);
         Duration position = Duration.ofNanos(positionNanos);
-        CompletionStage<PlaybackTimeline.BufferProgress> availability;
-        if (!availabilityPending.compareAndSet(false, true)) {
-            return;
-        }
-        try {
-            availability = Objects.requireNonNull(
-                    data.ensureAvailable(
-                            position,
-                            clock.speed(),
-                            PrefetchPlanner.Direction.FORWARD),
-                    "ensureAvailable result");
-        } catch (RuntimeException exception) {
-            availabilityPending.set(false);
-            reportFailure(exception);
-            return;
-        }
-        boolean availabilityComplete = availability.toCompletableFuture().isDone();
-        if (!availabilityComplete) {
-            onBuffering();
-        }
-        availability.whenComplete((ignored, failure) -> {
-            availabilityPending.set(false);
-            if (failure != null) {
-                reportFailure(unwrap(failure));
-            } else {
-                availabilityReady.set(true);
-                wake();
-            }
-        });
-
-        if (!availabilityComplete) {
-            return;
-        }
-        if (availability.toCompletableFuture().isCompletedExceptionally()) {
+        requestPrefetch(position);
+        if (stopped) {
             return;
         }
 
@@ -173,9 +189,11 @@ final class PacketScheduler {
             reportFailure(exception);
             return;
         }
-        boolean framesComplete = frames.toCompletableFuture().isDone();
-        if (!framesComplete) {
-            listener.onBuffering();
+        if (!frames.toCompletableFuture().isDone()) {
+            // PlaybackBuffer completes an in-memory frame range immediately.
+            // A pending stage therefore denotes an actual segment load rather
+            // than executor scheduling latency.
+            onBuffering();
         }
         frames.whenComplete((availableFrames, failure) -> {
             framesPending.set(false);
@@ -189,7 +207,9 @@ final class PacketScheduler {
                         wake();
                         return;
                     }
-                    listener.onBufferReady();
+                    if (minimumResumeSatisfied.get()) {
+                        signalBufferReady();
+                    }
                 }
                 boolean complete = emit(availableFrames, positionNanos);
                 if (complete
@@ -202,14 +222,62 @@ final class PacketScheduler {
             }
             wake();
         });
+    }
 
-        if (!framesComplete) {
+    void invalidatePrefetch() {
+        nextPrefetchPositionNanos = Long.MIN_VALUE;
+        minimumResumeSatisfied.set(false);
+        wake();
+    }
+
+    private void requestPrefetch(Duration position) {
+        long positionNanos = position.toNanos();
+        if (positionNanos < nextPrefetchPositionNanos) {
             return;
         }
+        if (!availabilityPending.compareAndSet(false, true)) {
+            return;
+        }
+        nextPrefetchPositionNanos = saturatingAdd(positionNanos, prefetchRefreshNanos);
+        CompletionStage<PlaybackTimeline.BufferProgress> availability;
+        try {
+            availability = Objects.requireNonNull(
+                    data.ensureAvailable(
+                            position,
+                            clock.speed(),
+                            PrefetchPlanner.Direction.FORWARD),
+                    "ensureAvailable result");
+        } catch (RuntimeException exception) {
+            availabilityPending.set(false);
+            reportFailure(exception);
+            return;
+        }
+        availability.whenComplete((progress, failure) -> {
+            availabilityPending.set(false);
+            if (failure != null) {
+                reportFailure(unwrap(failure));
+            } else {
+                minimumResumeSatisfied.set(progress.minimumResumeSatisfied());
+                if (!clock.playing()
+                        && shouldContinueBuffering()
+                        && progress.minimumResumeSatisfied()) {
+                    signalBufferReady();
+                }
+                wake();
+            }
+        });
     }
 
     private void onBuffering() {
         listener.onBuffering();
+    }
+
+    private void signalBufferReady() {
+        if (!clock.playing()
+                && shouldContinueBuffering()
+                && bufferReadyPending.compareAndSet(false, true)) {
+            listener.onBufferReady();
+        }
     }
 
     private boolean shouldContinueBuffering() {
@@ -240,7 +308,7 @@ final class PacketScheduler {
                 .toList();
         int emitted = 0;
         for (RawPacketFrame frame : ordered) {
-            if (stopped) {
+            if (stopped || emissionSuspended) {
                 return false;
             }
             if (frame.elapsedNanos() > positionNanos) {
@@ -300,5 +368,13 @@ final class PacketScheduler {
             return completion.getCause();
         }
         return failure;
+    }
+
+    private static long saturatingAdd(long left, long right) {
+        try {
+            return Math.addExact(left, right);
+        } catch (ArithmeticException exception) {
+            return Long.MAX_VALUE;
+        }
     }
 }

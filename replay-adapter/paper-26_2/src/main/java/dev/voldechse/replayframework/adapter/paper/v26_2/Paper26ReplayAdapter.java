@@ -25,7 +25,7 @@ public final class Paper26ReplayAdapter implements ReplayAdapter {
 
     private static final String ADAPTER_ID = "paper-26.2";
     private static final String MINECRAFT_VERSION = "26.2";
-    private static final int ADAPTER_FORMAT_REVISION = 1;
+    private static final int ADAPTER_FORMAT_REVISION = 3;
 
     private final AdapterDescriptor descriptor;
     private final PacketRegistry packetRegistry;

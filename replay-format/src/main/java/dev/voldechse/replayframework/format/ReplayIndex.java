@@ -76,6 +76,29 @@ public final class ReplayIndex {
         return result < 0 ? Optional.empty() : Optional.of(points.get(result));
     }
 
+    /**
+     * Finds the checkpoint anchor for the last indexed point at or before the
+     * target. A checkpoint ordinal is reused by all delta frames until the
+     * next checkpoint, so the time-floor point itself is not necessarily the
+     * point at which the checkpoint artifact starts.
+     *
+     * @param target nonnegative replay target
+     * @return checkpoint anchor, or empty before the first point
+     */
+    public Optional<SeekPoint> seekCheckpointFloor(Duration target) {
+        SeekPoint floor = seekFloor(target).orElse(null);
+        if (floor == null) {
+            return Optional.empty();
+        }
+        int checkpointOrdinal = floor.checkpointOrdinal();
+        for (SeekPoint point : points) {
+            if (point.checkpointOrdinal() == checkpointOrdinal) {
+                return Optional.of(point);
+            }
+        }
+        return Optional.empty();
+    }
+
     private static int compare(SeekPoint left, SeekPoint right) {
         int result = Long.compare(left.elapsedNanos(), right.elapsedNanos());
         if (result != 0) {

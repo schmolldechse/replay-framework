@@ -94,7 +94,8 @@ public final class ReplayCommand implements AutoCloseable {
         recordingCommands.suggestions(suggestions);
         this.listCommand = new ReplayListCommand(plugin, contextSupplier, browserSupplier);
         this.infoCommand = new ReplayInfoCommand(plugin, contextSupplier, suggestions);
-        this.playbackCommands = new ReplayPlaybackCommands(plugin, contextSupplier, suggestions);
+        this.playbackCommands = new ReplayPlaybackCommands(
+                plugin, contextSupplier, suggestions, browserSupplier);
         this.metadataCommands = new ReplayMetadataCommands(plugin, contextSupplier, suggestions);
         this.deleteCommand = new ReplayDeleteCommand(plugin, contextSupplier, suggestions);
     }
@@ -214,8 +215,11 @@ public final class ReplayCommand implements AutoCloseable {
             String operation,
             Throwable failure) {
         Throwable cause = unwrap(failure);
-        String type = cause.getClass().getSimpleName();
-        plugin.getLogger().warning(operation + " failed: " + type);
+        plugin.getLogger().log(
+                Level.WARNING,
+                operation + " failed",
+                cause
+        );
         if (sender instanceof Player player && !player.isOnline()) {
             return;
         }

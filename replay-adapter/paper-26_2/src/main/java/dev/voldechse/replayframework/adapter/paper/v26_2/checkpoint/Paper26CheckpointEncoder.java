@@ -113,6 +113,11 @@ public final class Paper26CheckpointEncoder implements CheckpointEncoder {
         blueprints.addAll(globalStateEncoder.encode(snapshot));
         blueprints.addAll(chunkEncoder.encode(snapshot));
         blueprints.addAll(entityEncoder.encode(snapshot));
+        // Snapshot providers may expose state that is valuable to retain in
+        // the recording but has no safe replay identity contract yet. Such
+        // packets remain captured in the delta stream, but cannot enter a
+        // reconstructed checkpoint.
+        blueprints.removeIf(blueprint -> !isCheckpointEligible(blueprint));
         blueprints.sort(PACKET_ORDER);
 
         if (blueprints.size() > Integer.MAX_VALUE) {
@@ -137,6 +142,15 @@ public final class Paper26CheckpointEncoder implements CheckpointEncoder {
 
         int provisionalOrdinal = request.kind() == CheckpointKind.INITIAL ? 0 : 1;
         return new ReplayCheckpoint(provisionalOrdinal, request.elapsedNanos(), frames);
+    }
+
+    private boolean isCheckpointEligible(PacketBlueprint blueprint) {
+        return registry.descriptors().stream().anyMatch(descriptor ->
+                descriptor.typeName().equals(blueprint.descriptorTypeName())
+                        && descriptor.phase() == PLAY
+                        && descriptor.direction() == CLIENTBOUND
+                        && descriptor.replayable()
+                        && descriptor.checkpointRelevant());
     }
 
     private void validateEncodedPacket(PacketBlueprint blueprint, EncodedPacket encoded) {

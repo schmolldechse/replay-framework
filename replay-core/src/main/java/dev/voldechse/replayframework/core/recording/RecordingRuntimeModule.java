@@ -56,15 +56,15 @@ public final class RecordingRuntimeModule extends AbstractModule {
     @Provides
     @Singleton
     RecordingCoordinator.ScopeResolver provideScopeResolver() {
-        return (requested, participants) -> java.util.concurrent.CompletableFuture.completedFuture(
+        return request -> java.util.concurrent.CompletableFuture.completedFuture(
                 new ResolvedRecordingScope(
-                        requested,
+                        request.scope(),
                         0L,
-                        requested.worlds(),
-                        requested.regions(),
+                        request.scope().worlds(),
+                        request.scope().regions(),
                         CapturePolicy.builder().build(),
-                        participants,
-                        packet -> acceptsScope(requested, packet)));
+                        request.participants(),
+                        packet -> acceptsScope(request.scope(), packet)));
     }
 
     @Provides

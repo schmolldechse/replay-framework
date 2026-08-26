@@ -176,7 +176,7 @@ public final class ExampleResourcePackService implements AutoCloseable {
     private final ScheduledExecutorService scheduler;
     private final boolean ownsScheduler;
     private final ConcurrentMap<UUID, PendingHandshake> pending = new ConcurrentHashMap<>();
-    private final java.util.Set<UUID> loaded = ConcurrentHashMap.newKeySet();
+    private final ConcurrentMap<UUID, Player> loadedConnections = new ConcurrentHashMap<>();
     private final AtomicBoolean closed = new AtomicBoolean();
     private final Object lifecycleLock = new Object();
 
@@ -237,8 +237,12 @@ public final class ExampleResourcePackService implements AutoCloseable {
         }
 
         UUID viewerId = player.getUniqueId();
-        if (loaded.contains(viewerId)) {
+        Player loadedConnection = loadedConnections.get(viewerId);
+        if (loadedConnection == player) {
             return CompletableFuture.completedFuture(success(viewerId));
+        }
+        if (loadedConnection != null) {
+            loadedConnections.remove(viewerId, loadedConnection);
         }
 
         synchronized (lifecycleLock) {
@@ -248,7 +252,12 @@ public final class ExampleResourcePackService implements AutoCloseable {
             PendingHandshake created = new PendingHandshake(player);
             PendingHandshake existing = pending.putIfAbsent(viewerId, created);
             if (existing != null) {
-                return existing.future;
+                if (existing.player != player) {
+                    fail(existing, new CancellationException("Resource-pack connection changed"), State.CLOSED);
+                    pending.put(viewerId, created);
+                } else {
+                    return existing.future;
+                }
             }
 
             created.timeout = scheduler.schedule(
@@ -284,18 +293,42 @@ public final class ExampleResourcePackService implements AutoCloseable {
      * @return true when that viewer has completed the successful handshake
      */
     public boolean isLoaded(UUID viewerId) {
-        return viewerId != null && loaded.contains(viewerId);
+        return viewerId != null && loadedConnections.containsKey(viewerId);
+    }
+
+    /** Returns whether the pack is ready on this exact live connection. */
+    public boolean isLoaded(Player player) {
+        return player != null && loadedConnections.get(player.getUniqueId()) == player;
     }
 
     /**
-     * Cancels only the pending handshake of the supplied viewer.
+     * Invalidates both pending and successful readiness for the supplied viewer.
      *
      * @param viewerId viewer whose pending handshake should be cancelled
      */
     public void cancel(UUID viewerId) {
+        invalidate(viewerId);
+    }
+
+    /** Invalidates all pack readiness associated with one exact connection. */
+    public void invalidate(Player player) {
+        if (player == null) {
+            return;
+        }
+        UUID viewerId = player.getUniqueId();
+        loadedConnections.remove(viewerId, player);
+        PendingHandshake handshake = pending.get(viewerId);
+        if (handshake != null && handshake.player == player) {
+            fail(handshake, new CancellationException("Resource-pack connection invalidated"), State.CLOSED);
+        }
+    }
+
+    /** Invalidates readiness and pending work for a viewer UUID. */
+    public void invalidate(UUID viewerId) {
         if (viewerId == null) {
             return;
         }
+        loadedConnections.remove(viewerId);
         PendingHandshake handshake = pending.get(viewerId);
         if (handshake != null) {
             fail(handshake, new CancellationException("Resource-pack handshake cancelled"), State.CLOSED);
@@ -314,6 +347,7 @@ public final class ExampleResourcePackService implements AutoCloseable {
             for (PendingHandshake handshake : pending.values()) {
                 fail(handshake, new CancellationException("Resource-pack service closed"), State.CLOSED);
             }
+            loadedConnections.clear();
             if (ownsScheduler) {
                 scheduler.shutdownNow();
             }
@@ -342,7 +376,7 @@ public final class ExampleResourcePackService implements AutoCloseable {
                 case SUCCESSFULLY_LOADED -> {
                     handshake.state = State.READY;
                     handshake.terminal = true;
-                    loaded.add(handshake.viewerId);
+                    loadedConnections.put(handshake.viewerId, handshake.player);
                     removePending(handshake);
                     cancelTimeout(handshake);
                     dispatch(() -> handshake.future.complete(success(handshake.viewerId)));
@@ -350,6 +384,7 @@ public final class ExampleResourcePackService implements AutoCloseable {
                 case DECLINED, INVALID_URL, FAILED_DOWNLOAD, FAILED_RELOAD, DISCARDED -> {
                     handshake.state = State.FAILED;
                     handshake.terminal = true;
+                    loadedConnections.remove(handshake.viewerId, handshake.player);
                     removePending(handshake);
                     cancelTimeout(handshake);
                     HandshakeException failure = new HandshakeException(handshake.viewerId, status);
@@ -366,6 +401,7 @@ public final class ExampleResourcePackService implements AutoCloseable {
             }
             handshake.state = terminalState;
             handshake.terminal = true;
+            loadedConnections.remove(handshake.viewerId, handshake.player);
             removePending(handshake);
             cancelTimeout(handshake);
             dispatch(() -> handshake.future.completeExceptionally(failure));

@@ -9,6 +9,7 @@ import dev.voldechse.replayframework.api.playback.PlaybackSpeed;
 import dev.voldechse.replayframework.example.command.ReplayCommand;
 import dev.voldechse.replayframework.example.command.argument.ReplayArguments;
 import dev.voldechse.replayframework.example.command.argument.ReplaySuggestions;
+import dev.voldechse.replayframework.example.ui.ReplayBrowser;
 import dev.voldechse.replayframework.example.viewer.ExampleViewerEnvironment;
 import java.time.Duration;
 import java.util.Objects;
@@ -26,14 +27,24 @@ public final class ReplayPlaybackCommands {
     private final JavaPlugin plugin;
     private final Supplier<ReplayCommand.Context> contextSupplier;
     private final ReplaySuggestions suggestions;
+    private final Supplier<Optional<ReplayBrowser>> browserSupplier;
 
     public ReplayPlaybackCommands(
             JavaPlugin plugin,
             Supplier<ReplayCommand.Context> contextSupplier,
             ReplaySuggestions suggestions) {
+        this(plugin, contextSupplier, suggestions, Optional::empty);
+    }
+
+    public ReplayPlaybackCommands(
+            JavaPlugin plugin,
+            Supplier<ReplayCommand.Context> contextSupplier,
+            ReplaySuggestions suggestions,
+            Supplier<Optional<ReplayBrowser>> browserSupplier) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.contextSupplier = Objects.requireNonNull(contextSupplier, "contextSupplier");
         this.suggestions = Objects.requireNonNull(suggestions, "suggestions");
+        this.browserSupplier = Objects.requireNonNull(browserSupplier, "browserSupplier");
     }
 
     public List<LiteralArgumentBuilder<CommandSourceStack>> buildNodes() {
@@ -88,11 +99,14 @@ public final class ReplayPlaybackCommands {
             throw ReplayCommand.syntax(failure.getMessage());
         }
         CommandSender sender = command.getSource().getSender();
+        Optional<ReplayBrowser> browser = Optional.ofNullable(browserSupplier.get())
+                .orElse(Optional.empty());
         ReplayCommand.complete(
                 plugin,
                 sender,
                 "Playback open " + replayId.value(),
-                environment.open(player, replayId),
+                browser.map(value -> value.openDirect(player, replayId))
+                        .orElseGet(() -> environment.open(player, replayId)),
                 session -> ReplayCommand.message(
                         sender,
                         "Playback opened for " + session.replayId().value()));

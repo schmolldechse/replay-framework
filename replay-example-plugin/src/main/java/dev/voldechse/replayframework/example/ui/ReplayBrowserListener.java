@@ -2,6 +2,7 @@ package dev.voldechse.replayframework.example.ui;
 
 import dev.voldechse.replayframework.example.viewer.ExampleViewerEnvironment;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.bukkit.entity.Player;
@@ -27,6 +28,7 @@ public final class ReplayBrowserListener implements Listener, AutoCloseable {
     private final JavaPlugin plugin;
     private final ReplayBrowser browser;
     private final PlaybackHotbar hotbar;
+    private final PlaybackStatusRenderer renderer;
     private final ExampleViewerEnvironment environment;
     private final ExampleItemModels models;
     private final AtomicBoolean registered = new AtomicBoolean();
@@ -36,11 +38,13 @@ public final class ReplayBrowserListener implements Listener, AutoCloseable {
             JavaPlugin plugin,
             ReplayBrowser browser,
             PlaybackHotbar hotbar,
+            PlaybackStatusRenderer renderer,
             ExampleViewerEnvironment environment,
             ExampleItemModels models) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.browser = Objects.requireNonNull(browser, "browser");
         this.hotbar = Objects.requireNonNull(hotbar, "hotbar");
+        this.renderer = Objects.requireNonNull(renderer, "renderer");
         this.environment = Objects.requireNonNull(environment, "environment");
         this.models = Objects.requireNonNull(models, "models");
     }
@@ -148,7 +152,11 @@ public final class ReplayBrowserListener implements Listener, AutoCloseable {
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onPlayerQuit(PlayerQuitEvent event) {
         if (!closing.get()) {
-            browser.closeFor(event.getPlayer().getUniqueId());
+            UUID viewerId = event.getPlayer().getUniqueId();
+            browser.closeFor(viewerId);
+            hotbar.clear(viewerId);
+            renderer.clear(viewerId);
+            environment.leave(event.getPlayer());
         }
     }
 
@@ -160,12 +168,12 @@ public final class ReplayBrowserListener implements Listener, AutoCloseable {
         if (!environment.isViewer(player.getUniqueId())) {
             return;
         }
-        models.controlAction(item).ifPresent(action -> {
-            if (models.item(action).slot() != slot) {
-                return;
-            }
+        Optional<ExampleItemModels.HotbarAction> action = models.controlAction(item)
+                .filter(value -> models.item(value).slot() == slot)
+                .or(() -> models.controlActionAtSlot(item, slot));
+        action.ifPresent(value -> {
             cancel.accept(true);
-            hotbar.handle(player, action);
+            hotbar.handle(player, value);
         });
     }
 }

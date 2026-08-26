@@ -17,11 +17,11 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
-/** Strict reader for revision-one checkpoint artifacts. */
+/** Strict reader for revision-three checkpoint artifacts. */
 public final class ReplayCheckpointReader {
 
     private static final byte[] MAGIC = "RFC1".getBytes(StandardCharsets.US_ASCII);
-    private static final int FORMAT_VERSION = 1;
+    private static final int FORMAT_VERSION = 3;
 
     /** Creates a stateless checkpoint reader. */
     public ReplayCheckpointReader() {

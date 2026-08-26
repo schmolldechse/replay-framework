@@ -27,7 +27,7 @@ public record ReplayManifest(
         long durationNanos,
         List<ArtifactFile> files) {
 
-    public static final int CURRENT_FORMAT_REVISION = 1;
+    public static final int CURRENT_FORMAT_REVISION = 3;
 
     /** Validates and canonicalizes the replay manifest. */
     public ReplayManifest {

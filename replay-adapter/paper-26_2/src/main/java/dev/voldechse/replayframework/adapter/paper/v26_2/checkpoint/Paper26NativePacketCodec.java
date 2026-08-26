@@ -157,7 +157,8 @@ public final class Paper26NativePacketCodec
                 || descriptor.disposition() == PacketDisposition.UNSUPPORTED
                 || !descriptor.replayable()
                 || !descriptor.checkpointRelevant()) {
-            throw incompatible("native checkpoint packet is not replayable", null);
+            throw incompatible(
+                    "native checkpoint packet is not replayable: " + descriptor.typeName(), null);
         }
         if (Paper26CheckpointEncoder.familyFor(descriptor.typeName()) != blueprint.family()) {
             throw incompatible("native checkpoint packet family mismatch", null);

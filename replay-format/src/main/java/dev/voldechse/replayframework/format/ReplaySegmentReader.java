@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Strict reader for revision-one replay segments.
+ * Strict reader for revision-three replay segments.
  */
 public final class ReplaySegmentReader {
 

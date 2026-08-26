@@ -15,6 +15,7 @@ import java.util.Objects;
  * @param replayable structural playback eligibility
  * @param checkpointRelevant whether checkpoint generation considers the packet
  * @param codecKey stable identifier for the version-bound packet codec
+ * @param playbackScope isolation treatment at the playback boundary
  */
 public record PacketDescriptor(
         String typeName,
@@ -25,7 +26,23 @@ public record PacketDescriptor(
         boolean captureByDefault,
         boolean replayable,
         boolean checkpointRelevant,
-        String codecKey) {
+        String codecKey,
+        PlaybackScope playbackScope) {
+
+    /** Keeps older adapter descriptors source-compatible with a safe default. */
+    public PacketDescriptor(
+            String typeName,
+            PacketPhase phase,
+            Direction direction,
+            int packetId,
+            PacketDisposition disposition,
+            boolean captureByDefault,
+            boolean replayable,
+            boolean checkpointRelevant,
+            String codecKey) {
+        this(typeName, phase, direction, packetId, disposition, captureByDefault,
+                replayable, checkpointRelevant, codecKey, PlaybackScope.SAFE);
+    }
 
     /** Validates packet identity, direction and disposition invariants. */
     public PacketDescriptor {
@@ -37,13 +54,36 @@ public record PacketDescriptor(
         }
         Objects.requireNonNull(disposition, "disposition");
         codecKey = requireStableText(codecKey, "codecKey");
+        Objects.requireNonNull(playbackScope, "playbackScope");
 
         if (disposition == PacketDisposition.CONTROL
                 || disposition == PacketDisposition.UNSUPPORTED) {
-            requireDisabled(disposition, captureByDefault, replayable, checkpointRelevant);
+            requireNotReplayable(disposition, replayable, checkpointRelevant);
         }
         if (direction == Direction.SERVERBOUND) {
             requireDisabled(disposition, captureByDefault, replayable, checkpointRelevant);
+        }
+    }
+
+    /** Explicit packet treatment at the decoded replay isolation boundary. */
+    public enum PlaybackScope {
+        /** Packet has no viewer identity or local-state side effects. */
+        SAFE,
+        /** Packet entity/UUID identities must be rewritten per playback session. */
+        REWRITE_IDENTITIES,
+        /** Packet mutates state owned by the observing live player and is dropped. */
+        VIEWER_LOCAL,
+        /** Packet has no safe playback contract and must be rejected. */
+        UNSAFE
+    }
+
+    private static void requireNotReplayable(
+            PacketDisposition disposition,
+            boolean replayable,
+            boolean checkpointRelevant) {
+        if (replayable || checkpointRelevant) {
+            throw new IllegalArgumentException(
+                    disposition + " packets cannot be replayed or checkpoint-relevant");
         }
     }
 
@@ -54,7 +94,7 @@ public record PacketDescriptor(
             boolean checkpointRelevant) {
         if (captureByDefault || replayable || checkpointRelevant) {
             throw new IllegalArgumentException(
-                    disposition + " packets cannot be captured, replayed or checkpoint-relevant");
+                    disposition + " serverbound packets cannot be captured, replayed or checkpoint-relevant");
         }
     }
 

@@ -7,6 +7,7 @@ import dev.voldechse.replayframework.api.playback.PlaybackService;
 import dev.voldechse.replayframework.api.playback.PlaybackSession;
 import dev.voldechse.replayframework.example.resourcepack.ExampleResourcePackService;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.List;
@@ -21,6 +22,10 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.stream.Stream;
 import java.util.logging.Level;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
@@ -29,6 +34,9 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.World;
+import org.bukkit.WorldCreator;
+import org.bukkit.WorldType;
 
 /**
  * Owns the Example-side environment around one independent replay viewer.
@@ -265,6 +273,8 @@ public final class ExampleViewerEnvironment {
         }
         StoredPlayerState state = StoredPlayerState.capture(player);
         registry.attachState(entry, state);
+        World viewerWorld = createViewerWorld(entry);
+        registry.attachViewerWorld(entry, viewerWorld);
         if (!registry.transition(
                 entry,
                 ViewerSessionRegistry.State.PACK_PENDING,
@@ -272,7 +282,7 @@ public final class ExampleViewerEnvironment {
             throw new IllegalStateException("Viewer was no longer pending preparation");
         }
 
-        preparePlayer(player);
+        preparePlayer(player, viewerWorld);
 
         if (!registry.transition(
                 entry,
@@ -304,8 +314,10 @@ public final class ExampleViewerEnvironment {
         return entry.openResult();
     }
 
-    private void preparePlayer(Player player) {
-        if (!player.teleport(configuration.replayLocation())) {
+    private void preparePlayer(Player player, World viewerWorld) {
+        Location target = configuration.replayLocation();
+        target.setWorld(viewerWorld);
+        if (!player.teleport(target)) {
             throw new IllegalStateException("Viewer teleportation was rejected");
         }
         player.setGameMode(configuration.playbackGameMode());
@@ -321,6 +333,28 @@ public final class ExampleViewerEnvironment {
         player.setGlowing(false);
         player.setCollidable(false);
         player.setGravity(false);
+        player.setFallDistance(0.0F);
+    }
+
+    private World createViewerWorld(ViewerSessionRegistry.ViewerSession entry) {
+        String worldName = "replay-viewer-" + entry.viewerId().toString().replace("-", "")
+                + "-" + entry.replayId().value().toString().replace("-", "");
+        if (plugin.getServer().getWorld(worldName) != null) {
+            throw new IllegalStateException("Viewer world name is already in use: " + worldName);
+        }
+        World template = Objects.requireNonNull(
+                configuration.replayLocation().getWorld(),
+                "replayLocation.world");
+        World world = new WorldCreator(worldName)
+                .environment(template.getEnvironment())
+                .type(WorldType.FLAT)
+                .generateStructures(false)
+                .createWorld();
+        if (world == null) {
+            throw new IllegalStateException("Paper did not create the viewer world");
+        }
+        world.setAutoSave(false);
+        return world;
     }
 
     private void handlePlaybackCompletion(
@@ -349,6 +383,7 @@ public final class ExampleViewerEnvironment {
                         ViewerSessionRegistry.State.ACTIVE)) {
             try {
                 registry.attachPlayback(entry, session);
+                session.play();
                 entry.openResult().complete(session);
             } catch (Throwable attachFailure) {
                 failOpen(entry, attachFailure);
@@ -377,19 +412,21 @@ public final class ExampleViewerEnvironment {
         if (!registry.isRegistered(entry)) {
             return CompletableFuture.completedFuture(null);
         }
-        ViewerSessionRegistry.State stateBeforeRestore = entry.state();
         boolean owner = registry.beginRestoreOwner(entry);
         if (!owner) {
             return entry.restoreStage();
+        }
+
+        try {
+            resourcePackService.invalidate(entry.player());
+        } catch (Throwable failure) {
+            logFailure("resource-pack invalidation", entry, failure);
         }
 
         if (entry.state() == ViewerSessionRegistry.State.RESTORING
                 && entry.storedPlayerState() == null
                 && entry.playbackOpen() == null
                 && entry.playback() == null) {
-            if (stateBeforeRestore == ViewerSessionRegistry.State.PACK_PENDING) {
-                cancelPendingPack(entry);
-            }
             return finishRestoreOnMain(entry, terminalFailure);
         }
 
@@ -458,8 +495,47 @@ public final class ExampleViewerEnvironment {
                 logFailure("player restore", entry, restoreFailure);
             }
         }
+        deleteViewerWorld(entry);
         finishRestoreOnMain(entry, terminalFailure);
         return null;
+    }
+
+    private void deleteViewerWorld(ViewerSessionRegistry.ViewerSession entry) {
+        World world = entry.viewerWorld();
+        if (world == null) {
+            return;
+        }
+
+        try {
+            if (plugin.getServer().getWorld(world.getName()) != null
+                    && !plugin.getServer().unloadWorld(world, false)) {
+                throw new IllegalStateException("Viewer world could not be unloaded");
+            }
+        } catch (Throwable failure) {
+            logFailure("viewer world unload", entry, failure);
+            return;
+        }
+
+        Path container = plugin.getServer().getWorldContainer().toPath()
+                .toAbsolutePath().normalize();
+        Path folder = world.getWorldFolder().toPath()
+                .toAbsolutePath().normalize();
+        String expectedPrefix = "replay-viewer-";
+        if (!folder.startsWith(container)
+                || folder.getFileName() == null
+                || !folder.getFileName().toString().startsWith(expectedPrefix)) {
+            logFailure("viewer world delete", entry,
+                    new IllegalStateException("viewer world path is outside the owned world container"));
+            return;
+        }
+
+        try (Stream<Path> paths = Files.walk(folder)) {
+            for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) {
+                Files.deleteIfExists(path);
+            }
+        } catch (IOException | RuntimeException failure) {
+            logFailure("viewer world delete", entry, failure);
+        }
     }
 
     private CompletionStage<Void> finishRestoreOnMain(
@@ -472,14 +548,6 @@ public final class ExampleViewerEnvironment {
         registry.removeIfSame(entry);
         entry.completeRestore();
         return CompletableFuture.completedFuture(null);
-    }
-
-    private void cancelPendingPack(ViewerSessionRegistry.ViewerSession entry) {
-        try {
-            resourcePackService.cancel(entry.viewerId());
-        } catch (Throwable failure) {
-            logFailure("resource-pack cancellation", entry, failure);
-        }
     }
 
     private CompletionStage<Void> closeEntriesOnMain() {

@@ -75,7 +75,10 @@ final class PlaybackTimeline implements AutoCloseable {
         }
     }
 
-    record BufferProgress(Duration bufferedBehind, Duration bufferedAhead) {
+    record BufferProgress(
+            Duration bufferedBehind,
+            Duration bufferedAhead,
+            boolean minimumResumeSatisfied) {
         BufferProgress {
             Objects.requireNonNull(bufferedBehind, "bufferedBehind");
             Objects.requireNonNull(bufferedAhead, "bufferedAhead");
@@ -102,7 +105,7 @@ final class PlaybackTimeline implements AutoCloseable {
     private boolean completionNotified;
     private boolean resourcesClosed;
     private long operationGeneration;
-    private BufferProgress lastProgress = new BufferProgress(Duration.ZERO, Duration.ZERO);
+    private BufferProgress lastProgress = new BufferProgress(Duration.ZERO, Duration.ZERO, false);
 
     PlaybackTimeline(
             Duration duration,
@@ -150,7 +153,12 @@ final class PlaybackTimeline implements AutoCloseable {
                 data,
                 bridge,
                 commandExecutor);
-        this.scheduler = new PacketScheduler(clock, data, bridge, new SchedulerListener());
+        this.scheduler = new PacketScheduler(
+                clock,
+                data,
+                bridge,
+                new SchedulerListener(),
+                options.preloadAhead());
     }
 
     static PlaybackData adapt(
@@ -167,7 +175,8 @@ final class PlaybackTimeline implements AutoCloseable {
                 return buffer.ensureAvailable(position, speed, direction)
                         .thenApply(progress -> new BufferProgress(
                                 progress.bufferedBehind(),
-                                progress.bufferedAhead()));
+                                progress.bufferedAhead(),
+                                progress.minimumResumeSatisfied()));
             }
 
             @Override
@@ -185,7 +194,10 @@ final class PlaybackTimeline implements AutoCloseable {
             @Override
             public BufferProgress progress(Duration position) {
                 PlaybackBuffer.BufferProgress progress = buffer.progress(position);
-                return new BufferProgress(progress.bufferedBehind(), progress.bufferedAhead());
+                return new BufferProgress(
+                        progress.bufferedBehind(),
+                        progress.bufferedAhead(),
+                        progress.minimumResumeSatisfied());
             }
 
             @Override
@@ -208,13 +220,13 @@ final class PlaybackTimeline implements AutoCloseable {
                 desiredPlaying = true;
                 if (!prepared) {
                     transition = setStatusLocked(PlaybackStatus.PREPARING);
-                } else if (status == PlaybackStatus.BUFFERING) {
+                } else if (status == PlaybackStatus.PLAYING) {
+                    clock.play(nowNanos.getAsLong());
+                    transition = null;
                     scheduler.start();
                     scheduler.wake();
-                    transition = null;
                 } else {
-                    clock.play(nowNanos.getAsLong());
-                    transition = setStatusLocked(PlaybackStatus.PLAYING);
+                    transition = setStatusLocked(PlaybackStatus.BUFFERING);
                     scheduler.start();
                     scheduler.wake();
                 }
@@ -256,8 +268,10 @@ final class PlaybackTimeline implements AutoCloseable {
                 clock.setSpeed(speed, nowNanos.getAsLong());
                 if (previous != speed) {
                     transition = new SpeedTransition(previous, speed, snapshotLocked());
+                    scheduler.invalidatePrefetch();
+                } else {
+                    scheduler.wake();
                 }
-                scheduler.wake();
             }
             notifySpeed(transition);
         });
@@ -277,7 +291,11 @@ final class PlaybackTimeline implements AutoCloseable {
             }
             notifyStatus(preparing);
             long generation = nextOperation();
-            return seekEngine.seekTo(Duration.ZERO, clock.speed(), false)
+            return seekEngine.seekTo(
+                            Duration.ZERO,
+                            clock.speed(),
+                            false,
+                            () -> isCurrentOperation(generation))
                     .thenApplyAsync(result -> {
                         StatusTransition preparedTransition;
                         BufferProgress previousProgress;
@@ -303,7 +321,9 @@ final class PlaybackTimeline implements AutoCloseable {
                         notifyStatus(preparedTransition);
                         return snapshot;
                     }, commandExecutor)
-                    .exceptionallyCompose(failure -> failPreparation(failure));
+                    .exceptionallyCompose(failure -> cancelled(failure)
+                            ? CompletableFuture.completedFuture(snapshot())
+                            : failPreparation(failure));
         });
     }
 
@@ -318,6 +338,9 @@ final class PlaybackTimeline implements AutoCloseable {
 
     CompletionStage<PlaybackSnapshot> seekBy(Duration delta) {
         Objects.requireNonNull(delta, "delta");
+        long generation = nextOperation();
+        scheduler.suspendEmission();
+        bridge.discardQueuedReplayPackets();
         return enqueueAsync(() -> {
             long current = clock.positionNanos(nowNanos.getAsLong());
             long deltaNanos;
@@ -332,7 +355,7 @@ final class PlaybackTimeline implements AutoCloseable {
             } catch (ArithmeticException exception) {
                 target = deltaNanos < 0L ? Long.MIN_VALUE : Long.MAX_VALUE;
             }
-            return beginSeek(Duration.ofNanos(target));
+            return beginSeek(Duration.ofNanos(target), generation);
         });
     }
 
@@ -368,6 +391,12 @@ final class PlaybackTimeline implements AutoCloseable {
         });
     }
 
+    /** Fails the timeline when the adapter reports an asynchronous send error. */
+    void failFromBridge(Throwable failure) {
+        Objects.requireNonNull(failure, "failure");
+        enqueueAsync(() -> failOperation(failure)).exceptionally(ignored -> null);
+    }
+
     @Override
     public void close() {
         closeAsync();
@@ -393,14 +422,22 @@ final class PlaybackTimeline implements AutoCloseable {
     }
 
     private CompletionStage<PlaybackSnapshot> seek(Duration target) {
-        return enqueueAsync(() -> beginSeek(target));
+        long generation = nextOperation();
+        scheduler.suspendEmission();
+        bridge.discardQueuedReplayPackets();
+        return enqueueAsync(() -> beginSeek(target, generation));
     }
 
-    private CompletionStage<PlaybackSnapshot> beginSeek(Duration target) {
+    private CompletionStage<PlaybackSnapshot> beginSeek(Duration target, long generation) {
         final boolean resume;
         final Duration requestedPosition = normalizeRequestedPosition(target);
         StatusTransition bufferingTransition;
         synchronized (stateLock) {
+            if (!isCurrentOperationLocked(generation)) {
+                return CompletableFuture.failedFuture(
+                        new java.util.concurrent.CancellationException(
+                                "seek was superseded before it started"));
+            }
             if (isTerminal()) {
                 return failedTerminal();
             }
@@ -409,8 +446,11 @@ final class PlaybackTimeline implements AutoCloseable {
             bufferingTransition = setStatusLocked(PlaybackStatus.BUFFERING);
         }
         notifyStatus(bufferingTransition);
-        long generation = nextOperation();
-        return seekEngine.seekTo(target, clock.speed(), resume)
+        return seekEngine.seekTo(
+                        target,
+                        clock.speed(),
+                        resume,
+                        () -> isCurrentOperation(generation))
                 .thenApplyAsync(result -> {
                     StatusTransition finalTransition;
                     BufferProgress previousProgress;
@@ -420,6 +460,7 @@ final class PlaybackTimeline implements AutoCloseable {
                             throw new IllegalStateException("seek is no longer current");
                         }
                         previousProgress = applySeekResult(result);
+                        scheduler.resumeEmission();
                         if (result.positionNanos() >= durationNanos) {
                             desiredPlaying = false;
                             finalTransition = setStatusLocked(PlaybackStatus.ENDED);
@@ -441,13 +482,17 @@ final class PlaybackTimeline implements AutoCloseable {
                     }
                     return snapshot;
                 }, commandExecutor)
-                .exceptionallyCompose(failure -> failOperation(failure));
+                .exceptionallyCompose(failure -> cancelled(failure)
+                        ? CompletableFuture.completedFuture(snapshot())
+                        : failOperation(failure));
     }
 
     private BufferProgress applySeekResult(SeekEngine.SeekResult result) {
         BufferProgress previousProgress = lastProgress;
         clock.seekTo(result.positionNanos(), nowNanos.getAsLong());
-        scheduler.resetCursor(result.emittedFrames());
+        scheduler.resetCursor(
+                result.emittedDeltaFrames(),
+                result.checkpoint().elapsedNanos());
         lastProgress = data.progress(Duration.ofNanos(result.positionNanos()));
         return previousProgress;
     }
@@ -550,9 +595,10 @@ final class PlaybackTimeline implements AutoCloseable {
     }
 
     private void notifyBuffer(BufferProgress previous, PlaybackSnapshot snapshot) {
-        BufferProgress current = new BufferProgress(
-                snapshot.bufferedBehind(),
-                snapshot.bufferedAhead());
+        BufferProgress current;
+        synchronized (stateLock) {
+            current = lastProgress;
+        }
         if (previous.equals(current)) {
             return;
         }
@@ -606,6 +652,20 @@ final class PlaybackTimeline implements AutoCloseable {
         synchronized (stateLock) {
             return ++operationGeneration;
         }
+    }
+
+    private boolean isCurrentOperation(long generation) {
+        synchronized (stateLock) {
+            return isCurrentOperationLocked(generation);
+        }
+    }
+
+    private boolean isCurrentOperationLocked(long generation) {
+        return generation == operationGeneration && !isTerminal();
+    }
+
+    private static boolean cancelled(Throwable failure) {
+        return unwrap(failure) instanceof java.util.concurrent.CancellationException;
     }
 
     private boolean isTerminal() {
@@ -763,9 +823,13 @@ final class PlaybackTimeline implements AutoCloseable {
         @Override
         public void onBufferReady() {
             commandExecutor.execute(() -> {
+                scheduler.acknowledgeBufferReady();
                 StatusTransition transition = null;
                 synchronized (stateLock) {
-                    if (!isTerminal() && desiredPlaying && status == PlaybackStatus.BUFFERING) {
+                    if (!isTerminal()
+                            && desiredPlaying
+                            && (status == PlaybackStatus.BUFFERING
+                            || status == PlaybackStatus.PAUSED)) {
                         clock.play(nowNanos.getAsLong());
                         transition = setStatusLocked(PlaybackStatus.PLAYING);
                     }

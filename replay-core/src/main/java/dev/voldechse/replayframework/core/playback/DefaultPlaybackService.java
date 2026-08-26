@@ -4,6 +4,7 @@ import dev.voldechse.replayframework.adapter.AdapterDescriptor;
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
 import dev.voldechse.replayframework.adapter.PlaybackBridge;
 import dev.voldechse.replayframework.adapter.ReplayAdapter;
+import dev.voldechse.replayframework.adapter.playback.PlaybackIdentityContext;
 import dev.voldechse.replayframework.api.id.PlaybackSessionId;
 import dev.voldechse.replayframework.api.id.ReplayId;
 import dev.voldechse.replayframework.api.playback.PlaybackRequest;
@@ -45,6 +46,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
@@ -221,7 +223,10 @@ final class DefaultPlaybackService implements PlaybackService {
                     resources.buffer.set(buffer);
 
                     PlaybackBridge bridge = Objects.requireNonNull(
-                            adapter.openPlayback(request.viewer()),
+                            adapter.openPlayback(
+                                    request.viewer(),
+                                    new PlaybackIdentityContext(
+                                            viewerId, sessionId.value())),
                             "adapter.openPlayback result");
                     resources.bridge.set(bridge);
 
@@ -229,12 +234,15 @@ final class DefaultPlaybackService implements PlaybackService {
                             sessionId,
                             request.replayId(),
                             viewerId);
+                    Map<SeekPoint, CompletionStage<List<RawPacketFrame>>> checkpoints =
+                            new ConcurrentHashMap<>();
                     PlaybackTimeline timeline = new PlaybackTimeline(
                             Duration.ofNanos(manifest.durationNanos()),
                             artifacts.index(),
                             PlaybackTimeline.adapt(
                                     buffer,
-                                    point -> fetchAndDecodeCheckpoint(
+                                    point -> cachedCheckpoint(
+                                            checkpoints,
                                             verified,
                                             artifacts.checkpoints(),
                                             point)),
@@ -243,6 +251,7 @@ final class DefaultPlaybackService implements PlaybackService {
                             commandExecutor,
                             System::nanoTime,
                             listener);
+                    bridge.setFailureHandler(timeline::failFromBridge);
                     resources.timeline.set(timeline);
                     return timeline;
                 })
@@ -298,6 +307,29 @@ final class DefaultPlaybackService implements PlaybackService {
                         .whenComplete((ignored, failure) -> deleteQuietly(target)));
     }
 
+    private CompletionStage<List<RawPacketFrame>> cachedCheckpoint(
+            Map<SeekPoint, CompletionStage<List<RawPacketFrame>>> cache,
+            ReplayArtifactReader.VerifiedReplay verified,
+            Map<Integer, ReplayManifest.ArtifactFile> checkpointFiles,
+            SeekPoint point) {
+        CompletableFuture<List<RawPacketFrame>> loading = new CompletableFuture<>();
+        CompletionStage<List<RawPacketFrame>> existing = cache.putIfAbsent(point, loading);
+        if (existing != null) {
+            return existing;
+        }
+
+        fetchAndDecodeCheckpoint(verified, checkpointFiles, point)
+                .whenComplete((frames, failure) -> {
+                    if (failure != null) {
+                        cache.remove(point, loading);
+                        loading.completeExceptionally(failure);
+                    } else {
+                        loading.complete(frames);
+                    }
+                });
+        return loading;
+    }
+
     private ReplayIndex readIndex(Path source) {
         try {
             ReplayIndex index = indexReader.read(source);
@@ -347,9 +379,15 @@ final class DefaultPlaybackService implements PlaybackService {
         }
 
         Map<Integer, List<SeekPoint>> pointsBySegment = new HashMap<>();
+        SeekPoint initialCheckpoint = new SeekPoint(0L, 0, 0, 0L);
         for (SeekPoint point : index.points()) {
             if (point.elapsedNanos() > manifest.durationNanos()) {
                 throw corrupt("index point exceeds replay duration");
+            }
+            // The bootstrap checkpoint is not a frame in segment zero. Its
+            // zero timestamp must not become that segment's lower time bound.
+            if (point.equals(initialCheckpoint)) {
+                continue;
             }
             pointsBySegment.computeIfAbsent(point.segmentOrdinal(), ignored -> new ArrayList<>())
                     .add(point);
@@ -497,7 +535,7 @@ final class DefaultPlaybackService implements PlaybackService {
     }
 
     private void updateDiagnostics(PlaybackSessionId sessionId) {
-        coordinator.active(sessionId).ifPresent(diagnostics::playbackUpdated);
+        coordinator.registered(sessionId).ifPresent(diagnostics::playbackUpdated);
     }
 
     private static Optional<ReplayFailureCode> failureCode(Throwable failure) {

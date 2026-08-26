@@ -195,13 +195,18 @@ public final class ReplayArtifactReader {
         try {
             ReplayManifest manifest = manifestCodec.read(normalized);
             if (!replayId.toString().equals(manifest.replayId())) {
-                throw new CompletionException(new CorruptReplayArtifactException(
-                        "replay manifest identity does not match requested replay: " + replayId));
+                throw new CorruptReplayArtifactException(
+                        "replay manifest identity does not match requested replay: " + replayId);
             }
             return new VerifiedReplay(replayId, manifest);
+        } catch (CorruptReplayArtifactException exception) {
+            throw new CompletionException(new CorruptReplayArtifactException(
+                    "replay " + replayId + " manifest " + normalized
+                            + " is invalid: " + exception.getMessage(), exception));
         } catch (IOException exception) {
             throw new CompletionException(new CorruptReplayArtifactException(
-                    "replay manifest is unavailable or corrupt", exception));
+                    "replay " + replayId + " manifest " + normalized
+                            + " is unavailable or corrupt", exception));
         }
     }
 

@@ -9,12 +9,10 @@ import com.mojang.brigadier.context.CommandContext;
 import dev.voldechse.replayframework.api.id.RecordingSessionId;
 import dev.voldechse.replayframework.api.recording.CapturePolicy;
 import dev.voldechse.replayframework.api.recording.CuboidRegion;
-import dev.voldechse.replayframework.api.recording.RecordingOptions;
 import dev.voldechse.replayframework.api.recording.RecordingRequest;
 import dev.voldechse.replayframework.api.recording.RecordingScope;
 import dev.voldechse.replayframework.api.recording.RecordingSession;
 import dev.voldechse.replayframework.api.recording.RecordingStatus;
-import dev.voldechse.replayframework.api.recording.ReplayBudget;
 import dev.voldechse.replayframework.example.command.ReplayCommand;
 import dev.voldechse.replayframework.example.command.argument.ReplayArguments;
 import dev.voldechse.replayframework.example.command.argument.ReplaySuggestions;
@@ -29,12 +27,11 @@ import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import net.kyori.adventure.key.Key;
 import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /** Implements recording start and stop commands for the Example plugin. */
 public final class ReplayRecordingCommands implements AutoCloseable {
-    private static final long DEFAULT_MAX_SEGMENT_BYTES = 64L * 1024L * 1024L;
-
     private final JavaPlugin plugin;
     private final Supplier<ReplayCommand.Context> contextSupplier;
     private final Map<RecordingSessionId, RecordingSession> activeSessions = new ConcurrentHashMap<>();
@@ -144,7 +141,7 @@ public final class ReplayRecordingCommands implements AutoCloseable {
         ReplayCommand.Context runtime = ReplayCommand.requireContext(contextSupplier);
         RecordingRequest request;
         try {
-            request = buildRequest(command);
+            request = buildRequest(command, runtime.framework().defaults());
         } catch (IllegalArgumentException failure) {
             throw ReplayCommand.syntax(failure.getMessage());
         }
@@ -198,7 +195,9 @@ public final class ReplayRecordingCommands implements AutoCloseable {
         return 1;
     }
 
-    private RecordingRequest buildRequest(CommandContext<CommandSourceStack> command) {
+    private RecordingRequest buildRequest(
+            CommandContext<CommandSourceStack> command,
+            dev.voldechse.replayframework.api.ReplayDefaults defaults) {
         String title = StringArgumentType.getString(command, "title");
         String description = StringArgumentType.getString(command, "description");
         RecordingScope.Builder scope = RecordingScope.builder();
@@ -232,16 +231,13 @@ public final class ReplayRecordingCommands implements AutoCloseable {
         Set<UUID> participants = participantsRaw == null
                 ? Set.of()
                 : ReplayArguments.parseParticipantList(participantsRaw);
-
         return RecordingRequest.builder()
                 .title(title)
                 .description(description)
                 .scope(scope.build())
                 .capturePolicy(CapturePolicy.builder().build())
-                .budget(ReplayBudget.builder()
-                        .maxSegmentBytes(DEFAULT_MAX_SEGMENT_BYTES)
-                        .build())
-                .options(RecordingOptions.defaults())
+                .budget(defaults.recordingBudget())
+                .options(defaults.recordingOptions())
                 .participants(participants)
                 .build();
     }

@@ -9,7 +9,6 @@ import dev.voldechse.replayframework.api.event.ReplayEventPublisher;
 import dev.voldechse.replayframework.api.id.RecordingSessionId;
 import dev.voldechse.replayframework.api.id.ReplayId;
 import dev.voldechse.replayframework.api.recording.RecordingRequest;
-import dev.voldechse.replayframework.api.recording.RecordingScope;
 import dev.voldechse.replayframework.api.recording.RecordingSession;
 import dev.voldechse.replayframework.api.recording.RecordingStatus;
 import dev.voldechse.replayframework.api.recording.ReplayCompletionReason;
@@ -26,8 +25,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
@@ -466,7 +463,7 @@ public final class RecordingCoordinator {
         final CompletionStage<ResolvedRecordingScope> scopeStage;
         try {
             scopeStage = Objects.requireNonNull(
-                    scopeResolver.resolve(request.scope(), request.participants()),
+                    scopeResolver.resolve(request),
                     "scopeResolver result");
         } catch (Throwable failure) {
             failInitialization(replayId, result, ReplayFailureCode.INTERNAL_ERROR,
@@ -998,9 +995,7 @@ public final class RecordingCoordinator {
     /** Runtime port that resolves Paper worlds/chunks into a core snapshot. */
     @FunctionalInterface
     interface ScopeResolver {
-        CompletionStage<ResolvedRecordingScope> resolve(
-                RecordingScope requested,
-                Set<UUID> participants);
+        CompletionStage<ResolvedRecordingScope> resolve(RecordingRequest request);
     }
 
     /** Opaque storage selection supplied by runtime composition. */

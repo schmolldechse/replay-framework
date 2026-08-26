@@ -99,15 +99,15 @@ final class ResolvedRecordingScope {
     }
 
     /**
-     * Applies scope and policy without any external calls. Unknown semantic
-     * context is rejected rather than guessed from a type name or payload.
+     * Applies scope and policy without any external calls. Packets without a
+     * playback contract are retained for a complete recording but remain
+     * excluded by the playback registry.
      */
     boolean accepts(CapturedPacket packet) {
         Objects.requireNonNull(packet, "packet");
         CaptureContext context = packet.context();
         PacketDisposition disposition = context.disposition().orElse(null);
-        if (disposition == null || disposition == PacketDisposition.CONTROL
-                || disposition == PacketDisposition.UNSUPPORTED) {
+        if (disposition == null) {
             return false;
         }
         if (isExcluded(disposition)) {
@@ -127,7 +127,7 @@ final class ResolvedRecordingScope {
                     .contains(CapturePolicy.PacketCategory.EPHEMERAL);
             case CONFIGURABLE -> capturePolicy.excludedPacketCategories()
                     .contains(CapturePolicy.PacketCategory.CONFIGURABLE);
-            case CONTROL, UNSUPPORTED -> true;
+            case CONTROL, UNSUPPORTED -> false;
         };
     }
 

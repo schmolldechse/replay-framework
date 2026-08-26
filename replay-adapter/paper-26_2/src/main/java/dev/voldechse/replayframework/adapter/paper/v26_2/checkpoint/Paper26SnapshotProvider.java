@@ -16,6 +16,9 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Supplier;
+import com.google.common.collect.ImmutableMultimap;
+import com.mojang.authlib.GameProfile;
+import com.mojang.authlib.properties.PropertyMap;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundChangeDifficultyPacket;
@@ -27,6 +30,8 @@ import net.minecraft.network.protocol.game.ClientboundSetEquipmentPacket;
 import net.minecraft.network.protocol.game.ClientboundSetPassengersPacket;
 import net.minecraft.network.protocol.game.ClientboundSetTimePacket;
 import net.minecraft.network.protocol.game.ClientboundUpdateMobEffectPacket;
+import net.minecraft.network.protocol.game.ClientboundUpdateAttributesPacket;
+import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
 import net.minecraft.server.level.ServerEntity;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -82,7 +87,7 @@ public final class Paper26SnapshotProvider
 
         try {
             CompletionStage<CompletionStage<Paper26CheckpointEncoder.CheckpointSnapshot>> planned =
-                    scheduler.submit(() -> resolveOnMainThread(request.scope()));
+                    scheduler.submit(() -> resolveOnMainThread(request));
             return planned.thenCompose(stage -> Objects.requireNonNull(
                     stage,
                     "world resolution returned null stage"));
@@ -99,7 +104,8 @@ public final class Paper26SnapshotProvider
     }
 
     private CompletionStage<Paper26CheckpointEncoder.CheckpointSnapshot> resolveOnMainThread(
-            RecordingScope scope) {
+            CheckpointEncoder.CheckpointRequest request) {
+        RecordingScope scope = request.scope();
         List<String> worlds = normalizedWorldKeys(worldAccess.worldKeys());
         Set<String> requestedWorlds = scope.worlds().stream()
                 .map(Object::toString)
@@ -122,7 +128,8 @@ public final class Paper26SnapshotProvider
             }
             selectedChunks.sort(ScopedChunk.ORDER);
             return CompletableFuture.completedFuture(
-                    worldAccess.snapshot(scope, List.copyOf(deduplicate(selectedChunks))));
+                    worldAccess.snapshot(
+                            scope, List.copyOf(deduplicate(selectedChunks))));
         }
 
         if (scope.regions().isEmpty()) {
@@ -429,12 +436,16 @@ public final class Paper26SnapshotProvider
                 ServerLevel level,
                 String worldKey,
                 Set<ChunkCoordinate> chunks) {
+            List<ServerPlayer> players = new ArrayList<>();
             for (Entity entity : level.getAllEntities()) {
                 ChunkCoordinate coordinate = new ChunkCoordinate(
                         Math.floorDiv((int) Math.floor(entity.getX()), 16),
                         Math.floorDiv((int) Math.floor(entity.getZ()), 16));
                 if (!chunks.contains(coordinate)) {
                     continue;
+                }
+                if (entity instanceof ServerPlayer player) {
+                    players.add(player);
                 }
                 String targetKey = "entity:" + entity.getId();
                 packets.add(blueprint(
@@ -445,12 +456,22 @@ public final class Paper26SnapshotProvider
 
                 List<net.minecraft.network.syncher.SynchedEntityData.DataValue<?>> metadata =
                         entity.getEntityData().getNonDefaultValues();
-                if (!metadata.isEmpty()) {
+                if (metadata != null && !metadata.isEmpty()) {
                     packets.add(blueprint(
                             new ClientboundSetEntityDataPacket(entity.getId(), List.copyOf(metadata)),
                             Paper26CheckpointEncoder.CheckpointPacketFamily.ENTITY_METADATA,
                             worldKey,
                             targetKey));
+                }
+                if (entity instanceof LivingEntity living) {
+                    var attributes = living.getAttributes().getSyncableAttributes();
+                    if (!attributes.isEmpty()) {
+                        packets.add(blueprint(
+                                new ClientboundUpdateAttributesPacket(entity.getId(), attributes),
+                                Paper26CheckpointEncoder.CheckpointPacketFamily.ENTITY_METADATA,
+                                worldKey,
+                                targetKey + ":attributes"));
+                    }
                 }
                 if (!entity.getPassengers().isEmpty()) {
                     packets.add(blueprint(
@@ -484,6 +505,40 @@ public final class Paper26SnapshotProvider
                     }
                 }
             }
+            if (!players.isEmpty()) {
+                players.sort(Comparator.comparing(player -> player.getUUID().toString()));
+                ClientboundPlayerInfoUpdatePacket initializing =
+                        ClientboundPlayerInfoUpdatePacket.createPlayerInitializing(players);
+                List<ClientboundPlayerInfoUpdatePacket.Entry> detachedEntries =
+                        initializing.entries().stream()
+                                .map(entry -> new ClientboundPlayerInfoUpdatePacket.Entry(
+                                        entry.profileId(),
+                                        detachProfile(entry.profile()),
+                                        entry.listed(),
+                                        entry.latency(),
+                                        entry.gameMode(),
+                                        entry.displayName(),
+                                        entry.showHat(),
+                                        entry.listOrder(),
+                                        entry.chatSession()))
+                                .toList();
+                packets.add(blueprint(
+                        new ClientboundPlayerInfoUpdatePacket(
+                                initializing.actions(), detachedEntries),
+                        Paper26CheckpointEncoder.CheckpointPacketFamily.GLOBAL_STATE,
+                        worldKey,
+                        "players"));
+            }
+        }
+
+        private static GameProfile detachProfile(GameProfile profile) {
+            if (profile == null) {
+                return null;
+            }
+            return new GameProfile(
+                    profile.id(),
+                    profile.name(),
+                    new PropertyMap(ImmutableMultimap.copyOf(profile.properties())));
         }
 
         /**

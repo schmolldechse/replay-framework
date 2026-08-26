@@ -87,10 +87,6 @@ public final class PlaybackBuffer implements AutoCloseable {
             Objects.requireNonNull(speed, "speed");
             Objects.requireNonNull(direction, "direction");
             ensureOpen();
-            BufferProgress current = progress(position);
-            if (hasMinimumForDirection(current, direction)) {
-                return CompletableFuture.completedFuture(current);
-            }
             PrefetchPlanner.Plan plan = planner.plan(
                     position,
                     Duration.ofNanos(replay.manifest().durationNanos()),
@@ -139,6 +135,10 @@ public final class PlaybackBuffer implements AutoCloseable {
                     .filter(segment -> segment.endNanos() >= startNanos
                             && segment.startNanos() < endNanos)
                     .toList();
+            if (areLoaded(required)) {
+                return CompletableFuture.completedFuture(
+                        memoryBuffer.framesBetween(startInclusive, endExclusive));
+            }
             long requestGeneration = generation.get();
             return loadSegments(required, requestGeneration)
                     .thenApplyAsync(ignored -> {
@@ -154,16 +154,9 @@ public final class PlaybackBuffer implements AutoCloseable {
     public BufferProgress progress(Duration position) {
         long positionNanos = validatePosition(position);
         MemoryPacketBuffer.BufferWindow window = memoryBuffer.window();
-        long behindNanos = window.earliest()
-                .map(Duration::toNanos)
-                .filter(earliest -> earliest <= positionNanos)
-                .map(earliest -> positionNanos - earliest)
-                .orElse(0L);
-        long aheadNanos = window.latest()
-                .map(Duration::toNanos)
-                .filter(latest -> latest >= positionNanos)
-                .map(latest -> latest - positionNanos)
-                .orElse(0L);
+        LoadedCoverage coverage = loadedCoverage(positionNanos);
+        long behindNanos = positionNanos - coverage.startNanos();
+        long aheadNanos = coverage.endNanos() - positionNanos;
         long diskBytes;
         synchronized (stateLock) {
             diskBytes = loadedDiskBytes.values().stream()
@@ -172,12 +165,14 @@ public final class PlaybackBuffer implements AutoCloseable {
         }
         Duration minimum = options.minimumResumeBuffer();
         long minimumNanos = toNanos(minimum, "minimumResumeBuffer");
+        long remainingNanos = replay.manifest().durationNanos() - positionNanos;
+        long requiredAheadNanos = Math.min(minimumNanos, remainingNanos);
         return new BufferProgress(
                 Duration.ofNanos(behindNanos),
                 Duration.ofNanos(aheadNanos),
                 window.accountedBytes(),
                 diskBytes,
-                Math.max(behindNanos, aheadNanos) >= minimumNanos);
+                aheadNanos >= requiredAheadNanos);
     }
 
     /** Clears decoded frames and forgets all segment generations. */
@@ -250,6 +245,15 @@ public final class PlaybackBuffer implements AutoCloseable {
             loadingSegments.put(segment.ordinal(), result);
             startSegmentLoad(segment, requestGeneration, result);
             return result;
+        }
+    }
+
+    private boolean areLoaded(List<SegmentCache.SegmentRef> requested) {
+        synchronized (stateLock) {
+            ensureOpen();
+            return requested.stream()
+                    .map(SegmentCache.SegmentRef::ordinal)
+                    .allMatch(loadedSegments::contains);
         }
     }
 
@@ -357,6 +361,44 @@ public final class PlaybackBuffer implements AutoCloseable {
                 .orElse(null);
     }
 
+    /**
+     * Calculates contiguous decoded coverage from segment bounds rather than
+     * packet timestamps. A quiet interval is buffered when its segment loaded.
+     */
+    private LoadedCoverage loadedCoverage(long positionNanos) {
+        synchronized (stateLock) {
+            long startNanos = positionNanos;
+            for (int index = segments.size() - 1; index >= 0; index--) {
+                SegmentCache.SegmentRef segment = segments.get(index);
+                if (!loadedSegments.contains(segment.ordinal())) {
+                    continue;
+                }
+                if (segment.startNanos() > startNanos) {
+                    continue;
+                }
+                if (segment.endNanos() < startNanos) {
+                    break;
+                }
+                startNanos = segment.startNanos();
+            }
+
+            long endNanos = positionNanos;
+            for (SegmentCache.SegmentRef segment : segments) {
+                if (!loadedSegments.contains(segment.ordinal())) {
+                    continue;
+                }
+                if (segment.endNanos() < endNanos) {
+                    continue;
+                }
+                if (segment.startNanos() > endNanos) {
+                    break;
+                }
+                endNanos = segment.endNanos();
+            }
+            return new LoadedCoverage(startNanos, endNanos);
+        }
+    }
+
     private long validatePosition(Duration position) {
         long positionNanos = toNanos(position, "position");
         if (positionNanos < 0L || positionNanos > replay.manifest().durationNanos()) {
@@ -379,17 +421,6 @@ public final class PlaybackBuffer implements AutoCloseable {
         }
     }
 
-    private boolean hasMinimumForDirection(
-            BufferProgress current,
-            PrefetchPlanner.Direction direction) {
-        Duration minimum = options.minimumResumeBuffer();
-        return switch (direction) {
-            case FORWARD -> current.bufferedAhead().compareTo(minimum) >= 0;
-            case BACKWARD -> current.bufferedBehind().compareTo(minimum) >= 0;
-            case SEEK -> current.minimumResumeSatisfied();
-        };
-    }
-
     private static List<SegmentCache.SegmentRef> validateSegments(
             List<SegmentCache.SegmentRef> values) {
         Objects.requireNonNull(values, "segments");
@@ -401,7 +432,7 @@ public final class PlaybackBuffer implements AutoCloseable {
         for (SegmentCache.SegmentRef segment : copy) {
             if (!ordinals.add(segment.ordinal())) {
                 throw new IllegalArgumentException("duplicate segment ordinal: " + segment.ordinal());
-        }
+            }
         }
         return copy;
     }
@@ -474,6 +505,9 @@ public final class PlaybackBuffer implements AutoCloseable {
                 throw new IllegalArgumentException("buffer byte counters must not be negative");
             }
         }
+    }
+
+    private record LoadedCoverage(long startNanos, long endNanos) {
     }
 
     /** Wraps a segment reader failure with the segment identity that failed. */

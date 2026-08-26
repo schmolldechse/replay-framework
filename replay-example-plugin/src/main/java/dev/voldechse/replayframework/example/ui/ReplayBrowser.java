@@ -1,6 +1,7 @@
 package dev.voldechse.replayframework.example.ui;
 
 import dev.voldechse.replayframework.api.id.ReplayId;
+import dev.voldechse.replayframework.api.playback.PlaybackSession;
 import dev.voldechse.replayframework.api.query.ReplayPage;
 import dev.voldechse.replayframework.api.query.ReplayQuery;
 import dev.voldechse.replayframework.api.recording.RecordingStatus;
@@ -20,6 +21,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -105,21 +107,50 @@ public final class ReplayBrowser implements AutoCloseable {
                 return;
             }
             session.pendingReplay = Optional.of(replayId);
-            CompletionStage<?> openStage;
+            // Closing the inventory fires InventoryCloseEvent synchronously on
+            // the server thread. Remove the browser first so that the close
+            // event cannot cancel the viewer reservation while the viewer
+            // environment is teleporting the player.
+            sessions.remove(session.viewerId, session);
+            session.closed = true;
+            player.closeInventory();
             try {
-                openStage = environment.open(player, replayId);
+                plugin.getServer().getScheduler().runTask(plugin, () ->
+                        startBrowserOpen(player, session, replayId));
             } catch (Throwable failure) {
                 completeOpen(player, session, replayId, null, failure);
-                return;
             }
-            if (openStage == null) {
-                completeOpen(player, session, replayId, null,
-                        new NullPointerException("viewer environment returned no stage"));
-                return;
-            }
-            openStage.whenComplete((value, failure) -> onMain(() ->
-                    completeOpen(player, session, replayId, value, failure)));
         });
+    }
+
+    /** Opens a replay directly from a command and installs the viewer UI. */
+    public CompletionStage<PlaybackSession> openDirect(Player player, ReplayId replayId) {
+        Objects.requireNonNull(player, "player");
+        Objects.requireNonNull(replayId, "replayId");
+        CompletableFuture<PlaybackSession> result = new CompletableFuture<>();
+        onMain(() -> {
+            if (closed.get() || !player.isOnline()) {
+                result.completeExceptionally(new IllegalStateException("replay browser is closed"));
+                return;
+            }
+            if (environment.isViewer(player.getUniqueId())) {
+                result.completeExceptionally(new IllegalStateException(
+                        "player already has an active replay viewer"));
+                return;
+            }
+            BrowserSession previous = sessions.remove(player.getUniqueId());
+            if (previous != null) {
+                invalidate(previous, false);
+            }
+            player.closeInventory();
+            try {
+                plugin.getServer().getScheduler().runTask(plugin, () ->
+                        startDirectOpen(player, replayId, result));
+            } catch (Throwable failure) {
+                result.completeExceptionally(failure);
+            }
+        });
+        return result;
     }
 
     /** Moves one browser to the previous cursor in its own history. */
@@ -341,28 +372,101 @@ public final class ReplayBrowser implements AutoCloseable {
         }
         session.pendingReplay = Optional.empty();
         if (failure != null) {
-            if (isCurrent(session, player)) {
+            if (player.isOnline()) {
                 player.sendMessage(Component.text(
                         "Replay could not be opened. Please try again.", NamedTextColor.RED));
             }
             return;
         }
         if (!(value instanceof dev.voldechse.replayframework.api.playback.PlaybackSession playback)) {
-            if (isCurrent(session, player)) {
+            if (player.isOnline()) {
                 player.sendMessage(Component.text(
                         "Replay could not be opened. Please try again.", NamedTextColor.RED));
-            } else {
+            }
+            if (environment.isViewer(session.viewerId)) {
                 environment.leave(session.viewerId);
             }
             return;
         }
-        if (!isCurrent(session, player)) {
+        if (!player.isOnline() || sessions.containsKey(session.viewerId)) {
             environment.leave(session.viewerId);
             return;
         }
-        player.closeInventory();
-        sessions.remove(session.viewerId, session);
-        session.closed = true;
+        try {
+            installPlaybackUi(player, playback);
+        } catch (Throwable installFailure) {
+            environment.leave(session.viewerId);
+            player.sendMessage(Component.text(
+                    "Replay could not be opened. Please try again.", NamedTextColor.RED));
+        }
+    }
+
+    private void startBrowserOpen(Player player, BrowserSession session, ReplayId replayId) {
+        if (closed.get() || !player.isOnline()) {
+            completeOpen(player, session, replayId, null,
+                    new IllegalStateException("replay browser is closed"));
+            return;
+        }
+        CompletionStage<?> openStage;
+        try {
+            openStage = environment.open(player, replayId);
+        } catch (Throwable failure) {
+            completeOpen(player, session, replayId, null, failure);
+            return;
+        }
+        if (openStage == null) {
+            completeOpen(player, session, replayId, null,
+                    new NullPointerException("viewer environment returned no stage"));
+            return;
+        }
+        openStage.whenComplete((value, failure) -> onMain(() ->
+                completeOpen(player, session, replayId, value, failure)));
+    }
+
+    private void startDirectOpen(
+            Player player,
+            ReplayId replayId,
+            CompletableFuture<PlaybackSession> result) {
+        if (closed.get() || !player.isOnline()) {
+            result.completeExceptionally(new IllegalStateException("replay browser is closed"));
+            return;
+        }
+        CompletionStage<PlaybackSession> openStage;
+        try {
+            openStage = environment.open(player, replayId);
+        } catch (Throwable failure) {
+            result.completeExceptionally(failure);
+            return;
+        }
+        if (openStage == null) {
+            result.completeExceptionally(new NullPointerException(
+                    "viewer environment returned no stage"));
+            return;
+        }
+        openStage.whenComplete((playback, failure) -> onMain(() -> {
+            if (failure != null) {
+                result.completeExceptionally(failure);
+                return;
+            }
+            if (playback == null || !player.isOnline()) {
+                if (environment.isViewer(player.getUniqueId())) {
+                    environment.leave(player.getUniqueId());
+                }
+                result.completeExceptionally(new IllegalStateException(
+                        "viewer environment returned no playback session"));
+                return;
+            }
+            try {
+                installPlaybackUi(player, playback);
+                result.complete(playback);
+            } catch (Throwable installFailure) {
+                environment.leave(player.getUniqueId());
+                result.completeExceptionally(installFailure);
+            }
+        }));
+    }
+
+    private void installPlaybackUi(Player player, PlaybackSession playback) {
         hotbar.install(player, playback);
         renderer.renderInitial(player, playback.snapshot());
     }

@@ -12,7 +12,8 @@ import java.util.UUID;
  * <p>An empty participant set has the domain meaning that all players
  * captured by the resolved scope are selected participants. A non-empty set
  * selects the listed UUIDs while packet capture for the resolved scope may
- * still contain other players and entities.</p>
+ * still contain other players and entities. The recording is not bound to a
+ * viewer or to the connection that started it.</p>
  */
 public final class RecordingRequest {
     private final String title;

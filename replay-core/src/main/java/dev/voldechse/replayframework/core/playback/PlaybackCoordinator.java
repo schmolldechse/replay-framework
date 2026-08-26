@@ -72,6 +72,12 @@ final class PlaybackCoordinator {
         return Optional.of(session);
     }
 
+    /** Returns a registered session without requesting a snapshot from its timeline. */
+    Optional<PlaybackSession> registered(PlaybackSessionId sessionId) {
+        Objects.requireNonNull(sessionId, "sessionId");
+        return Optional.ofNullable(bySessionId.get(sessionId));
+    }
+
     /** Removes only the supplied session and never a newer session for the same viewer. */
     void release(PlaybackSessionId sessionId, UUID viewerId) {
         Objects.requireNonNull(sessionId, "sessionId");

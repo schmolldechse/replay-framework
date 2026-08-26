@@ -9,7 +9,6 @@ import dev.voldechse.replayframework.api.ReplayFramework;
 import dev.voldechse.replayframework.api.ReplayFrameworkProvider;
 import dev.voldechse.replayframework.api.metadata.QueryCapabilities;
 import dev.voldechse.replayframework.api.metadata.ReplayMetadataKey;
-import dev.voldechse.replayframework.api.playback.PlaybackBufferOptions;
 import dev.voldechse.replayframework.example.command.ReplayCommand;
 import dev.voldechse.replayframework.example.resourcepack.ExampleResourcePackService;
 import dev.voldechse.replayframework.example.ui.ExampleItemModels;
@@ -154,7 +153,7 @@ public final class ReplayExamplePlugin extends JavaPlugin {
                     renderer);
             replayBrowser = browser;
             ReplayBrowserListener listener = new ReplayBrowserListener(
-                    this, browser, hotbar, createdEnvironment, models);
+                    this, browser, hotbar, renderer, createdEnvironment, models);
             browserListener = listener;
             listener.register();
 
@@ -226,7 +225,7 @@ public final class ReplayExamplePlugin extends JavaPlugin {
                     new ExampleViewerEnvironment.Configuration(
                             location,
                             GameMode.ADVENTURE,
-                            PlaybackBufferOptions.builder().build(),
+                            framework.defaults().playbackBufferOptions(),
                             Set.of("replay"),
                             models::isControlItem));
             resourcePackService = packService;

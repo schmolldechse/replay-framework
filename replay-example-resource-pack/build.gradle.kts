@@ -27,6 +27,7 @@ val itemAssetNames = listOf(
     "leave"
 )
 val expectedFontCodePoints = (0xE100..0xE10E).toList()
+val expectedStatusCodePoints = (0xE200..0xE213).toList()
 
 fun readPng(path: java.io.File): BufferedImage {
     require(path.isFile) { "Missing PNG asset: ${path.path}" }
@@ -59,6 +60,15 @@ val verifyResourcePackAssets = tasks.register("verifyResourcePackAssets") {
         itemAssetNames.forEach { assetName ->
             val model = root.resolve("assets/replay_example/models/item/$assetName.json")
             require(model.isFile) { "Missing item model: ${model.path}" }
+            val itemDefinition = root.resolve("assets/replay_example/items/$assetName.json")
+            require(itemDefinition.isFile) { "Missing item definition: ${itemDefinition.path}" }
+            val itemDefinitionText = itemDefinition.readText(StandardCharsets.UTF_8)
+            require(itemDefinitionText.contains("minecraft:model")) {
+                "Item definition does not use minecraft:model: ${itemDefinition.path}"
+            }
+            require(itemDefinitionText.contains("replay_example:item/$assetName")) {
+                "Item definition does not reference its model: ${itemDefinition.path}"
+            }
             val modelText = model.readText(StandardCharsets.UTF_8)
             require(modelText.contains("minecraft:item/generated")) {
                 "Item model does not use minecraft:item/generated: ${model.path}"
@@ -96,11 +106,46 @@ val verifyResourcePackAssets = tasks.register("verifyResourcePackAssets") {
             "Replay font bitmap must contain an alpha channel"
         }
 
+        val statusDefinition = root.resolve("assets/replay_example/font/status.json")
+        require(statusDefinition.isFile) { "Missing status font definition: ${statusDefinition.path}" }
+        val statusText = statusDefinition.readText(StandardCharsets.UTF_8)
+        require(statusText.contains("replay_example:font/status.png")) {
+            "Status font does not reference its bitmap"
+        }
+        require(statusText.contains("\"type\": \"space\"")) {
+            "Status font must use the native space provider"
+        }
+        require(!statusText.contains("NegativeSpaceFont")) {
+            "Status font must not depend on NegativeSpaceFont"
+        }
+        expectedStatusCodePoints.forEach { codePoint ->
+            val escapedCodePoint = "\\u%04X".format(codePoint)
+            require(statusText.contains(escapedCodePoint, ignoreCase = true)) {
+                "Status font is missing codepoint $escapedCodePoint"
+            }
+        }
+        listOf(0xE300, 0xE301, 0xE302, 0xE303, 0xE304, 0xE305, 0xE306).forEach { codePoint ->
+            val escapedCodePoint = "\\u%04X".format(codePoint)
+            require(statusText.contains(escapedCodePoint, ignoreCase = true)) {
+                "Status font is missing native space codepoint $escapedCodePoint"
+            }
+        }
+        val statusTexture = readPng(root.resolve("assets/replay_example/textures/font/status.png"))
+        require(statusTexture.width == 240 && statusTexture.height == 16) {
+            "Status font bitmap must be 240x16"
+        }
+        require(statusTexture.colorModel.hasAlpha()) {
+            "Status font bitmap must contain an alpha channel"
+        }
+
         val allowedFiles = buildSet {
             add("pack.mcmeta")
             add("assets/replay_example/font/replay.json")
             add("assets/replay_example/textures/font/replay.png")
+            add("assets/replay_example/font/status.json")
+            add("assets/replay_example/textures/font/status.png")
             itemAssetNames.forEach { assetName ->
+                add("assets/replay_example/items/$assetName.json")
                 add("assets/replay_example/models/item/$assetName.json")
                 add("assets/replay_example/textures/item/$assetName.png")
             }

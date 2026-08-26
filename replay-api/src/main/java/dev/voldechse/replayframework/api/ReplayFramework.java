@@ -14,6 +14,14 @@ import dev.voldechse.replayframework.api.replay.ReplayService;
  */
 public interface ReplayFramework {
     /**
+     * Returns the request defaults derived from the installed runtime
+     * configuration.
+     *
+     * @return immutable recording and playback defaults
+     */
+    ReplayDefaults defaults();
+
+    /**
      * Returns the recording service.
      *
      * @return recording service

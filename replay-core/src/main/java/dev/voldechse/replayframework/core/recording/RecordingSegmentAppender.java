@@ -408,8 +408,11 @@ final class RecordingSegmentAppender implements AutoCloseable {
             return;
         }
         boolean beforeLast = frame.elapsedNanos() < lastElapsedNanos
-                || (frame.serverTick() < lastServerTick)
-                || (frame.serverTick() == lastServerTick && frame.sequence() < lastSequence);
+                || (frame.elapsedNanos() == lastElapsedNanos
+                && frame.serverTick() < lastServerTick)
+                || (frame.elapsedNanos() == lastElapsedNanos
+                && frame.serverTick() == lastServerTick
+                && frame.sequence() < lastSequence);
         if (beforeLast) {
             throw new IllegalArgumentException("captured frames moved backwards");
         }

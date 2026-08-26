@@ -14,11 +14,11 @@ import java.nio.file.StandardOpenOption;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 
-/** Writes the uncompressed revision-one replay index. */
+/** Writes the uncompressed revision-three replay index. */
 public final class ReplayIndexWriter {
 
     private static final byte[] MAGIC = "RFI1".getBytes(StandardCharsets.US_ASCII);
-    private static final int FORMAT_VERSION = 1;
+    private static final int FORMAT_VERSION = 3;
 
     /** Creates a stateless index writer. */
     public ReplayIndexWriter() {

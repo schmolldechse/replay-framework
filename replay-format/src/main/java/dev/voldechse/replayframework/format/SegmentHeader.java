@@ -27,8 +27,8 @@ public record SegmentHeader(
         CompressionId compressionId,
         long uncompressedLength) {
 
-    /** Revision one is the first supported segment wire format. */
-    public static final int CURRENT_FORMAT_VERSION = 1;
+    /** Revision three is the neutral segment wire format. */
+    public static final int CURRENT_FORMAT_VERSION = 3;
 
     public SegmentHeader {
         if (formatVersion != CURRENT_FORMAT_VERSION) {

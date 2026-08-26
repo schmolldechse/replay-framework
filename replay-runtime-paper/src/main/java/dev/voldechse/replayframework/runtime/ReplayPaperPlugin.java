@@ -16,6 +16,10 @@ import dev.voldechse.replayframework.adapter.paper.v26_2.checkpoint.Paper26Nativ
 import dev.voldechse.replayframework.adapter.paper.v26_2.checkpoint.Paper26SnapshotProvider;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26PlaybackBridge;
 import dev.voldechse.replayframework.api.ReplayFramework;
+import dev.voldechse.replayframework.api.ReplayDefaults;
+import dev.voldechse.replayframework.api.playback.PlaybackBufferOptions;
+import dev.voldechse.replayframework.api.recording.RecordingOptions;
+import dev.voldechse.replayframework.api.recording.ReplayBudget;
 import dev.voldechse.replayframework.api.ReplayFrameworkProvider;
 import dev.voldechse.replayframework.api.event.ReplayEventPublisher;
 import dev.voldechse.replayframework.api.metadata.ReplayMetadataService;
@@ -149,7 +153,7 @@ public final class ReplayPaperPlugin extends JavaPlugin {
     }
 
     private Paper26ReplayAdapter createPaperAdapter() {
-        PaperConnectionAccessor accessor = new PaperConnectionAccessor(this);
+        PaperConnectionAccessor accessor = new PaperConnectionAccessor();
         Paper26PacketRegistry registry = Paper26PacketRegistry.discover();
         Paper26CaptureBridge captureBridge = new Paper26CaptureBridge(accessor, registry);
         Paper26SnapshotProvider snapshotProvider = new Paper26SnapshotProvider(this);
@@ -228,6 +232,7 @@ public final class ReplayPaperPlugin extends JavaPlugin {
             state.installShutdownCoordinator();
             DefaultReplayFramework framework = new DefaultReplayFramework(
                     state.injector().getInstance(RecordingService.class),
+                    runtimeDefaults(state.injector().getInstance(ReplayRuntimeConfiguration.class)),
                     state.injector().getInstance(PlaybackService.class),
                     state.injector().getInstance(ReplayService.class),
                     state.injector().getInstance(ReplayMetadataService.class),
@@ -251,6 +256,28 @@ public final class ReplayPaperPlugin extends JavaPlugin {
                     + safeFailureSummary(bootstrapFailure));
             disableAfterBootstrapFailure();
         }
+    }
+
+    private static ReplayDefaults runtimeDefaults(ReplayRuntimeConfiguration configuration) {
+        ReplayRuntimeConfiguration.RecordingSettings recording = configuration.recording();
+        ReplayRuntimeConfiguration.PlaybackSettings playback = configuration.playback();
+        return new ReplayDefaults(
+                ReplayBudget.builder()
+                        .maxSegmentBytes(recording.maxSegmentBytes())
+                        .maxSegmentDuration(recording.maxSegmentDuration())
+                        .maxQueueBytes(recording.maxQueueBytes())
+                        .build(),
+                RecordingOptions.builder()
+                        .checkpointInterval(recording.checkpointInterval())
+                        .build(),
+                PlaybackBufferOptions.builder()
+                        .preloadAhead(playback.preloadAhead())
+                        .retainBehind(playback.retainBehind())
+                        .minimumResumeBuffer(playback.minimumResumeBuffer())
+                        .memoryBudgetBytes(playback.memoryBudgetBytes())
+                        .diskBudgetBytes(playback.diskBudgetBytes())
+                        .maxParallelFetches(playback.maxParallelFetches())
+                        .build());
     }
 
     private void disableAfterBootstrapFailure() {

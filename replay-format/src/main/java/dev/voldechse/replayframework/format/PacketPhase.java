@@ -10,7 +10,13 @@ public enum PacketPhase {
     /** Client configuration packets required before the play view. */
     CONFIGURATION(1),
     /** Clientbound packets representing the replayed play state. */
-    PLAY(2);
+    PLAY(2),
+    /** Server-list/status protocol packets retained for complete capture. */
+    STATUS(3),
+    /** Login protocol packets retained for complete capture. */
+    LOGIN(4),
+    /** Handshake protocol packets retained for complete capture. */
+    HANDSHAKING(5);
 
     private final int wireCode;
 

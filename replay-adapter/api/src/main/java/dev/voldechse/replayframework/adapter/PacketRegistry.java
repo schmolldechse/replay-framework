@@ -143,8 +143,6 @@ final class DefaultPacketRegistry implements PacketRegistry {
             int packetId) {
         return find(phase, direction, packetId)
                 .filter(descriptor -> descriptor.direction() == PacketDescriptor.Direction.CLIENTBOUND)
-                .filter(descriptor -> descriptor.disposition() != PacketDisposition.CONTROL)
-                .filter(descriptor -> descriptor.disposition() != PacketDisposition.UNSUPPORTED)
                 .map(PacketDescriptor::captureByDefault)
                 .orElse(false);
     }
@@ -179,6 +177,7 @@ final class DefaultPacketRegistry implements PacketRegistry {
             canonical.append(descriptor.replayable()).append('\n');
             canonical.append(descriptor.checkpointRelevant()).append('\n');
             canonical.append(descriptor.codecKey()).append('\n');
+            canonical.append(descriptor.playbackScope().name()).append('\n');
             canonical.append('\n');
         }
 

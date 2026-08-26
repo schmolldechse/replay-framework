@@ -1,17 +1,34 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.capture;
 
+import com.github.retrooper.packetevents.PacketEvents;
+import com.github.retrooper.packetevents.event.PacketListener;
+import com.github.retrooper.packetevents.event.PacketListenerCommon;
+import com.github.retrooper.packetevents.event.PacketListenerPriority;
+import com.github.retrooper.packetevents.event.PacketSendEvent;
 import dev.voldechse.replayframework.adapter.CaptureBridge;
+import dev.voldechse.replayframework.adapter.CaptureContext;
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
+import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.PacketRegistry;
 import dev.voldechse.replayframework.adapter.paper.v26_2.Paper26PacketRegistry;
+import dev.voldechse.replayframework.adapter.paper.v26_2.capture.Paper26SyntheticStateCollector.SyntheticStatePacket;
+import dev.voldechse.replayframework.adapter.paper.v26_2.checkpoint.Paper26CheckpointEncoder;
+import dev.voldechse.replayframework.api.recording.BlockPosition;
+import dev.voldechse.replayframework.api.recording.RecordingScope;
+import dev.voldechse.replayframework.format.PacketPhase;
+import dev.voldechse.replayframework.format.RawPacketFrame;
+import io.netty.buffer.ByteBuf;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.UUID;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.Optional;
+import java.util.function.Function;
+import net.kyori.adventure.key.Key;
+import org.bukkit.entity.Player;
 
 /**
  * Global Paper 26.2 capture installation shared by all active recording
@@ -19,30 +36,24 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public final class Paper26CaptureBridge implements CaptureBridge {
 
-    static final String HANDLER_NAME = "replay-framework-capture";
-
     private final PaperConnectionAccessor accessor;
     private final PacketRegistry registry;
     private final AtomicReference<State> state = new AtomicReference<>(State.NEW);
     private final AtomicBoolean failureReported = new AtomicBoolean();
-    private final ConcurrentMap<UUID, InstalledHandler> installedHandlers = new ConcurrentHashMap<>();
+    private final Set<Paper26SyntheticStateCollector> syntheticCollectors =
+            ConcurrentHashMap.newKeySet();
     private final Object handlerStateLock = new Object();
     private final Object sequenceLock = new Object();
-    private final PaperConnectionAccessor.ConnectionLifecycleListener lifecycleListener =
-            new PaperConnectionAccessor.ConnectionLifecycleListener() {
-                @Override
-                public void onConnected(PaperConnectionAccessor.ConnectionHandle connection) {
-                    attach(connection);
-                }
-
-                @Override
-                public void onDisconnected(PaperConnectionAccessor.ConnectionHandle connection) {
-                    detach(connection.recipientId(), connection);
-                }
-            };
+    private final PacketListener packetListener = new PacketListener() {
+        @Override
+        public void onPacketSend(PacketSendEvent event) {
+            capture(event);
+        }
+    };
 
     private volatile CaptureBridge.PacketSink sink;
     private volatile CaptureBridge.FailureHandler failureHandler;
+    private volatile PacketListenerCommon installedListener;
     private long sequenceTick = -1L;
     private int nextSequence;
 
@@ -84,10 +95,8 @@ public final class Paper26CaptureBridge implements CaptureBridge {
         }
 
         try {
-            accessor.registerLifecycleListener(lifecycleListener);
-            for (PaperConnectionAccessor.ConnectionHandle connection : accessor.activeConnections()) {
-                attach(connection);
-            }
+            installedListener = PacketEvents.getAPI().getEventManager().registerListener(
+                    packetListener, PacketListenerPriority.MONITOR);
         } catch (Throwable failure) {
             fail(failure);
         }
@@ -104,12 +113,8 @@ public final class Paper26CaptureBridge implements CaptureBridge {
         }
 
         // UNINSTALLED is an expected lifecycle end, not an integrity failure.
-        cleanupHandlers();
-        try {
-            accessor.unregisterLifecycleListener(lifecycleListener);
-        } catch (Throwable ignored) {
-            // Paper may already have dismantled its event manager during shutdown.
-        }
+        unregisterPacketListener();
+        closeSyntheticCollectors();
     }
 
     @Override
@@ -117,45 +122,183 @@ public final class Paper26CaptureBridge implements CaptureBridge {
         return state.get() == State.INSTALLED;
     }
 
-    private void attach(PaperConnectionAccessor.ConnectionHandle connection) {
-        Objects.requireNonNull(connection, "connection");
-        InstalledHandler installed;
-        synchronized (handlerStateLock) {
-            if (state.get() != State.INSTALLED
-                    || installedHandlers.containsKey(connection.recipientId())) {
+    /**
+     * Routes one adapter-generated state packet through the same sink and
+     * sequence allocator as a real outbound packet.
+     *
+     * <p>This is the only bridge entry point for synthetic Paper state. It
+     * deliberately has no connection or recipient argument, so generated
+     * state remains part of the neutral recording stream.</p>
+     */
+    public void captureSynthetic(SyntheticStatePacket packet) {
+        Objects.requireNonNull(packet, "packet");
+        if (state.get() != State.INSTALLED) {
+            throw new IllegalStateException("Paper capture bridge is not installed");
+        }
+        if (packet.phase() != PacketPhase.PLAY) {
+            throw incompatible("synthetic Paper packet is not in PLAY phase", null);
+        }
+        PacketDescriptor descriptor = registry.find(
+                        packet.phase(),
+                        PacketDescriptor.Direction.CLIENTBOUND,
+                        packet.packetId())
+                .orElseThrow(() -> incompatible(
+                        "synthetic Paper packet is not in the verified registry", null));
+        if (!registry.captureAllowed(
+                packet.phase(), PacketDescriptor.Direction.CLIENTBOUND, packet.packetId())) {
+            throw incompatible("synthetic Paper packet is not capture-eligible", null);
+        }
+        CaptureBridge.PacketSink currentSink = sink;
+        if (currentSink == null) {
+            throw new IllegalStateException("Paper capture bridge has no packet sink");
+        }
+        Key world = Key.key(packet.worldKey());
+        CaptureBridge.CapturePacket captured = new CaptureBridge.CapturePacket(
+                packet.captureTimeNanos(),
+                packet.serverTick(),
+                allocateSequence(packet.serverTick()),
+                packet.phase(),
+                packet.packetId(),
+                packet.payload(),
+                new CaptureContext(
+                        descriptor.disposition(),
+                        Optional.of(world),
+                        Optional.ofNullable(packet.position()),
+                        Optional.empty(),
+                        Optional.empty()));
+        currentSink.accept(captured);
+    }
+
+    /**
+     * Creates a collector whose accepted synthetic packets are routed through
+     * this bridge. The caller owns and closes the returned collector together
+     * with the recording session.
+     */
+    public Paper26SyntheticStateCollector syntheticCollector(
+            RecordingScope scope,
+            Function<CaptureBridge.CapturePacket, Paper26SyntheticStateCollector.ObservedStateKey>
+                    observationDecoder,
+            Function<Paper26SyntheticStateCollector.StateDelta,
+                    Paper26SyntheticStateCollector.SyntheticStatePacket> deltaEncoder,
+            dev.voldechse.replayframework.adapter.CheckpointSignalSource checkpointSignals) {
+        if (state.get() != State.INSTALLED) {
+            throw new IllegalStateException("Paper capture bridge is not installed");
+        }
+        AtomicReference<Paper26SyntheticStateCollector> collectorReference =
+                new AtomicReference<>();
+        Paper26SyntheticStateCollector collector = new Paper26SyntheticStateCollector(
+                registry,
+                scope,
+                observationDecoder,
+                deltaEncoder,
+                checkpointSignals,
+                this::captureSynthetic,
+                () -> {
+                    Paper26SyntheticStateCollector current = collectorReference.get();
+                    if (current != null) {
+                        syntheticCollectors.remove(current);
+                    }
+                });
+        collectorReference.set(collector);
+        syntheticCollectors.add(collector);
+        return collector;
+    }
+
+    private void capture(PacketSendEvent event) {
+        if (state.get() != State.INSTALLED || event.isCancelled()) {
+            return;
+        }
+        try {
+            PacketPhase phase = phaseOf(event);
+            int packetId = event.getPacketId();
+            PacketDescriptor descriptor = registry.find(
+                            phase, PacketDescriptor.Direction.CLIENTBOUND, packetId)
+                    .orElseThrow(() -> incompatible(
+                            "PacketEvents clientbound packet is not in the verified registry: "
+                                    + phase + ':' + packetId,
+                            null));
+            if (!registry.captureAllowed(
+                    phase, PacketDescriptor.Direction.CLIENTBOUND, packetId)) {
                 return;
             }
-            ReplayOutboundHandler handler = new ReplayOutboundHandler(
-                    accessor,
-                    connection,
-                    registry,
-                    packet -> {
-                        CaptureBridge.PacketSink currentSink = sink;
-                        if (currentSink != null) {
-                            currentSink.accept(packet);
-                        }
-                    },
-                    this::fail,
-                    this::allocateSequence);
-            installed = new InstalledHandler(connection, handler);
-            installedHandlers.put(connection.recipientId(), installed);
-        }
 
-        try {
-            accessor.installBeforeTransportCodec(connection, HANDLER_NAME, installed.handler());
+            byte[] payload = copyPayload(event);
+            long serverTick = accessor.currentServerTick();
+            CaptureBridge.CapturePacket packet = new CaptureBridge.CapturePacket(
+                    System.nanoTime(),
+                    serverTick,
+                    allocateSequence(serverTick),
+                    phase,
+                    packetId,
+                    payload,
+                    captureContext(event, descriptor, phase, packetId, payload, serverTick));
+            for (Paper26SyntheticStateCollector collector : syntheticCollectors) {
+                collector.observe(packet);
+            }
+            CaptureBridge.PacketSink currentSink = sink;
+            if (currentSink != null) {
+                currentSink.accept(packet);
+            }
         } catch (Throwable failure) {
-            installedHandlers.remove(connection.recipientId(), installed);
             fail(failure);
         }
     }
 
-    private void detach(UUID recipientId, PaperConnectionAccessor.ConnectionHandle connection) {
-        InstalledHandler installed = installedHandlers.remove(recipientId);
-        if (installed != null) {
-            accessor.uninstallHandler(installed.connection(), HANDLER_NAME);
-        } else {
-            accessor.uninstallHandler(connection, HANDLER_NAME);
+    private CaptureContext captureContext(
+            PacketSendEvent event,
+            PacketDescriptor descriptor,
+            PacketPhase phase,
+            int packetId,
+            byte[] payload,
+            long serverTick) {
+        Object candidate = event.getPlayer();
+        if (candidate instanceof Player player) {
+            PaperConnectionAccessor.ConnectionHandle connection = accessor.connectionFor(player);
+            if (connection != null) {
+                if (phase == PacketPhase.PLAY) {
+                    Object decoded = accessor.decodeCapturedFrame(
+                            connection,
+                            new RawPacketFrame(0L, serverTick, 0, phase, packetId, payload),
+                            registry);
+                    return accessor.captureContext(connection, decoded, descriptor);
+                }
+                return new CaptureContext(
+                        descriptor.disposition(),
+                        connection.world(),
+                        Optional.empty(),
+                        Optional.empty(),
+                        Optional.empty());
+            }
         }
+        return new CaptureContext(
+                descriptor.disposition(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty());
+    }
+
+    private static PacketPhase phaseOf(PacketSendEvent event) {
+        return switch (event.getConnectionState().name()) {
+            case "STATUS" -> PacketPhase.STATUS;
+            case "LOGIN" -> PacketPhase.LOGIN;
+            case "CONFIGURATION" -> PacketPhase.CONFIGURATION;
+            case "PLAY" -> PacketPhase.PLAY;
+            default -> throw incompatible(
+                    "PacketEvents exposed an unsupported clientbound connection state "
+                            + event.getConnectionState(),
+                    null);
+        };
+    }
+
+    private static byte[] copyPayload(PacketSendEvent event) {
+        Object raw = event.getByteBuf();
+        if (!(raw instanceof ByteBuf buffer)) {
+            throw incompatible("PacketEvents did not expose a Netty byte buffer", null);
+        }
+        byte[] payload = new byte[buffer.readableBytes()];
+        buffer.getBytes(buffer.readerIndex(), payload);
+        return payload;
     }
 
     private void fail(Throwable failure) {
@@ -170,12 +313,7 @@ public final class Paper26CaptureBridge implements CaptureBridge {
             state.set(State.FAILED);
         }
 
-        cleanupHandlers();
-        try {
-            accessor.unregisterLifecycleListener(lifecycleListener);
-        } catch (Throwable ignored) {
-            // Failure cleanup is best effort and must remain one-shot.
-        }
+        unregisterPacketListener();
 
         if (failureReported.compareAndSet(false, true)) {
             CaptureBridge.FailureHandler currentFailureHandler = failureHandler;
@@ -189,18 +327,16 @@ public final class Paper26CaptureBridge implements CaptureBridge {
         }
     }
 
-    private void cleanupHandlers() {
-        List<InstalledHandler> handlers;
-        synchronized (handlerStateLock) {
-            handlers = new ArrayList<>(installedHandlers.values());
-            installedHandlers.clear();
+    private void unregisterPacketListener() {
+        PacketListenerCommon listener = installedListener;
+        installedListener = null;
+        if (listener == null) {
+            return;
         }
-        for (InstalledHandler installed : handlers) {
-            try {
-                accessor.uninstallHandler(installed.connection(), HANDLER_NAME);
-            } catch (Throwable ignored) {
-                // The channel may already be closed; cleanup remains best effort.
-            }
+        try {
+            PacketEvents.getAPI().getEventManager().unregisterListener(listener);
+        } catch (Throwable ignored) {
+            // PacketEvents may already have stopped while Paper disables plugins.
         }
     }
 
@@ -223,6 +359,19 @@ public final class Paper26CaptureBridge implements CaptureBridge {
         }
     }
 
+    private void closeSyntheticCollectors() {
+        List<Paper26SyntheticStateCollector> collectors =
+                new ArrayList<>(syntheticCollectors);
+        syntheticCollectors.clear();
+        for (Paper26SyntheticStateCollector collector : collectors) {
+            try {
+                collector.close();
+            } catch (Throwable ignored) {
+                // Capture shutdown remains best effort after the hook is gone.
+            }
+        }
+    }
+
     private static PacketRegistry verifyRegistry(PacketRegistry registry) {
         Objects.requireNonNull(registry, "registry");
         if (!(registry instanceof Paper26PacketRegistry)) {
@@ -241,15 +390,11 @@ public final class Paper26CaptureBridge implements CaptureBridge {
                 : new IncompatibleAdapterException(message, cause);
     }
 
-    private record InstalledHandler(
-            PaperConnectionAccessor.ConnectionHandle connection,
-            ReplayOutboundHandler handler) {}
-
     /** Status values document whether capture is trusted, failed or shut down. */
     private enum State {
-        /** No callback or lifecycle listener is installed. */
+        /** No PacketEvents callback is installed. */
         NEW,
-        /** The single callback is active and handlers are being maintained. */
+        /** The single PacketEvents callback is active. */
         INSTALLED,
         /** Capture integrity failed; active recording must fail. */
         FAILED,

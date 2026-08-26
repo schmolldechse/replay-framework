@@ -16,12 +16,9 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelOutboundHandler;
 import io.netty.channel.ChannelPipeline;
 import java.lang.reflect.Field;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 import net.minecraft.network.Connection;
 import net.minecraft.network.PacketEncoder;
@@ -43,127 +40,14 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import org.bukkit.entity.Player;
 import org.bukkit.craftbukkit.entity.CraftPlayer;
-import org.bukkit.event.Event;
-import org.bukkit.event.EventException;
-import org.bukkit.event.EventPriority;
-import org.bukkit.event.HandlerList;
-import org.bukkit.event.Listener;
-import org.bukkit.event.player.PlayerJoinEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.plugin.EventExecutor;
-import org.bukkit.plugin.java.JavaPlugin;
 
 /**
- * Adapter-only access to Paper connections, lifecycle events and the live
- * 26.2 packet codec.
+ * Adapter-only access to Paper connections and the live 26.2 packet codec.
  */
 public final class PaperConnectionAccessor {
 
     private static final String PACKET_ENCODER_NAME = "encoder";
     private static final Field PACKET_ENCODER_PROTOCOL_INFO = protocolInfoField();
-
-    private final JavaPlugin owner;
-    private final CopyOnWriteArrayList<ConnectionLifecycleListener> lifecycleListeners =
-            new CopyOnWriteArrayList<>();
-    private final Listener bukkitLifecycleListener = new Listener() {};
-    private final EventExecutor lifecycleExecutor = this::handleLifecycleEvent;
-
-    /**
-     * Creates an accessor owned by the plugin that owns the Paper lifecycle.
-     *
-     * @param owner plugin whose server and events are used
-     */
-    public PaperConnectionAccessor(JavaPlugin owner) {
-        this.owner = Objects.requireNonNull(owner, "owner");
-    }
-
-    /**
-     * Returns currently connected online players without creating connections.
-     *
-     * @return immutable snapshot of usable player channels
-     */
-    public List<ConnectionHandle> activeConnections() {
-        List<ConnectionHandle> connections = new ArrayList<>();
-        for (Player player : owner.getServer().getOnlinePlayers()) {
-            ConnectionHandle connection = connectionOf(player);
-            if (connection != null) {
-                connections.add(connection);
-            }
-        }
-        return List.copyOf(connections);
-    }
-
-    /** Registers a lifecycle callback exactly once. */
-    public void registerLifecycleListener(ConnectionLifecycleListener listener) {
-        Objects.requireNonNull(listener, "listener");
-        if (!lifecycleListeners.addIfAbsent(listener)) {
-            return;
-        }
-        if (lifecycleListeners.size() == 1) {
-            owner.getServer().getPluginManager().registerEvent(
-                    PlayerJoinEvent.class,
-                    bukkitLifecycleListener,
-                    EventPriority.MONITOR,
-                    lifecycleExecutor,
-                    owner,
-                    true);
-            owner.getServer().getPluginManager().registerEvent(
-                    PlayerQuitEvent.class,
-                    bukkitLifecycleListener,
-                    EventPriority.MONITOR,
-                    lifecycleExecutor,
-                    owner,
-                    true);
-        }
-    }
-
-    /** Removes a lifecycle callback and unregisters the Bukkit hooks when unused. */
-    public void unregisterLifecycleListener(ConnectionLifecycleListener listener) {
-        Objects.requireNonNull(listener, "listener");
-        if (!lifecycleListeners.remove(listener)) {
-            return;
-        }
-        if (lifecycleListeners.isEmpty()) {
-            HandlerList.unregisterAll(bukkitLifecycleListener);
-        }
-    }
-
-    /**
-     * Installs a handler at the outbound position immediately before the
-     * transport encoder is reached. Netty invokes outbound handlers from tail
-     * to head, so the handler is inserted after the encoder in pipeline order.
-     *
-     * <p>The operation is scheduled on the channel event loop and never waits
-     * on that loop from the Paper thread.</p>
-     */
-    public void installBeforeTransportCodec(
-            ConnectionHandle connection,
-            String handlerName,
-            ReplayOutboundHandler handler) {
-        Objects.requireNonNull(connection, "connection");
-        requireHandlerName(handlerName);
-        Objects.requireNonNull(handler, "handler");
-
-        connection.channel().eventLoop().execute(() -> {
-            try {
-                ChannelPipeline pipeline = connection.channel().pipeline();
-                if (pipeline.get(handlerName) != null) {
-                    throw incompatible("reserved capture handler name is already in use", null);
-                }
-                ChannelHandlerContext encoderContext = pipeline.context(PacketEncoder.class);
-                if (encoderContext == null
-                        || !(encoderContext.handler() instanceof PacketEncoder<?>)) {
-                    throw incompatible("Paper packet encoder is not installed", null);
-                }
-
-                // For outbound traversal, addAfter makes this handler execute
-                // before the encoder while preserving the original message.
-                pipeline.addAfter(encoderContext.name(), handlerName, handler);
-            } catch (Throwable failure) {
-                handler.installationFailed(failure);
-            }
-        });
-    }
 
     /**
      * Resolves one open Paper player connection for the playback boundary.
@@ -176,7 +60,7 @@ public final class PaperConnectionAccessor {
     }
 
     /**
-     * Installs a viewer gate immediately before the capture observer. All
+     * Installs a viewer gate immediately before Paper's packet encoder. All
      * pipeline mutations remain event-loop local and installation failures are
      * routed to the caller instead of escaping into Netty.
      */
@@ -195,11 +79,6 @@ public final class PaperConnectionAccessor {
                 ChannelPipeline pipeline = connection.channel().pipeline();
                 if (pipeline.get(handlerName) != null) {
                     throw incompatible("reserved playback handler name is already in use", null);
-                }
-
-                if (pipeline.get(Paper26CaptureBridge.HANDLER_NAME) != null) {
-                    pipeline.addBefore(Paper26CaptureBridge.HANDLER_NAME, handlerName, gate);
-                    return;
                 }
 
                 ChannelHandlerContext encoderContext = pipeline.context(PacketEncoder.class);
@@ -240,6 +119,31 @@ public final class PaperConnectionAccessor {
                 || !descriptor.replayable()) {
             throw incompatible("replay packet is blocked by the verified registry", null);
         }
+        return decodeClientboundFrame(connection, frame);
+    }
+
+    /**
+     * Decodes an observed clientbound frame only to derive its capture scope.
+     * The packet still remains non-replayable unless the registry separately
+     * grants a playback contract.
+     */
+    public Object decodeCapturedFrame(
+            ConnectionHandle connection,
+            RawPacketFrame frame,
+            PacketRegistry registry) {
+        Objects.requireNonNull(connection, "connection");
+        Objects.requireNonNull(frame, "frame");
+        Objects.requireNonNull(registry, "registry");
+        registry.find(frame.phase(), PacketDescriptor.Direction.CLIENTBOUND, frame.packetId())
+                .orElseThrow(() -> incompatible(
+                        "captured packet ID is not in the verified registry", null));
+        return decodeClientboundFrame(connection, frame);
+    }
+
+    private Object decodeClientboundFrame(ConnectionHandle connection, RawPacketFrame frame) {
+        if (!connection.channel().isOpen()) {
+            throw incompatible("Paper clientbound channel is closed", null);
+        }
 
         ChannelHandler encoder = connection.channel().pipeline().get(PACKET_ENCODER_NAME);
         if (!(encoder instanceof PacketEncoder<?> packetEncoder)) {
@@ -247,9 +151,9 @@ public final class PaperConnectionAccessor {
         }
 
         ProtocolInfo<?> protocolInfo = protocolInfoOf(packetEncoder);
-        if (protocolInfo.id() != net.minecraft.network.ConnectionProtocol.PLAY
+        if (phaseOf(protocolInfo.id()) != frame.phase()
                 || protocolInfo.flow() != PacketFlow.CLIENTBOUND) {
-            throw incompatible("Paper playback codec is not PLAY clientbound", null);
+            throw incompatible("Paper clientbound codec does not match the captured phase", null);
         }
 
         ByteBuf buffer = Unpooled.buffer();
@@ -263,13 +167,13 @@ public final class PaperConnectionAccessor {
             if (!(decoded instanceof Packet<?> packet)
                     || packet.type() == null
                     || packet.type().flow() != PacketFlow.CLIENTBOUND) {
-                throw incompatible("Paper playback codec returned an invalid packet", null);
+                throw incompatible("Paper clientbound codec returned an invalid packet", null);
             }
             return packet;
         } catch (IncompatibleAdapterException exception) {
             throw exception;
         } catch (RuntimeException | LinkageError exception) {
-            throw incompatible("Paper 26.2 replay codec failed for packet ID " + frame.packetId(), exception);
+            throw incompatible("Paper 26.2 clientbound codec failed for packet ID " + frame.packetId(), exception);
         } finally {
             buffer.release();
         }
@@ -279,16 +183,52 @@ public final class PaperConnectionAccessor {
     public void uninstallHandler(ConnectionHandle connection, String handlerName) {
         Objects.requireNonNull(connection, "connection");
         requireHandlerName(handlerName);
-        connection.channel().eventLoop().execute(() -> {
-            try {
-                if (connection.channel().pipeline().get(handlerName) != null) {
-                    connection.channel().pipeline().remove(handlerName);
+        try {
+            connection.channel().eventLoop().execute(() -> removeHandler(connection, handlerName));
+        } catch (Throwable ignored) {
+            // A closed event loop is an expected disconnect/shutdown path.
+        }
+    }
+
+    /**
+     * Removes a handler before returning when called off the channel event
+     * loop. This is used by playback cleanup so the live player state is not
+     * restored while the replay gate can still suppress its packets.
+     */
+    public void uninstallHandlerAndWait(ConnectionHandle connection, String handlerName) {
+        Objects.requireNonNull(connection, "connection");
+        requireHandlerName(handlerName);
+        if (connection.channel().eventLoop().inEventLoop()) {
+            removeHandler(connection, handlerName);
+            return;
+        }
+
+        java.util.concurrent.CompletableFuture<Void> removed =
+                new java.util.concurrent.CompletableFuture<>();
+        try {
+            connection.channel().eventLoop().execute(() -> {
+                try {
+                    removeHandler(connection, handlerName);
+                    removed.complete(null);
+                } catch (Throwable failure) {
+                    removed.completeExceptionally(failure);
                 }
-            } catch (Throwable ignored) {
-                // A closed or already dismantled Paper channel is an expected
-                // quit path and must not turn shutdown into a second failure.
+            });
+            removed.join();
+        } catch (Throwable ignored) {
+            // A closed event loop is an expected disconnect/shutdown path.
+        }
+    }
+
+    private static void removeHandler(ConnectionHandle connection, String handlerName) {
+        try {
+            if (connection.channel().pipeline().get(handlerName) != null) {
+                connection.channel().pipeline().remove(handlerName);
             }
-        });
+        } catch (Throwable ignored) {
+            // A closed or already dismantled Paper channel is an expected
+            // quit path and must not turn shutdown into a second failure.
+        }
     }
 
     /**
@@ -387,41 +327,6 @@ public final class PaperConnectionAccessor {
             throw incompatible("Paper server tick is negative", null);
         }
         return tick;
-    }
-
-    private void handleLifecycleEvent(Listener ignored, Event event) throws EventException {
-        if (event instanceof PlayerJoinEvent joinEvent) {
-            ConnectionHandle connection = connectionOf(joinEvent.getPlayer());
-            if (connection != null) {
-                notifyConnected(connection);
-            }
-        } else if (event instanceof PlayerQuitEvent quitEvent) {
-            ConnectionHandle connection = connectionOf(quitEvent.getPlayer());
-            if (connection != null) {
-                notifyDisconnected(connection);
-            }
-        }
-    }
-
-    private void notifyConnected(ConnectionHandle connection) {
-        for (ConnectionLifecycleListener listener : lifecycleListeners) {
-            try {
-                listener.onConnected(connection);
-            } catch (Throwable ignored) {
-                // The bridge owns adapter failure reporting; a faulty observer
-                // must not break Bukkit's join event dispatch.
-            }
-        }
-    }
-
-    private void notifyDisconnected(ConnectionHandle connection) {
-        for (ConnectionLifecycleListener listener : lifecycleListeners) {
-            try {
-                listener.onDisconnected(connection);
-            } catch (Throwable ignored) {
-                // Quit is best effort and must not escape into Bukkit shutdown.
-            }
-        }
     }
 
     private static ConnectionHandle connectionOf(Player player) {
@@ -533,13 +438,13 @@ public final class PaperConnectionAccessor {
     }
 
     private static PacketPhase phaseOf(net.minecraft.network.ConnectionProtocol protocol) {
-        if (protocol == net.minecraft.network.ConnectionProtocol.PLAY) {
-            return PacketPhase.PLAY;
-        }
-        if (protocol == net.minecraft.network.ConnectionProtocol.CONFIGURATION) {
-            return PacketPhase.CONFIGURATION;
-        }
-        throw incompatible("Paper connection is outside a replay-supported phase", null);
+        return switch (protocol) {
+            case HANDSHAKING -> PacketPhase.HANDSHAKING;
+            case STATUS -> PacketPhase.STATUS;
+            case LOGIN -> PacketPhase.LOGIN;
+            case CONFIGURATION -> PacketPhase.CONFIGURATION;
+            case PLAY -> PacketPhase.PLAY;
+        };
     }
 
     private static int readVarInt(ByteBuf buffer) {
@@ -605,27 +510,20 @@ public final class PaperConnectionAccessor {
 
     /** Immutable connection identity used by the adapter-internal capture path. */
     public record ConnectionHandle(
-            UUID recipientId,
+            UUID connectionId,
             Channel channel,
             Optional<net.kyori.adventure.key.Key> world,
             Optional<BlockPosition> position) {
-        public ConnectionHandle(UUID recipientId, Channel channel) {
-            this(recipientId, channel, Optional.empty(), Optional.empty());
+        public ConnectionHandle(UUID connectionId, Channel channel) {
+            this(connectionId, channel, Optional.empty(), Optional.empty());
         }
 
         public ConnectionHandle {
-            Objects.requireNonNull(recipientId, "recipientId");
+            Objects.requireNonNull(connectionId, "connectionId");
             Objects.requireNonNull(channel, "channel");
             world = Objects.requireNonNull(world, "world");
             position = Objects.requireNonNull(position, "position");
         }
-    }
-
-    /** Lifecycle boundary kept inside the Paper adapter. */
-    public interface ConnectionLifecycleListener {
-        void onConnected(ConnectionHandle connection);
-
-        void onDisconnected(ConnectionHandle connection);
     }
 
     /** Immutable result of one live-codec inspection. */

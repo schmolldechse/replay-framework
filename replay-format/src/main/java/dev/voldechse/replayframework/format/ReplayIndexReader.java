@@ -11,11 +11,11 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
-/** Strict reader for revision-one replay indexes. */
+/** Strict reader for revision-three replay indexes. */
 public final class ReplayIndexReader {
 
     private static final byte[] MAGIC = "RFI1".getBytes(StandardCharsets.US_ASCII);
-    private static final int FORMAT_VERSION = 1;
+    private static final int FORMAT_VERSION = 3;
 
     /** Creates a stateless index reader. */
     public ReplayIndexReader() {

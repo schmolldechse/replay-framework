@@ -1,5 +1,6 @@
 package dev.voldechse.replayframework.adapter;
 
+import dev.voldechse.replayframework.adapter.playback.PlaybackIdentityContext;
 import java.util.Objects;
 import org.bukkit.entity.Player;
 
@@ -55,6 +56,15 @@ public interface ReplayAdapter {
      * @throws IncompatibleAdapterException when the adapter was not verified
      */
     PlaybackBridge openPlayback(Player player);
+
+    /** Opens and binds a bridge to the isolated playback identity context. */
+    default PlaybackBridge openPlayback(
+            Player player,
+            PlaybackIdentityContext identityContext) {
+        PlaybackBridge bridge = Objects.requireNonNull(openPlayback(player), "openPlayback result");
+        bridge.setIdentityContext(Objects.requireNonNull(identityContext, "identityContext"));
+        return bridge;
+    }
 
     /**
      * Verifies that the adapter descriptor and immutable registry agree before

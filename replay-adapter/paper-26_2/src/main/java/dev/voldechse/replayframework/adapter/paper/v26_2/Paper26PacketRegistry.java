@@ -5,6 +5,7 @@ import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.PacketDisposition;
 import dev.voldechse.replayframework.adapter.PacketRegistry;
 import dev.voldechse.replayframework.format.PacketPhase;
+import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26ReplayPacketRewriter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -65,64 +66,66 @@ public final class Paper26PacketRegistry implements PacketRegistry {
             Map.entry(type("minecraft:move_entity_pos"), stateful()),
             Map.entry(type("minecraft:move_entity_pos_rot"), stateful()),
             Map.entry(type("minecraft:move_entity_rot"), stateful()),
-            Map.entry(type("minecraft:move_minecart_along_track"), stateful()),
-            Map.entry(type("minecraft:move_vehicle"), stateful()),
+            Map.entry(type("minecraft:move_minecart_along_track"), unsupported()),
+            Map.entry(type("minecraft:move_vehicle"), viewerLocalStateful()),
             Map.entry(type("minecraft:remove_entities"), stateful()),
             Map.entry(type("minecraft:rotate_head"), stateful()),
-            Map.entry(type("minecraft:set_camera"), stateful()),
+            Map.entry(type("minecraft:set_camera"), viewerLocalStateful()),
             Map.entry(type("minecraft:set_entity_data"), stateful()),
-            Map.entry(type("minecraft:set_entity_link"), stateful()),
+            Map.entry(type("minecraft:set_entity_link"), unsupported()),
             Map.entry(type("minecraft:set_entity_motion"), stateful()),
             Map.entry(type("minecraft:set_equipment"), stateful()),
-            Map.entry(type("minecraft:set_experience"), stateful()),
-            Map.entry(type("minecraft:set_health"), stateful()),
+            Map.entry(type("minecraft:set_experience"), viewerLocalStateful()),
+            Map.entry(type("minecraft:set_health"), viewerLocalStateful()),
             Map.entry(type("minecraft:set_passengers"), stateful()),
             Map.entry(type("minecraft:teleport_entity"), stateful()),
             Map.entry(type("minecraft:update_attributes"), stateful()),
             Map.entry(type("minecraft:update_mob_effect"), stateful()),
             Map.entry(type("minecraft:remove_mob_effect"), stateful()),
             Map.entry(type("minecraft:projectile_power"), stateful()),
-            Map.entry(type("minecraft:waypoint"), stateful()),
-            Map.entry(type("minecraft:player_abilities"), stateful()),
-            Map.entry(type("minecraft:player_position"), stateful()),
-            Map.entry(type("minecraft:player_rotation"), stateful()),
-            Map.entry(type("minecraft:respawn"), stateful()),
-            Map.entry(type("minecraft:login"), stateful()),
+            Map.entry(type("minecraft:waypoint"), unsupported()),
+            Map.entry(type("minecraft:player_abilities"), viewerLocalStateful()),
+            Map.entry(type("minecraft:player_position"), viewerLocalStateful()),
+            Map.entry(type("minecraft:player_rotation"), viewerLocalStateful()),
+            Map.entry(type("minecraft:respawn"), viewerLocalStateful()),
+            // A PLAY login is a connection bootstrap and cannot be sent to an
+            // already connected live viewer.
+            Map.entry(type("minecraft:login"), control()),
 
             // Inventory, recipe, command, team, score and tab-list state persists.
-            Map.entry(type("minecraft:container_close"), stateful()),
-            Map.entry(type("minecraft:container_set_content"), stateful()),
-            Map.entry(type("minecraft:container_set_data"), stateful()),
-            Map.entry(type("minecraft:container_set_slot"), stateful()),
+            Map.entry(type("minecraft:container_close"), viewerLocalStateful()),
+            Map.entry(type("minecraft:container_set_content"), viewerLocalStateful()),
+            Map.entry(type("minecraft:container_set_data"), viewerLocalStateful()),
+            Map.entry(type("minecraft:container_set_slot"), viewerLocalStateful()),
             Map.entry(type("minecraft:cooldown"), stateful()),
             Map.entry(type("minecraft:command_suggestions"), ephemeral()),
             Map.entry(type("minecraft:commands"), stateful()),
             Map.entry(type("minecraft:custom_chat_completions"), stateful()),
             Map.entry(type("minecraft:merchant_offers"), stateful()),
-            Map.entry(type("minecraft:mount_screen_open"), stateful()),
-            Map.entry(type("minecraft:open_screen"), stateful()),
+            Map.entry(type("minecraft:mount_screen_open"), viewerLocalStateful()),
+            Map.entry(type("minecraft:open_screen"), viewerLocalStateful()),
             Map.entry(type("minecraft:place_ghost_recipe"), stateful()),
             Map.entry(type("minecraft:recipe_book_add"), stateful()),
             Map.entry(type("minecraft:recipe_book_remove"), stateful()),
             Map.entry(type("minecraft:recipe_book_settings"), stateful()),
-            Map.entry(type("minecraft:set_cursor_item"), stateful()),
-            Map.entry(type("minecraft:set_held_slot"), stateful()),
-            Map.entry(type("minecraft:set_player_inventory"), stateful()),
+            Map.entry(type("minecraft:set_cursor_item"), viewerLocalStateful()),
+            Map.entry(type("minecraft:set_held_slot"), viewerLocalStateful()),
+            Map.entry(type("minecraft:set_player_inventory"), viewerLocalStateful()),
             Map.entry(type("minecraft:player_info_remove"), stateful()),
             Map.entry(type("minecraft:player_info_update"), stateful()),
-            Map.entry(type("minecraft:set_objective"), stateful()),
-            Map.entry(type("minecraft:set_display_objective"), stateful()),
-            Map.entry(type("minecraft:set_player_team"), stateful()),
+            Map.entry(type("minecraft:set_objective"), unsupported()),
+            Map.entry(type("minecraft:set_display_objective"), unsupported()),
+            Map.entry(type("minecraft:set_player_team"), unsupported()),
             Map.entry(type("minecraft:set_score"), stateful()),
             Map.entry(type("minecraft:reset_score"), stateful()),
             Map.entry(type("minecraft:boss_event"), stateful()),
-            Map.entry(type("minecraft:tab_list"), stateful()),
+            Map.entry(type("minecraft:tab_list"), viewerLocalStateful()),
             Map.entry(type("minecraft:update_advancements"), stateful()),
             Map.entry(type("minecraft:select_advancements_tab"), configurable()),
             Map.entry(type("minecraft:update_recipes"), stateful()),
             Map.entry(type("minecraft:update_tags"), stateful()),
             Map.entry(type("minecraft:map_item_data"), stateful()),
-            Map.entry(type("minecraft:player_look_at"), ephemeral()),
+            Map.entry(type("minecraft:player_look_at"), viewerLocalEphemeral()),
             Map.entry(type("minecraft:server_data"), configurable()),
             Map.entry(type("minecraft:set_chunk_cache_center"), stateful()),
             Map.entry(type("minecraft:set_chunk_cache_radius"), stateful()),
@@ -134,7 +137,7 @@ public final class Paper26PacketRegistry implements PacketRegistry {
             Map.entry(type("minecraft:disguised_chat"), configurable()),
             Map.entry(type("minecraft:player_chat"), configurable()),
             Map.entry(type("minecraft:system_chat"), configurable()),
-            Map.entry(type("minecraft:set_action_bar_text"), configurable()),
+            Map.entry(type("minecraft:set_action_bar_text"), viewerLocalConfigurable()),
             Map.entry(type("minecraft:set_subtitle_text"), configurable()),
             Map.entry(type("minecraft:set_title_text"), configurable()),
             Map.entry(type("minecraft:set_titles_animation"), configurable()),
@@ -146,19 +149,19 @@ public final class Paper26PacketRegistry implements PacketRegistry {
             Map.entry(type("minecraft:show_dialog"), configurable()),
 
             // Short-lived effects are replayed in order but never copied to checkpoints.
-            Map.entry(type("minecraft:animate"), ephemeral()),
+            Map.entry(type("minecraft:animate"), unsupported()),
             Map.entry(type("minecraft:award_stats"), stateful()),
-            Map.entry(type("minecraft:block_destruction"), ephemeral()),
+            Map.entry(type("minecraft:block_destruction"), unsupported()),
             Map.entry(type("minecraft:block_event"), ephemeral()),
             Map.entry(type("minecraft:damage_event"), ephemeral()),
-            Map.entry(type("minecraft:entity_event"), ephemeral()),
+            Map.entry(type("minecraft:entity_event"), unsupported()),
             Map.entry(type("minecraft:explode"), ephemeral()),
             Map.entry(type("minecraft:game_event"), ephemeral()),
             Map.entry(type("minecraft:hurt_animation"), ephemeral()),
             Map.entry(type("minecraft:level_event"), ephemeral()),
             Map.entry(type("minecraft:level_particles"), ephemeral()),
             Map.entry(type("minecraft:sound"), ephemeral()),
-            Map.entry(type("minecraft:sound_entity"), ephemeral()),
+            Map.entry(type("minecraft:sound_entity"), unsupported()),
             Map.entry(type("minecraft:stop_sound"), ephemeral()),
             Map.entry(type("minecraft:take_item_entity"), ephemeral()),
             Map.entry(type("minecraft:player_combat_end"), ephemeral()),
@@ -183,7 +186,7 @@ public final class Paper26PacketRegistry implements PacketRegistry {
     }
 
     /**
-     * Discovers and classifies the live Paper 26.2 PLAY clientbound registry.
+     * Discovers and classifies every live Paper 26.2 clientbound registry.
      *
      * @return immutable classified registry
      */
@@ -196,7 +199,7 @@ public final class Paper26PacketRegistry implements PacketRegistry {
      *
      * @param snapshot validated Paper snapshot
      * @return immutable classified registry
-     * @throws IncompatibleAdapterException when any entry is not an explicit 26.2 type
+     * @throws IncompatibleAdapterException when Paper exposes an invalid clientbound entry
      */
     static Paper26PacketRegistry fromSnapshot(
             Paper26ProtocolIntrospector.ProtocolSnapshot snapshot) {
@@ -205,13 +208,12 @@ public final class Paper26PacketRegistry implements PacketRegistry {
             throw incompatible("unsupported Paper Minecraft version", null);
         }
 
-        List<PacketDescriptor> descriptors = new ArrayList<>(snapshot.clientboundPlayPackets().size());
-        for (Paper26ProtocolIntrospector.PacketType packet : snapshot.clientboundPlayPackets()) {
+        List<PacketDescriptor> descriptors = new ArrayList<>(snapshot.clientboundPackets().size());
+        for (Paper26ProtocolIntrospector.PacketType packet : snapshot.clientboundPackets()) {
             validatePacket(packet);
-            Classification classification = CLASSIFICATIONS.get(packet.typeName());
-            if (classification == null) {
-                throw incompatible("unclassified Paper PLAY packet type " + packet.typeName(), null);
-            }
+            Classification classification = packet.phase() == PacketPhase.PLAY
+                    ? CLASSIFICATIONS.getOrDefault(packet.typeName(), captureOnly())
+                    : captureOnly();
             String expectedCodecKey = CODEC_PREFIX + packet.typeName();
             if (!expectedCodecKey.equals(packet.codecKey())) {
                 throw incompatible("Paper packet codec key mismatch for " + packet.typeName(), null);
@@ -226,7 +228,8 @@ public final class Paper26PacketRegistry implements PacketRegistry {
                         classification.captureByDefault(),
                         classification.replayable(),
                         classification.checkpointRelevant(),
-                        packet.codecKey()));
+                        packet.codecKey(),
+                        playbackScope(packet.typeName(), classification)));
             } catch (IllegalArgumentException exception) {
                 throw incompatible("invalid Paper packet descriptor for " + packet.typeName(), exception);
             }
@@ -235,7 +238,7 @@ public final class Paper26PacketRegistry implements PacketRegistry {
         try {
             return new Paper26PacketRegistry(PacketRegistry.of(descriptors));
         } catch (IllegalArgumentException exception) {
-            throw incompatible("Paper PLAY packet registry is not unique", exception);
+            throw incompatible("Paper clientbound packet registry is not unique", exception);
         }
     }
 
@@ -275,10 +278,9 @@ public final class Paper26PacketRegistry implements PacketRegistry {
 
     private static void validatePacket(Paper26ProtocolIntrospector.PacketType packet) {
         if (packet == null
-                || packet.phase() != PacketPhase.PLAY
                 || packet.direction() != PacketDescriptor.Direction.CLIENTBOUND
                 || packet.packetId() < 0) {
-            throw incompatible("Paper snapshot contains a non-PLAY clientbound packet", null);
+            throw incompatible("Paper snapshot contains an invalid clientbound packet", null);
         }
     }
 
@@ -290,6 +292,10 @@ public final class Paper26PacketRegistry implements PacketRegistry {
         return new Classification(PacketDisposition.STATEFUL, true, true, true);
     }
 
+    private static Classification viewerLocalStateful() {
+        return new Classification(PacketDisposition.STATEFUL, true, true, false);
+    }
+
     private static Classification ephemeral() {
         return new Classification(PacketDisposition.EPHEMERAL, true, true, false);
     }
@@ -298,14 +304,44 @@ public final class Paper26PacketRegistry implements PacketRegistry {
         return new Classification(PacketDisposition.CONFIGURABLE, true, true, false);
     }
 
-    /** CONTROL means protocol/connection mechanics, never replay data. */
-    private static Classification control() {
-        return new Classification(PacketDisposition.CONTROL, false, false, false);
+    private static Classification viewerLocalEphemeral() {
+        return new Classification(PacketDisposition.EPHEMERAL, true, true, false);
     }
 
-    /** UNSUPPORTED means known but intentionally blocked until a safe contract exists. */
+    private static Classification viewerLocalConfigurable() {
+        return new Classification(PacketDisposition.CONFIGURABLE, true, true, false);
+    }
+
+    /** CONTROL means captured diagnostics/protocol data, never replay data. */
+    private static Classification control() {
+        return new Classification(PacketDisposition.CONTROL, true, false, false);
+    }
+
+    /** UNSUPPORTED means captured but blocked until a safe playback contract exists. */
     private static Classification unsupported() {
-        return new Classification(PacketDisposition.UNSUPPORTED, false, false, false);
+        return new Classification(PacketDisposition.UNSUPPORTED, true, false, false);
+    }
+
+    /** All non-PLAY and newly discovered packets are retained but never replayed implicitly. */
+    private static Classification captureOnly() {
+        return new Classification(PacketDisposition.CONTROL, true, false, false);
+    }
+
+    private static PacketDescriptor.PlaybackScope playbackScope(
+            String typeName,
+            Classification classification) {
+        if (classification.disposition() == PacketDisposition.CONTROL
+                || classification.disposition() == PacketDisposition.UNSUPPORTED) {
+            return PacketDescriptor.PlaybackScope.UNSAFE;
+        }
+        String identifier = typeName.substring(TYPE_PREFIX.length());
+        if (Paper26ReplayPacketRewriter.isViewerLocal(identifier)) {
+            return PacketDescriptor.PlaybackScope.VIEWER_LOCAL;
+        }
+        if (Paper26ReplayPacketRewriter.isIdentityBearing(identifier)) {
+            return PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES;
+        }
+        return PacketDescriptor.PlaybackScope.SAFE;
     }
 
     private static IncompatibleAdapterException incompatible(String message, Throwable cause) {
@@ -324,9 +360,9 @@ public final class Paper26PacketRegistry implements PacketRegistry {
             Objects.requireNonNull(disposition, "disposition");
             if ((disposition == PacketDisposition.CONTROL
                     || disposition == PacketDisposition.UNSUPPORTED)
-                    && (captureByDefault || replayable || checkpointRelevant)) {
+                    && (replayable || checkpointRelevant)) {
                 throw new IllegalArgumentException(
-                        disposition + " packets must be disabled at registry construction");
+                        disposition + " packets cannot be replayable or checkpoint-relevant");
             }
         }
     }

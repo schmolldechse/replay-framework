@@ -10,6 +10,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.potion.PotionEffect;
+import org.bukkit.scoreboard.Scoreboard;
 
 /**
  * In-memory snapshot of the player properties changed by the Example viewer.
@@ -39,6 +40,8 @@ final class StoredPlayerState {
     private final boolean glowing;
     private final boolean collidable;
     private final boolean gravity;
+    private final float fallDistance;
+    private final Scoreboard scoreboard;
     private final List<PotionEffect> potionEffects;
     private final int fireTicks;
     private final int freezeTicks;
@@ -64,6 +67,8 @@ final class StoredPlayerState {
             boolean glowing,
             boolean collidable,
             boolean gravity,
+            float fallDistance,
+            Scoreboard scoreboard,
             List<PotionEffect> potionEffects,
             int fireTicks,
             int freezeTicks) {
@@ -87,6 +92,8 @@ final class StoredPlayerState {
         this.glowing = glowing;
         this.collidable = collidable;
         this.gravity = gravity;
+        this.fallDistance = fallDistance;
+        this.scoreboard = Objects.requireNonNull(scoreboard, "scoreboard");
         this.potionEffects = List.copyOf(potionEffects);
         this.fireTicks = fireTicks;
         this.freezeTicks = freezeTicks;
@@ -117,6 +124,8 @@ final class StoredPlayerState {
                 player.isGlowing(),
                 player.isCollidable(),
                 player.hasGravity(),
+                player.getFallDistance(),
+                Objects.requireNonNull(player.getScoreboard(), "player.scoreboard"),
                 new ArrayList<>(player.getActivePotionEffects()),
                 player.getFireTicks(),
                 player.getFreezeTicks());
@@ -159,9 +168,11 @@ final class StoredPlayerState {
             player.setGlowing(glowing);
             player.setCollidable(collidable);
             player.setGravity(gravity);
+            player.setFallDistance(fallDistance);
             player.setFireTicks(fireTicks);
             player.setFreezeTicks(freezeTicks);
         });
+        restoreSection(failures, "scoreboard", () -> player.setScoreboard(scoreboard));
         restoreSection(failures, "potion effects", () -> {
             for (PotionEffect effect : player.getActivePotionEffects()) {
                 player.removePotionEffect(effect.getType());

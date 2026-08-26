@@ -3,7 +3,6 @@ package dev.voldechse.replayframework.adapter;
 import dev.voldechse.replayframework.format.PacketPhase;
 import dev.voldechse.replayframework.format.RawPacketFrame;
 import java.util.Objects;
-import java.util.UUID;
 
 /**
  * Adapter boundary for observing raw clientbound packets without exposing
@@ -39,6 +38,15 @@ public interface CaptureBridge {
          * @param packet immutable packet event
          */
         void accept(CapturePacket packet);
+
+        /**
+         * Reports whether at least one recording currently consumes capture
+         * data. Adapters use this only to avoid producing synthetic state while
+         * the global route has no active recording sessions.
+         */
+        default boolean hasActiveSinks() {
+            return true;
+        }
     }
 
     /** Receives the first fatal failure raised while delivering to a sink. */
@@ -55,7 +63,6 @@ public interface CaptureBridge {
     /**
      * Copied raw packet data plus the monotonic timestamp at which it was seen.
      *
-     * @param recipientId connection recipient
      * @param captureTimeNanos monotonic capture timestamp; it may be negative as
      *                         permitted by {@link System#nanoTime()}
      * @param serverTick server tick at capture time
@@ -66,7 +73,6 @@ public interface CaptureBridge {
      * @param context adapter-decoded semantic facts; unknown values are empty
      */
     record CapturePacket(
-            UUID recipientId,
             long captureTimeNanos,
             long serverTick,
             int sequence,
@@ -81,20 +87,18 @@ public interface CaptureBridge {
          * allowed to infer packet meaning from raw payload bytes.
          */
         public CapturePacket(
-                UUID recipientId,
                 long captureTimeNanos,
                 long serverTick,
                 int sequence,
                 PacketPhase phase,
                 int packetId,
                 byte[] payload) {
-            this(recipientId, captureTimeNanos, serverTick, sequence, phase, packetId,
+            this(captureTimeNanos, serverTick, sequence, phase, packetId,
                     payload, CaptureContext.unknown());
         }
 
         /** Validates and defensively copies the captured packet data. */
         public CapturePacket {
-            Objects.requireNonNull(recipientId, "recipientId");
             if (serverTick < 0L) {
                 throw new IllegalArgumentException("serverTick must not be negative");
             }

@@ -12,11 +12,15 @@ import java.util.Set;
 import net.minecraft.SharedConstants;
 import net.minecraft.WorldVersion;
 import net.minecraft.network.ConnectionProtocol;
+import net.minecraft.network.ProtocolInfo;
 import net.minecraft.network.protocol.PacketFlow;
+import net.minecraft.network.protocol.configuration.ConfigurationProtocols;
 import net.minecraft.network.protocol.game.GameProtocols;
+import net.minecraft.network.protocol.login.LoginProtocols;
+import net.minecraft.network.protocol.status.StatusProtocols;
 
 /**
- * Reads the Paper 26.2 protocol registry and exposes only immutable adapter data.
+ * Reads all Paper 26.2 clientbound protocol registries and exposes only immutable adapter data.
  *
  * <p>All NMS access is deliberately kept in this class. The Paper packet registry
  * exposes stable {@code PacketType} identifiers and numeric positions through its
@@ -26,10 +30,9 @@ import net.minecraft.network.protocol.game.GameProtocols;
 final class Paper26ProtocolIntrospector {
 
     private static final String CODEC_PREFIX = "paper-26.2/";
-    private static final String TYPE_PREFIX = "play.clientbound.";
 
     /**
-     * Inspects the current Paper protocol metadata and the PLAY clientbound list.
+     * Inspects the current Paper protocol metadata and every clientbound packet list.
      *
      * @return immutable protocol snapshot
      * @throws IncompatibleAdapterException when Paper exposes an unexpected registry
@@ -45,23 +48,19 @@ final class Paper26ProtocolIntrospector {
                 throw incompatible("Paper protocol version is negative", null);
             }
 
-            var details = Objects.requireNonNull(
-                    GameProtocols.CLIENTBOUND_TEMPLATE.details(),
-                    "Paper PLAY clientbound protocol details");
-            if (details.id() != ConnectionProtocol.PLAY || details.flow() != PacketFlow.CLIENTBOUND) {
-                throw incompatible("Paper PLAY clientbound protocol details mismatch", null);
-            }
-
             List<PacketType> packets = new ArrayList<>();
-            details.listPackets((packetType, packetId) -> packets.add(
-                    normalize(packetType, packetId)));
-            packets.sort(Comparator.comparingInt(PacketType::packetId));
+            collect(packets, StatusProtocols.CLIENTBOUND_TEMPLATE.details(), ConnectionProtocol.STATUS);
+            collect(packets, LoginProtocols.CLIENTBOUND_TEMPLATE.details(), ConnectionProtocol.LOGIN);
+            collect(packets, ConfigurationProtocols.CLIENTBOUND_TEMPLATE.details(), ConnectionProtocol.CONFIGURATION);
+            collect(packets, GameProtocols.CLIENTBOUND_TEMPLATE.details(), ConnectionProtocol.PLAY);
+            packets.sort(Comparator.comparingInt((PacketType packet) -> packet.phase().wireCode())
+                    .thenComparingInt(PacketType::packetId));
             validatePacketSet(packets);
             return new ProtocolSnapshot(minecraftVersion, protocolVersion, packets);
         } catch (IncompatibleAdapterException exception) {
             throw exception;
         } catch (RuntimeException | LinkageError exception) {
-            throw incompatible("Paper PLAY clientbound registry cannot be inspected", exception);
+            throw incompatible("Paper clientbound registry cannot be inspected", exception);
         }
     }
 
@@ -70,24 +69,40 @@ final class Paper26ProtocolIntrospector {
         return SharedConstants.getCurrentVersion();
     }
 
+    private static void collect(
+            List<PacketType> packets,
+            ProtocolInfo.Details details,
+            ConnectionProtocol expectedProtocol) {
+        Objects.requireNonNull(packets, "packets");
+        Objects.requireNonNull(details, "Paper clientbound protocol details");
+        if (details.id() != expectedProtocol || details.flow() != PacketFlow.CLIENTBOUND) {
+            throw incompatible("Paper clientbound protocol details mismatch for " + expectedProtocol, null);
+        }
+        PacketPhase phase = phaseOf(expectedProtocol);
+        details.listPackets((packetType, packetId) -> packets.add(normalize(phase, packetType, packetId)));
+    }
+
     private static PacketType normalize(
+            PacketPhase phase,
             net.minecraft.network.protocol.PacketType<?> packetType,
             int packetId) {
         if (packetType == null || packetId < 0) {
-            throw incompatible("Paper PLAY clientbound registry contains an invalid entry", null);
+            throw incompatible("Paper clientbound registry contains an invalid entry", null);
         }
         if (packetType.flow() != PacketFlow.CLIENTBOUND) {
-            throw incompatible("Paper PLAY registry contains a non-clientbound entry", null);
+            throw incompatible("Paper registry contains a non-clientbound entry", null);
         }
         if (packetType.id() == null) {
-            throw incompatible("Paper PLAY registry contains a packet without an identifier", null);
+            throw incompatible("Paper registry contains a packet without an identifier", null);
         }
         String typeIdentifier = packetType.id().toString();
         requireStableText(typeIdentifier, "packet type identifier");
-        String typeName = requireStableText(TYPE_PREFIX + typeIdentifier, "packet type name");
+        String typeName = requireStableText(
+                phase.name().toLowerCase(java.util.Locale.ROOT) + ".clientbound." + typeIdentifier,
+                "packet type name");
         String codecKey = requireStableText(CODEC_PREFIX + typeName, "packet codec key");
         return new PacketType(
-                PacketPhase.PLAY,
+                phase,
                 PacketDescriptor.Direction.CLIENTBOUND,
                 typeName,
                 packetId,
@@ -95,19 +110,29 @@ final class Paper26ProtocolIntrospector {
     }
 
     private static void validatePacketSet(List<PacketType> packets) {
-        Set<Integer> packetIds = new HashSet<>();
+        Set<String> packetIds = new HashSet<>();
         Set<String> typeNames = new HashSet<>();
         for (PacketType packet : packets) {
-            if (!packetIds.add(packet.packetId())) {
-                throw incompatible("Paper PLAY registry contains a duplicate packet ID", null);
+            if (!packetIds.add(packet.phase().name() + ':' + packet.packetId())) {
+                throw incompatible("Paper registry contains a duplicate packet ID in " + packet.phase(), null);
             }
             if (!typeNames.add(packet.typeName())) {
-                throw incompatible("Paper PLAY registry contains a duplicate packet type", null);
+                throw incompatible("Paper registry contains a duplicate packet type", null);
             }
         }
         if (packets.isEmpty()) {
-            throw incompatible("Paper PLAY clientbound registry is empty", null);
+            throw incompatible("Paper clientbound registries are empty", null);
         }
+    }
+
+    private static PacketPhase phaseOf(ConnectionProtocol protocol) {
+        return switch (protocol) {
+            case HANDSHAKING -> PacketPhase.HANDSHAKING;
+            case STATUS -> PacketPhase.STATUS;
+            case LOGIN -> PacketPhase.LOGIN;
+            case CONFIGURATION -> PacketPhase.CONFIGURATION;
+            case PLAY -> PacketPhase.PLAY;
+        };
     }
 
     private static String requireStableText(String value, String field) {
@@ -132,15 +157,15 @@ final class Paper26ProtocolIntrospector {
     record ProtocolSnapshot(
             String minecraftVersion,
             int protocolVersion,
-            List<PacketType> clientboundPlayPackets) {
+            List<PacketType> clientboundPackets) {
 
         ProtocolSnapshot {
             minecraftVersion = requireStableText(minecraftVersion, "minecraftVersion");
             if (protocolVersion < 0) {
                 throw incompatible("snapshot protocol version is negative", null);
             }
-            Objects.requireNonNull(clientboundPlayPackets, "clientboundPlayPackets");
-            clientboundPlayPackets = List.copyOf(clientboundPlayPackets);
+            Objects.requireNonNull(clientboundPackets, "clientboundPackets");
+            clientboundPackets = List.copyOf(clientboundPackets);
         }
     }
 

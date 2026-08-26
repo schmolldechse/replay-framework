@@ -5,26 +5,34 @@ import dev.voldechse.replayframework.api.id.PlaybackSessionId;
 import dev.voldechse.replayframework.api.playback.PlaybackSnapshot;
 import dev.voldechse.replayframework.api.playback.PlaybackStatus;
 import dev.voldechse.replayframework.example.viewer.ExampleViewerEnvironment;
-import java.time.Duration;
-import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.title.Title;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitTask;
 
-/** Renders event-driven playback status without owning a playback scheduler. */
+/** Renders the fixed ActionBar status and refreshes active viewers on the main thread. */
 public final class PlaybackStatusRenderer implements AutoCloseable {
     private final JavaPlugin plugin;
     private final ExampleViewerEnvironment environment;
     private final PlaybackHotbar hotbar;
     private final AtomicBoolean closed = new AtomicBoolean();
+    private final Map<UUID, PlaybackSessionId> activeSessions = new ConcurrentHashMap<>();
+    private final Map<UUID, PlaybackSessionId> readySessions = new ConcurrentHashMap<>();
+    private final java.util.Set<UUID> refreshingViewers = ConcurrentHashMap.newKeySet();
+    private final Map<UUID, PendingRender> pendingRenders = new ConcurrentHashMap<>();
+    private final Set<UUID> scheduledRenders = ConcurrentHashMap.newKeySet();
     private final ReplayEventPublisher.Subscription subscription;
+    private volatile BukkitTask refreshTask;
 
     public PlaybackStatusRenderer(
             JavaPlugin plugin,
@@ -44,7 +52,34 @@ public final class PlaybackStatusRenderer implements AutoCloseable {
         }
         onMain(() -> {
             if (!closed.get() && player.isOnline()) {
+                var session = environment.playback(player.getUniqueId()).orElse(null);
+                if (session == null) {
+                    return;
+                }
+                pendingRenders.remove(player.getUniqueId());
+                activeSessions.put(player.getUniqueId(), session.id());
+                updateRefreshState(player.getUniqueId(), snapshot);
+                notifyReady(player, session.id(), snapshot);
                 render(player, snapshot, titleFor(snapshot.status()));
+            }
+        });
+    }
+
+    /** Clears status for a viewer that left the browser or playback environment. */
+    public void clear(UUID viewerId) {
+        if (viewerId == null) {
+            return;
+        }
+        onMain(() -> {
+            pendingRenders.remove(viewerId);
+            scheduledRenders.remove(viewerId);
+            activeSessions.remove(viewerId);
+            readySessions.remove(viewerId);
+            refreshingViewers.remove(viewerId);
+            cancelRefreshIfIdle();
+            Player player = Bukkit.getPlayer(viewerId);
+            if (player != null && player.isOnline()) {
+                player.sendActionBar(Component.empty());
             }
         });
     }
@@ -53,6 +88,22 @@ public final class PlaybackStatusRenderer implements AutoCloseable {
     public void close() {
         if (closed.compareAndSet(false, true)) {
             subscription.close();
+            BukkitTask task = refreshTask;
+            if (task != null) {
+                task.cancel();
+                refreshTask = null;
+            }
+            for (UUID viewerId : activeSessions.keySet()) {
+                Player player = Bukkit.getPlayer(viewerId);
+                if (player != null && player.isOnline()) {
+                    player.sendActionBar(Component.empty());
+                }
+            }
+            activeSessions.clear();
+            readySessions.clear();
+            refreshingViewers.clear();
+            pendingRenders.clear();
+            scheduledRenders.clear();
         }
     }
 
@@ -90,36 +141,134 @@ public final class PlaybackStatusRenderer implements AutoCloseable {
         if (viewerId == null || sessionId == null || snapshot == null) {
             return;
         }
-        UUID finalViewerId = viewerId;
-        PlaybackSessionId finalSessionId = sessionId;
-        PlaybackSnapshot finalSnapshot = snapshot;
-        PlaybackStatus finalTitleStatus = titleStatus;
-        onMain(() -> {
-            if (closed.get()) {
-                return;
+        queueRender(new PendingRender(viewerId, sessionId, snapshot, titleStatus));
+    }
+
+    private void queueRender(PendingRender pending) {
+        pendingRenders.put(pending.viewerId(), pending);
+        if (!scheduledRenders.add(pending.viewerId())) {
+            return;
+        }
+        onMain(() -> drainRender(pending.viewerId()));
+    }
+
+    private void drainRender(UUID viewerId) {
+        try {
+            PendingRender pending = pendingRenders.remove(viewerId);
+            if (pending != null) {
+                renderEvent(pending);
             }
-            Player player = Bukkit.getPlayer(finalViewerId);
-            if (player == null || !player.isOnline()) {
-                return;
+        } finally {
+            scheduledRenders.remove(viewerId);
+            if (pendingRenders.containsKey(viewerId) && scheduledRenders.add(viewerId)) {
+                onMain(() -> drainRender(viewerId));
             }
-            Optional<dev.voldechse.replayframework.api.playback.PlaybackSession> session =
-                    environment.playback(finalViewerId);
-            if (session.isEmpty() || !session.get().id().equals(finalSessionId)) {
-                return;
+        }
+    }
+
+    private void renderEvent(PendingRender pending) {
+        if (closed.get()) {
+            return;
+        }
+        Player player = Bukkit.getPlayer(pending.viewerId());
+        if (player == null || !player.isOnline()) {
+            return;
+        }
+        Optional<dev.voldechse.replayframework.api.playback.PlaybackSession> session =
+                environment.playback(pending.viewerId());
+        if (session.isEmpty() || !session.get().id().equals(pending.sessionId())) {
+            return;
+        }
+        if (pending.snapshot().status() == PlaybackStatus.FAILED
+                || pending.snapshot().status() == PlaybackStatus.CLOSED) {
+            activeSessions.remove(pending.viewerId(), pending.sessionId());
+            refreshingViewers.remove(pending.viewerId());
+            cancelRefreshIfIdle();
+            hotbar.clear(pending.viewerId());
+            player.sendActionBar(Component.empty());
+            environment.leave(pending.viewerId());
+            return;
+        }
+        activeSessions.put(pending.viewerId(), pending.sessionId());
+        updateRefreshState(pending.viewerId(), pending.snapshot());
+        notifyReady(player, pending.sessionId(), pending.snapshot());
+        render(player, pending.snapshot(), titleFor(pending.titleStatus()));
+    }
+
+    private void refreshActive() {
+        if (closed.get()) {
+            return;
+        }
+        for (UUID viewerId : refreshingViewers) {
+            PlaybackSessionId sessionId = activeSessions.get(viewerId);
+            if (sessionId == null) {
+                refreshingViewers.remove(viewerId);
+                continue;
             }
-            render(player, finalSnapshot, titleFor(finalTitleStatus));
-        });
+            var session = environment.playback(viewerId).orElse(null);
+            Player player = Bukkit.getPlayer(viewerId);
+            if (session == null || player == null || !player.isOnline()
+                    || !session.id().equals(sessionId)) {
+                activeSessions.remove(viewerId, sessionId);
+                refreshingViewers.remove(viewerId);
+                if (player != null && player.isOnline()) {
+                    player.sendActionBar(Component.empty());
+                }
+                continue;
+            }
+            PlaybackSnapshot snapshot = session.snapshot();
+            render(player, snapshot, Optional.empty());
+            if (isTerminal(snapshot.status())) {
+                refreshingViewers.remove(viewerId);
+            }
+        }
+        cancelRefreshIfIdle();
+    }
+
+    private void updateRefreshState(UUID viewerId, PlaybackSnapshot snapshot) {
+        if (!isTerminal(snapshot.status())) {
+            refreshingViewers.add(viewerId);
+            ensureRefreshTask();
+        } else {
+            refreshingViewers.remove(viewerId);
+            cancelRefreshIfIdle();
+        }
+        if (isTerminal(snapshot.status())) {
+            activeSessions.remove(viewerId);
+        }
+    }
+
+    private static boolean isTerminal(PlaybackStatus status) {
+        return status == PlaybackStatus.FAILED || status == PlaybackStatus.CLOSED;
+    }
+
+    private void ensureRefreshTask() {
+        if (refreshTask == null && !closed.get()) {
+            refreshTask = plugin.getServer().getScheduler().runTaskTimer(
+                    plugin, this::refreshActive, 1L, 2L);
+        }
+    }
+
+    private void cancelRefreshIfIdle() {
+        if (!refreshingViewers.isEmpty()) {
+            return;
+        }
+        BukkitTask task = refreshTask;
+        if (task != null) {
+            task.cancel();
+            refreshTask = null;
+        }
     }
 
     private void render(Player player, PlaybackSnapshot snapshot, Optional<Title> title) {
         try {
-            player.sendActionBar(Component.text(formatActionBar(snapshot)));
+            player.sendActionBar(PlaybackStatusLayout.component(snapshot));
             hotbar.refresh(player.getUniqueId(), snapshot);
             title.ifPresent(player::showTitle);
         } catch (RuntimeException failure) {
             plugin.getLogger().log(Level.FINE, "Playback status render failed: "
                     + failure.getClass().getSimpleName());
-            player.sendActionBar(Component.text(formatActionBar(snapshot)));
+            player.sendActionBar(PlaybackStatusLayout.component(snapshot));
         }
     }
 
@@ -140,31 +289,6 @@ public final class PlaybackStatusRenderer implements AutoCloseable {
         };
     }
 
-    private static String formatActionBar(PlaybackSnapshot snapshot) {
-        return formatDuration(snapshot.position())
-                + " / " + formatDuration(snapshot.duration())
-                + " · " + formatSpeed(snapshot)
-                + " · " + snapshot.status()
-                + " · Buffer " + formatDuration(snapshot.bufferedAhead());
-    }
-
-    private static String formatDuration(Duration duration) {
-        long seconds = duration.toSeconds();
-        long hours = seconds / 3600;
-        long minutes = (seconds % 3600) / 60;
-        long remainder = seconds % 60;
-        return hours > 0
-                ? String.format(Locale.ROOT, "%d:%02d:%02d", hours, minutes, remainder)
-                : String.format(Locale.ROOT, "%02d:%02d", minutes, remainder);
-    }
-
-    private static String formatSpeed(PlaybackSnapshot snapshot) {
-        double multiplier = snapshot.speed().multiplier();
-        return multiplier < 1.0
-                ? String.format(Locale.ROOT, "%.2fx", multiplier)
-                : String.format(Locale.ROOT, "%.0fx", multiplier);
-    }
-
     private void onMain(Runnable action) {
         if (Bukkit.isPrimaryThread()) {
             action.run();
@@ -175,5 +299,26 @@ public final class PlaybackStatusRenderer implements AutoCloseable {
                 plugin.getLogger().log(Level.FINE, "Playback status task rejected during shutdown");
             }
         }
+    }
+
+    private void notifyReady(
+            Player player,
+            PlaybackSessionId sessionId,
+            PlaybackSnapshot snapshot) {
+        if (snapshot.status() != PlaybackStatus.PLAYING) {
+            return;
+        }
+        PlaybackSessionId previous = readySessions.put(player.getUniqueId(), sessionId);
+        if (!sessionId.equals(previous)) {
+            player.sendMessage(Component.text(
+                    "Replay loaded and ready. The hotbar controls are now active."));
+        }
+    }
+
+    private record PendingRender(
+            UUID viewerId,
+            PlaybackSessionId sessionId,
+            PlaybackSnapshot snapshot,
+            PlaybackStatus titleStatus) {
     }
 }

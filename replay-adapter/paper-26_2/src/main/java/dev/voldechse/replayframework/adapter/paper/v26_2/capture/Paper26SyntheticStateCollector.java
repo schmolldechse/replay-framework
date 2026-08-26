@@ -15,14 +15,17 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import net.kyori.adventure.key.Key;
 
 /**
- * Session-local collector for state changes without a real outbound recipient.
+ * Session-local collector for state changes without a real outbound connection.
  *
  * <p>The collector performs only bounded in-memory bookkeeping. It never
- * creates a sentinel recipient and never writes directly to the core queue.</p>
+ * creates a sentinel connection. Its candidates can be handed to the adapter
+ * capture bridge, which assigns the same global sequence as real outbound
+ * packets.</p>
  */
 public final class Paper26SyntheticStateCollector implements AutoCloseable {
 
@@ -33,6 +36,8 @@ public final class Paper26SyntheticStateCollector implements AutoCloseable {
     private final RecordingScope scope;
     private final Function<CaptureBridge.CapturePacket, ObservedStateKey> observationDecoder;
     private final Function<StateDelta, SyntheticStatePacket> deltaEncoder;
+    private final Consumer<SyntheticStatePacket> emitter;
+    private final Runnable closeHandler;
     private final CheckpointSignalSource checkpointSignals;
     private final ReentrantLock lock = new ReentrantLock();
     private final Set<ObservedStateKey> observed = new HashSet<>();
@@ -46,7 +51,10 @@ public final class Paper26SyntheticStateCollector implements AutoCloseable {
             RecordingScope scope,
             Function<CaptureBridge.CapturePacket, ObservedStateKey> observationDecoder,
             Function<StateDelta, SyntheticStatePacket> deltaEncoder) {
-        this(registry, scope, observationDecoder, deltaEncoder, CheckpointSignalSource.noop());
+        this(registry, scope, observationDecoder, deltaEncoder,
+                CheckpointSignalSource.noop(), packet -> {
+                }, () -> {
+                });
     }
 
     /** Creates a collector with an adapter-local semantic checkpoint source. */
@@ -56,11 +64,38 @@ public final class Paper26SyntheticStateCollector implements AutoCloseable {
             Function<CaptureBridge.CapturePacket, ObservedStateKey> observationDecoder,
             Function<StateDelta, SyntheticStatePacket> deltaEncoder,
             CheckpointSignalSource checkpointSignals) {
+        this(registry, scope, observationDecoder, deltaEncoder, checkpointSignals, packet -> {
+        }, () -> {
+        });
+    }
+
+    /** Creates a collector that emits accepted candidates into a neutral sink. */
+    public Paper26SyntheticStateCollector(
+            PacketRegistry registry,
+            RecordingScope scope,
+            Function<CaptureBridge.CapturePacket, ObservedStateKey> observationDecoder,
+            Function<StateDelta, SyntheticStatePacket> deltaEncoder,
+            CheckpointSignalSource checkpointSignals,
+            Consumer<SyntheticStatePacket> emitter) {
+        this(registry, scope, observationDecoder, deltaEncoder, checkpointSignals, emitter, () -> {
+        });
+    }
+
+    Paper26SyntheticStateCollector(
+            PacketRegistry registry,
+            RecordingScope scope,
+            Function<CaptureBridge.CapturePacket, ObservedStateKey> observationDecoder,
+            Function<StateDelta, SyntheticStatePacket> deltaEncoder,
+            CheckpointSignalSource checkpointSignals,
+            Consumer<SyntheticStatePacket> emitter,
+            Runnable closeHandler) {
         this.registry = Objects.requireNonNull(registry, "registry");
         this.scope = Objects.requireNonNull(scope, "scope");
         this.observationDecoder = Objects.requireNonNull(observationDecoder, "observationDecoder");
         this.deltaEncoder = Objects.requireNonNull(deltaEncoder, "deltaEncoder");
         this.checkpointSignals = Objects.requireNonNull(checkpointSignals, "checkpointSignals");
+        this.emitter = Objects.requireNonNull(emitter, "emitter");
+        this.closeHandler = Objects.requireNonNull(closeHandler, "closeHandler");
     }
 
     /** Records one real outbound state observation for the current server tick. */
@@ -152,9 +187,17 @@ public final class Paper26SyntheticStateCollector implements AutoCloseable {
                     || packet.packetId() != delta.packetId()
                     || packet.family() != delta.family()
                     || !packet.worldKey().equals(delta.worldKey())
-                    || !packet.targetKey().equals(delta.targetKey())) {
+                    || !packet.targetKey().equals(delta.targetKey())
+                    || !Objects.equals(packet.position(), delta.position())) {
                 throw new IllegalArgumentException(
                         "deltaEncoder changed synthetic state identity");
+            }
+            try {
+                emitter.accept(packet);
+            } catch (RuntimeException failure) {
+                throw new IncompatibleAdapterException(
+                        "synthetic state packet could not enter the neutral capture stream",
+                        failure);
             }
             emitted.add(key);
             return List.of(packet);
@@ -166,6 +209,7 @@ public final class Paper26SyntheticStateCollector implements AutoCloseable {
     /** Closes this session-local collector and clears all retained keys. */
     @Override
     public void close() {
+        boolean shouldNotify;
         lock.lock();
         try {
             if (closed) {
@@ -174,8 +218,12 @@ public final class Paper26SyntheticStateCollector implements AutoCloseable {
             closed = true;
             observed.clear();
             emitted.clear();
+            shouldNotify = true;
         } finally {
             lock.unlock();
+        }
+        if (shouldNotify) {
+            closeHandler.run();
         }
     }
 
@@ -267,9 +315,6 @@ public final class Paper26SyntheticStateCollector implements AutoCloseable {
             int packetId,
             byte[] payload) {
         public StateDelta {
-            if (captureTimeNanos < 0L) {
-                throw new IllegalArgumentException("captureTimeNanos must not be negative");
-            }
             if (serverTick < 0L) {
                 throw new IllegalArgumentException("serverTick must not be negative");
             }
@@ -302,11 +347,9 @@ public final class Paper26SyntheticStateCollector implements AutoCloseable {
             Paper26CheckpointEncoder.CheckpointPacketFamily family,
             String worldKey,
             String targetKey,
+            BlockPosition position,
             byte[] payload) {
         public SyntheticStatePacket {
-            if (captureTimeNanos < 0L) {
-                throw new IllegalArgumentException("captureTimeNanos must not be negative");
-            }
             if (serverTick < 0L) {
                 throw new IllegalArgumentException("serverTick must not be negative");
             }
@@ -322,6 +365,20 @@ public final class Paper26SyntheticStateCollector implements AutoCloseable {
             targetKey = stableText(targetKey, "targetKey");
             Objects.requireNonNull(payload, "payload");
             payload = payload.clone();
+        }
+
+        /** Source-compatible constructor for synthetic packets without a point. */
+        public SyntheticStatePacket(
+                long captureTimeNanos,
+                long serverTick,
+                PacketPhase phase,
+                int packetId,
+                Paper26CheckpointEncoder.CheckpointPacketFamily family,
+                String worldKey,
+                String targetKey,
+                byte[] payload) {
+            this(captureTimeNanos, serverTick, phase, packetId, family,
+                    worldKey, targetKey, null, payload);
         }
 
         @Override

@@ -136,6 +136,11 @@ public final class CaptureRouter implements CaptureBridge.PacketSink, AutoClosea
         }
     }
 
+    @Override
+    public boolean hasActiveSinks() {
+        return !closed() && !sinks.get().isEmpty();
+    }
+
     /**
      * Closes the router and atomically removes all sinks. This is an expected
      * lifecycle state, not an adapter failure.

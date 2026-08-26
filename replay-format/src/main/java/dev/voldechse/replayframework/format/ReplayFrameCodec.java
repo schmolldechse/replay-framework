@@ -13,6 +13,8 @@ import java.util.Objects;
  */
 final class ReplayFrameCodec {
 
+    static final int MAX_PAYLOAD_LENGTH = 16 * 1024 * 1024;
+
     private ReplayFrameCodec() {
     }
 
@@ -59,6 +61,9 @@ final class ReplayFrameCodec {
             throws IOException, CorruptReplayArtifactException {
         Objects.requireNonNull(input, "input");
         int recordLength = readUnsignedVarInt(input, "frame record length");
+        if (recordLength <= 0) {
+            throw corrupt("frame record length must be positive");
+        }
         LimitedInputStream record = new LimitedInputStream(input, recordLength);
         long elapsedNanos = readUnsignedVarLong(record, "frame elapsed time");
         long serverTick = readUnsignedVarLong(record, "frame server tick");
@@ -72,6 +77,9 @@ final class ReplayFrameCodec {
         }
         int packetId = readUnsignedVarInt(record, "frame packet id");
         int payloadLength = readUnsignedVarInt(record, "frame payload length");
+        if (payloadLength > MAX_PAYLOAD_LENGTH) {
+            throw corrupt("frame payload exceeds maximum length");
+        }
         if (payloadLength > record.remaining()) {
             throw corrupt("payload length exceeds its frame record");
         }
@@ -161,6 +169,9 @@ final class ReplayFrameCodec {
     }
 
     private static long recordBodyLength(RawPacketFrame frame, byte[] payload) {
+        if (payload.length > MAX_PAYLOAD_LENGTH) {
+            throw new IllegalArgumentException("frame payload exceeds maximum length");
+        }
         long recordLength = 0L;
         recordLength = addLength(recordLength,
                 SegmentWire.sizeOfUnsignedVarLong(frame.elapsedNanos()));

@@ -5,7 +5,6 @@ import dev.voldechse.replayframework.adapter.CaptureContext;
 import dev.voldechse.replayframework.format.PacketPhase;
 import java.util.Arrays;
 import java.util.Objects;
-import java.util.UUID;
 
 /**
  * Immutable packet event shared by the recording sinks of one capture route.
@@ -14,7 +13,6 @@ import java.util.UUID;
  * session rebases it to its own start time before creating a format frame.</p>
  */
 public record CapturedPacket(
-        UUID recipientId,
         long captureTimeNanos,
         long serverTick,
         int sequence,
@@ -28,20 +26,18 @@ public record CapturedPacket(
      * explicitly unknown adapter context.
      */
     public CapturedPacket(
-            UUID recipientId,
             long captureTimeNanos,
             long serverTick,
             int sequence,
             PacketPhase phase,
             int packetId,
             byte[] payload) {
-        this(recipientId, captureTimeNanos, serverTick, sequence, phase, packetId,
+        this(captureTimeNanos, serverTick, sequence, phase, packetId,
                 payload, CaptureContext.unknown());
     }
 
     /** Validates packet metadata and takes ownership of a defensive payload copy. */
     public CapturedPacket {
-        Objects.requireNonNull(recipientId, "recipientId");
         if (serverTick < 0L) {
             throw new IllegalArgumentException("serverTick must not be negative");
         }
@@ -61,7 +57,6 @@ public record CapturedPacket(
     public static CapturedPacket from(CaptureBridge.CapturePacket packet) {
         Objects.requireNonNull(packet, "packet");
         return new CapturedPacket(
-                packet.recipientId(),
                 packet.captureTimeNanos(),
                 packet.serverTick(),
                 packet.sequence(),
@@ -89,7 +84,6 @@ public record CapturedPacket(
                 && serverTick == that.serverTick
                 && sequence == that.sequence
                 && packetId == that.packetId
-                && recipientId.equals(that.recipientId)
                 && phase == that.phase
                 && context.equals(that.context)
                 && Arrays.equals(payload, that.payload);
@@ -98,14 +92,13 @@ public record CapturedPacket(
     @Override
     public int hashCode() {
         int result = Objects.hash(
-                recipientId, captureTimeNanos, serverTick, sequence, phase, packetId, context);
+                captureTimeNanos, serverTick, sequence, phase, packetId, context);
         return 31 * result + Arrays.hashCode(payload);
     }
 
     @Override
     public String toString() {
-        return "CapturedPacket[recipientId=" + recipientId
-                + ", captureTimeNanos=" + captureTimeNanos
+        return "CapturedPacket[captureTimeNanos=" + captureTimeNanos
                 + ", serverTick=" + serverTick
                 + ", sequence=" + sequence
                 + ", phase=" + phase

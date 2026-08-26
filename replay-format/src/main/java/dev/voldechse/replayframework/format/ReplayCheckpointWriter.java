@@ -20,7 +20,7 @@ import java.util.Objects;
 public final class ReplayCheckpointWriter {
 
     private static final byte[] MAGIC = "RFC1".getBytes(StandardCharsets.US_ASCII);
-    private static final int FORMAT_VERSION = 1;
+    private static final int FORMAT_VERSION = 3;
 
     private enum State {
         /** The writer has not published its checkpoint yet. */

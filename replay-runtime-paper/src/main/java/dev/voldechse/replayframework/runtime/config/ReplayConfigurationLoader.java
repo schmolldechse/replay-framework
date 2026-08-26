@@ -24,8 +24,6 @@ import static dev.voldechse.replayframework.runtime.config.ReplayRuntimeConfigur
 /** Loads and validates the one JSON configuration owned by the Paper runtime. */
 public final class ReplayConfigurationLoader {
     private static final String CONFIG_FILE = "config.json";
-    private static final String DEFAULT_PASSWORD_ENV = "REPLAY_DATABASE_PASSWORD";
-
     private final Gson gson;
     private final Function<String, Optional<String>> environment;
 
@@ -76,24 +74,13 @@ public final class ReplayConfigurationLoader {
 
     private ReplayRuntimeConfiguration.PostgresSettings parsePostgresql(JsonObject object) {
         rejectUnknown(object, Set.of(
-                "jdbcUrl", "username", "passwordEnv", "minimumIdle", "maximumPoolSize",
+                "jdbcUrl", "username", "password", "minimumIdle", "maximumPoolSize",
                 "connectionTimeout", "validationTimeout", "idleTimeout", "maxLifetime",
                 "databaseParallelism", "databaseQueueCapacity"), "postgresql");
-        String passwordEnv = string(object, "passwordEnv", "postgresql");
-        Optional<String> password = passwordEnv.isEmpty()
-                ? Optional.empty()
-                : environment.apply(passwordEnv).map(value -> {
-                    if (value.isBlank()) {
-                        throw new IllegalArgumentException(
-                                "postgresql.passwordEnv resolved to a blank value");
-                    }
-                    return value;
-                });
         return new ReplayRuntimeConfiguration.PostgresSettings(
                 string(object, "jdbcUrl", "postgresql"),
                 string(object, "username", "postgresql"),
-                passwordEnv,
-                password,
+                string(object, "password", "postgresql"),
                 integer(object, "minimumIdle", "postgresql"),
                 integer(object, "maximumPoolSize", "postgresql"),
                 duration(object, "connectionTimeout", "postgresql"),
@@ -277,7 +264,7 @@ public final class ReplayConfigurationLoader {
         JsonObject postgres = new JsonObject();
         postgres.addProperty("jdbcUrl", "jdbc:postgresql://127.0.0.1:5432/replay");
         postgres.addProperty("username", "replay");
-        postgres.addProperty("passwordEnv", DEFAULT_PASSWORD_ENV);
+        postgres.addProperty("password", "");
         postgres.addProperty("minimumIdle", 1);
         postgres.addProperty("maximumPoolSize", 8);
         postgres.addProperty("connectionTimeout", "PT10S");

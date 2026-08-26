@@ -1,6 +1,7 @@
 package dev.voldechse.replayframework.runtime;
 
 import dev.voldechse.replayframework.api.ReplayFramework;
+import dev.voldechse.replayframework.api.ReplayDefaults;
 import dev.voldechse.replayframework.api.event.ReplayEventPublisher;
 import dev.voldechse.replayframework.api.metadata.ReplayMetadataService;
 import dev.voldechse.replayframework.api.playback.PlaybackService;
@@ -12,6 +13,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /** Runtime-owned implementation of the public framework facade. */
 public final class DefaultReplayFramework implements ReplayFramework, AutoCloseable {
     private final RecordingService recordings;
+    private final ReplayDefaults defaults;
     private final PlaybackService playbacks;
     private final ReplayService replays;
     private final ReplayMetadataService metadata;
@@ -21,17 +23,24 @@ public final class DefaultReplayFramework implements ReplayFramework, AutoClosea
 
     DefaultReplayFramework(
             RecordingService recordings,
+            ReplayDefaults defaults,
             PlaybackService playbacks,
             ReplayService replays,
             ReplayMetadataService metadata,
             ReplayEventPublisher events,
             Runnable shutdown) {
         this.recordings = Objects.requireNonNull(recordings, "recordings");
+        this.defaults = Objects.requireNonNull(defaults, "defaults");
         this.playbacks = Objects.requireNonNull(playbacks, "playbacks");
         this.replays = Objects.requireNonNull(replays, "replays");
         this.metadata = Objects.requireNonNull(metadata, "metadata");
         this.events = Objects.requireNonNull(events, "events");
         this.shutdown = Objects.requireNonNull(shutdown, "shutdown");
+    }
+
+    @Override
+    public ReplayDefaults defaults() {
+        return defaults;
     }
 
     @Override

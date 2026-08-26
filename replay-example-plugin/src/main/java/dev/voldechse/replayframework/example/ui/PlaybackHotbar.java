@@ -93,7 +93,8 @@ public final class PlaybackHotbar implements AutoCloseable {
             try {
                 switch (action) {
                     case TOGGLE_PLAY -> {
-                        if (snapshot.status() == PlaybackStatus.PLAYING) {
+                        if (snapshot.status() == PlaybackStatus.PLAYING
+                                || snapshot.status() == PlaybackStatus.BUFFERING) {
                             session.pause();
                         } else if (snapshot.status() == PlaybackStatus.PAUSED) {
                             session.play();
@@ -180,10 +181,13 @@ public final class PlaybackHotbar implements AutoCloseable {
 
     private static boolean allowed(PlaybackStatus status, ExampleItemModels.HotbarAction action) {
         if (status == PlaybackStatus.PREPARING
-                || status == PlaybackStatus.BUFFERING
                 || status == PlaybackStatus.FAILED
                 || status == PlaybackStatus.CLOSED) {
             return false;
+        }
+        if (status == PlaybackStatus.BUFFERING) {
+            return action == ExampleItemModels.HotbarAction.TOGGLE_PLAY
+                    || action == ExampleItemModels.HotbarAction.LEAVE;
         }
         return status != PlaybackStatus.ENDED
                 || action == ExampleItemModels.HotbarAction.RESTART

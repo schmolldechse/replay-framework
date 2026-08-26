@@ -136,6 +136,19 @@ final class ReplayViewerOutboundGate extends ChannelOutboundHandlerAdapter {
         current.write(decodedPacket, current.newPromise());
     }
 
+    /** Flushes the bounded replay batch after its packets were written. */
+    void flushReplay() {
+        ChannelHandlerContext current = context;
+        if (current == null || state.get() != State.ACTIVE) {
+            throw new IllegalStateException("replay viewer gate is not active");
+        }
+        if (!current.executor().inEventLoop()) {
+            current.executor().execute(this::flushReplay);
+            return;
+        }
+        current.flush();
+    }
+
     /** Marks the gate closed before the accessor removes the pipeline entry. */
     void close() {
         state.set(State.CLOSED);
@@ -153,6 +166,12 @@ final class ReplayViewerOutboundGate extends ChannelOutboundHandlerAdapter {
             return false;
         }
         PacketDescriptor value = descriptor.orElseThrow();
+        // The Example viewer owns these packets while playback is active.
+        // They are live control/status UI, not replay state that should be
+        // suppressed from the observer.
+        if (Paper26ReplayPacketRewriter.isViewerUi(value.typeName())) {
+            return false;
+        }
         return value.replayable()
                 && registry.replayAllowed(
                         wirePacket.phase(), wirePacket.direction(), wirePacket.packetId())

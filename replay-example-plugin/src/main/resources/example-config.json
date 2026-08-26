@@ -17,45 +17,45 @@
         "action": "TOGGLE_PLAY",
         "slot": 0,
         "material": "CLOCK",
-        "model": "replay_example:item/pause",
-        "alternateModel": "replay_example:item/play"
+        "model": "replay_example:pause",
+        "alternateModel": "replay_example:play"
       },
       {
         "action": "REWIND",
         "slot": 1,
         "material": "CLOCK",
-        "model": "replay_example:item/rewind"
+        "model": "replay_example:rewind"
       },
       {
         "action": "FORWARD",
         "slot": 2,
         "material": "CLOCK",
-        "model": "replay_example:item/forward"
+        "model": "replay_example:forward"
       },
       {
         "action": "RESTART",
         "slot": 3,
         "material": "CLOCK",
-        "model": "replay_example:item/restart"
+        "model": "replay_example:restart"
       },
       {
         "action": "SPEED_CYCLE",
         "slot": 4,
         "material": "CLOCK",
-        "model": "replay_example:item/speed_1",
+        "model": "replay_example:speed_1",
         "speedModels": {
-          "0.25": "replay_example:item/speed_0_25",
-          "0.5": "replay_example:item/speed_0_5",
-          "1": "replay_example:item/speed_1",
-          "2": "replay_example:item/speed_2",
-          "4": "replay_example:item/speed_4"
+          "0.25": "replay_example:speed_0_25",
+          "0.5": "replay_example:speed_0_5",
+          "1": "replay_example:speed_1",
+          "2": "replay_example:speed_2",
+          "4": "replay_example:speed_4"
         }
       },
       {
         "action": "LEAVE",
         "slot": 8,
         "material": "BARRIER",
-        "model": "replay_example:item/leave"
+        "model": "replay_example:leave"
       }
     ]
   }

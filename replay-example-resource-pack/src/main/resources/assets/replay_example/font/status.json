@@ -1,0 +1,67 @@
+{
+  "providers": [
+    {
+      "type": "bitmap",
+      "file": "replay_example:font/status.png",
+      "ascent": 12,
+      "height": 16,
+      "chars": [
+        "\uE200\uE201\uE202\uE203\uE204\uE205\uE206\uE207\uE208\uE209\uE20A\uE20B\uE20C\uE20D\uE20E"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "replay_example:font/status.png",
+      "ascent": 12,
+      "height": 16,
+      "chars": [""]
+    },
+    {
+      "type": "bitmap",
+      "file": "replay_example:item/pause.png",
+      "ascent": 12,
+      "height": 16,
+      "chars": ["\uE20F"]
+    },
+    {
+      "type": "bitmap",
+      "file": "replay_example:item/play.png",
+      "ascent": 12,
+      "height": 16,
+      "chars": ["\uE210"]
+    },
+    {
+      "type": "bitmap",
+      "file": "replay_example:item/forward.png",
+      "ascent": 12,
+      "height": 16,
+      "chars": ["\uE211"]
+    },
+    {
+      "type": "bitmap",
+      "file": "replay_example:item/restart.png",
+      "ascent": 12,
+      "height": 16,
+      "chars": ["\uE212"]
+    },
+    {
+      "type": "bitmap",
+      "file": "replay_example:item/leave.png",
+      "ascent": 12,
+      "height": 16,
+      "chars": ["\uE213"]
+    },
+    {
+      "type": "space",
+      "advances": {
+        "\uE300": -192,
+        "\uE301": 8,
+        "\uE302": 16,
+        "\uE303": 32,
+        "\uE304": 48,
+        "\uE305": 64,
+        "\uE306": -1
+      }
+    }
+  ]
+}

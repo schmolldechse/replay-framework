@@ -201,12 +201,10 @@ public final class ReplayRuntimeModule extends AbstractModule implements AutoClo
 
     private PostgresModule.Configuration toPostgresConfiguration() {
         ReplayRuntimeConfiguration.PostgresSettings settings = configuration.postgresql();
-        String password = settings.password().orElseThrow(() -> new IllegalArgumentException(
-                "postgresql password environment variable is not configured"));
         return new PostgresModule.Configuration(
                 settings.jdbcUrl(),
                 settings.username(),
-                password,
+                settings.password(),
                 settings.minimumIdle(),
                 settings.maximumPoolSize(),
                 settings.connectionTimeout(),

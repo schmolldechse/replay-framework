@@ -341,7 +341,7 @@ public final class ExampleItemModels {
         }
     }
 
-    /** Returns the action only for a correctly modeled configured control item. */
+    /** Returns the action only for a server-owned configured control item. */
     public Optional<HotbarAction> controlAction(ItemStack item) {
         if (item == null || item.getType().isAir() || item.getItemMeta() == null) {
             return Optional.empty();
@@ -362,11 +362,19 @@ public final class ExampleItemModels {
         if (definition == null || definition.material() != item.getType()) {
             return Optional.empty();
         }
-        String modelKey = modelKey(meta);
-        if (modelKey == null || !allowedModelKeys(definition).contains(modelKey)) {
+        return Optional.of(action);
+    }
+
+    /** Returns the configured control occupying a slot when its material matches. */
+    public Optional<HotbarAction> controlActionAtSlot(ItemStack item, int slot) {
+        if (item == null || item.getType().isAir() || slot < 0 || slot > 8) {
             return Optional.empty();
         }
-        return Optional.of(action);
+        return hotbar.items().stream()
+                .filter(definition -> definition.slot() == slot
+                        && definition.material() == item.getType())
+                .map(ItemDefinition::action)
+                .findFirst();
     }
 
     /** Returns whether an item is safe to leave available to a protected viewer. */
@@ -426,19 +434,6 @@ public final class ExampleItemModels {
         additionalMeta.accept(meta);
         item.setItemMeta(meta);
         return item;
-    }
-
-    private static String modelKey(ItemMeta meta) {
-        NamespacedKey model = meta.getItemModel();
-        return model == null ? null : model.asString();
-    }
-
-    private static Set<String> allowedModelKeys(ItemDefinition definition) {
-        Set<String> keys = new HashSet<>();
-        definition.model().itemModelKey().ifPresent(keys::add);
-        definition.alternateModel().flatMap(ExamplePackAsset::itemModelKey).ifPresent(keys::add);
-        definition.speedModels().values().forEach(asset -> asset.itemModelKey().ifPresent(keys::add));
-        return keys;
     }
 
     private static final class RawConfiguration {

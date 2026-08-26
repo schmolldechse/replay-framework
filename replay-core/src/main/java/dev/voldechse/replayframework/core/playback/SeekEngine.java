@@ -14,6 +14,8 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
+import java.util.concurrent.CancellationException;
+import java.util.function.BooleanSupplier;
 
 /** Reconstructs one viewer view from a floor checkpoint and replay deltas. */
 final class SeekEngine {
@@ -45,9 +47,14 @@ final class SeekEngine {
     CompletionStage<SeekResult> seekTo(
             Duration target,
             PlaybackSpeed speed,
-            boolean resumeAfterSeek) {
+            boolean resumeAfterSeek,
+            BooleanSupplier operationCurrent) {
         Objects.requireNonNull(target, "target");
         Objects.requireNonNull(speed, "speed");
+        Objects.requireNonNull(operationCurrent, "operationCurrent");
+        if (!operationCurrent.getAsBoolean()) {
+            return cancelled();
+        }
         final long targetNanos;
         try {
             targetNanos = clamp(target.toNanos());
@@ -56,7 +63,7 @@ final class SeekEngine {
                     new IllegalArgumentException("target exceeds nanosecond range", exception));
         }
 
-        SeekPoint point = index.seekFloor(Duration.ofNanos(targetNanos)).orElse(null);
+        SeekPoint point = index.seekCheckpointFloor(Duration.ofNanos(targetNanos)).orElse(null);
         if (point == null) {
             return CompletableFuture.failedFuture(
                     new IllegalStateException("replay index has no floor checkpoint"));
@@ -74,13 +81,21 @@ final class SeekEngine {
             return CompletableFuture.failedFuture(exception);
         }
 
-        return availability.thenCompose(ignored -> loadFrames(point, targetNanos))
-                .thenApplyAsync(
-                        frames -> apply(point, targetNanos, frames, resumeAfterSeek),
+        return availability.thenCompose(ignored -> {
+                    requireCurrent(operationCurrent);
+                    return loadFrames(point, targetNanos);
+                })
+                .thenComposeAsync(
+                        frames -> apply(
+                                point,
+                                targetNanos,
+                                frames,
+                                resumeAfterSeek,
+                                operationCurrent),
                         continuationExecutor);
     }
 
-    private CompletionStage<List<RawPacketFrame>> loadFrames(
+    private CompletionStage<LoadedFrames> loadFrames(
             SeekPoint point,
             long targetNanos) {
         Duration checkpointTime = Duration.ofNanos(point.elapsedNanos());
@@ -98,26 +113,35 @@ final class SeekEngine {
                             checkpoint.size() + deltas.size());
                     result.addAll(checkpoint);
                     result.addAll(deltas);
-                    return List.copyOf(result);
+                    return new LoadedFrames(
+                            List.copyOf(result),
+                            List.copyOf(deltas));
                 },
                 continuationExecutor);
     }
 
-    private SeekResult apply(
+    private CompletionStage<SeekResult> apply(
             SeekPoint point,
             long targetNanos,
-            List<RawPacketFrame> frames,
-            boolean resumeAfterSeek) {
+            LoadedFrames loadedFrames,
+            boolean resumeAfterSeek,
+            BooleanSupplier operationCurrent) {
+        requireCurrent(operationCurrent);
         bridge.resetView();
-        for (RawPacketFrame frame : frames) {
+        for (RawPacketFrame frame : loadedFrames.frames()) {
+            requireCurrent(operationCurrent);
             bridge.send(frame);
         }
-        boolean atEnd = targetNanos >= durationNanos;
-        return new SeekResult(
-                targetNanos,
-                atEnd || !resumeAfterSeek,
-                frames,
-                point);
+        return bridge.awaitOutboundIdle().thenApply(ignored -> {
+            requireCurrent(operationCurrent);
+            boolean atEnd = targetNanos >= durationNanos;
+            return new SeekResult(
+                    targetNanos,
+                    atEnd || !resumeAfterSeek,
+                    loadedFrames.frames(),
+                    loadedFrames.deltaFrames(),
+                    point);
+        });
     }
 
     private long clamp(long value) {
@@ -144,6 +168,7 @@ final class SeekEngine {
             long positionNanos,
             boolean paused,
             List<RawPacketFrame> emittedFrames,
+            List<RawPacketFrame> emittedDeltaFrames,
             SeekPoint checkpoint) {
 
         SeekResult {
@@ -152,7 +177,30 @@ final class SeekEngine {
             }
             Objects.requireNonNull(emittedFrames, "emittedFrames");
             emittedFrames = List.copyOf(emittedFrames);
+            Objects.requireNonNull(emittedDeltaFrames, "emittedDeltaFrames");
+            emittedDeltaFrames = List.copyOf(emittedDeltaFrames);
             Objects.requireNonNull(checkpoint, "checkpoint");
+        }
+    }
+
+    private static void requireCurrent(BooleanSupplier operationCurrent) {
+        if (!operationCurrent.getAsBoolean()) {
+            throw new CancellationException("seek was superseded by a newer operation");
+        }
+    }
+
+    private static <T> CompletionStage<T> cancelled() {
+        return CompletableFuture.failedFuture(
+                new CancellationException("seek was superseded by a newer operation"));
+    }
+
+    private record LoadedFrames(
+            List<RawPacketFrame> frames,
+            List<RawPacketFrame> deltaFrames) {
+
+        private LoadedFrames {
+            Objects.requireNonNull(frames, "frames");
+            Objects.requireNonNull(deltaFrames, "deltaFrames");
         }
     }
 }

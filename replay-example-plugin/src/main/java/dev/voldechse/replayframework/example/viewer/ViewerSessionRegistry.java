@@ -15,6 +15,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import org.bukkit.entity.Player;
+import org.bukkit.World;
 
 /**
  * Owns the in-memory lifecycle entries of the Example viewers.
@@ -42,6 +43,7 @@ final class ViewerSessionRegistry {
         private final CompletableFuture<Void> restoreStage = new CompletableFuture<>();
         private final CompletableFuture<PlaybackSession> openResult = new CompletableFuture<>();
         private volatile StoredPlayerState storedPlayerState;
+        private volatile World viewerWorld;
         private volatile CompletionStage<PlaybackSession> playbackOpen;
         private volatile PlaybackSession playback;
 
@@ -69,6 +71,10 @@ final class ViewerSessionRegistry {
 
         StoredPlayerState storedPlayerState() {
             return storedPlayerState;
+        }
+
+        World viewerWorld() {
+            return viewerWorld;
         }
 
         CompletionStage<PlaybackSession> playbackOpen() {
@@ -100,6 +106,13 @@ final class ViewerSessionRegistry {
                 throw new IllegalStateException("Viewer player state is already stored");
             }
             storedPlayerState = Objects.requireNonNull(value, "value");
+        }
+
+        void viewerWorld(World value) {
+            if (viewerWorld != null) {
+                throw new IllegalStateException("Viewer world is already attached");
+            }
+            viewerWorld = Objects.requireNonNull(value, "value");
         }
 
         void playbackOpen(CompletionStage<PlaybackSession> value) {
@@ -159,6 +172,11 @@ final class ViewerSessionRegistry {
     void attachState(ViewerSession entry, StoredPlayerState state) {
         requireOwned(entry);
         entry.storedPlayerState(state);
+    }
+
+    void attachViewerWorld(ViewerSession entry, World world) {
+        requireOwned(entry);
+        entry.viewerWorld(world);
     }
 
     void attachPlaybackOpen(ViewerSession entry, CompletionStage<PlaybackSession> playbackOpen) {

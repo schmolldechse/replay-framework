@@ -77,12 +77,11 @@ public final class ReplayRuntimeConfiguration {
         SFTP
     }
 
-    /** PostgreSQL values with an optional process-local secret resolution. */
+    /** PostgreSQL connection values, including the configured password. */
     public static final class PostgresSettings {
         private final String jdbcUrl;
         private final String username;
-        private final String passwordEnv;
-        private final Optional<String> password;
+        private final String password;
         private final int minimumIdle;
         private final int maximumPoolSize;
         private final Duration connectionTimeout;
@@ -95,8 +94,7 @@ public final class ReplayRuntimeConfiguration {
         public PostgresSettings(
                 String jdbcUrl,
                 String username,
-                String passwordEnv,
-                Optional<String> password,
+                String password,
                 int minimumIdle,
                 int maximumPoolSize,
                 Duration connectionTimeout,
@@ -110,9 +108,7 @@ public final class ReplayRuntimeConfiguration {
                 throw new IllegalArgumentException("jdbcUrl must use the PostgreSQL JDBC scheme");
             }
             this.username = requireNonBlank(username, "username");
-            this.passwordEnv = requireOptionalName(passwordEnv, "passwordEnv");
-            this.password = Objects.requireNonNull(password, "password").map(value ->
-                    requireNonBlank(value, "password"));
+            this.password = requireNonBlank(password, "password");
             if (minimumIdle < 0) {
                 throw new IllegalArgumentException("minimumIdle must not be negative");
             }
@@ -144,11 +140,7 @@ public final class ReplayRuntimeConfiguration {
             return username;
         }
 
-        public String passwordEnv() {
-            return passwordEnv;
-        }
-
-        public Optional<String> password() {
+        public String password() {
             return password;
         }
 
