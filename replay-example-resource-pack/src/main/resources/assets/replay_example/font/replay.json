@@ -1,0 +1,13 @@
+{
+  "providers": [
+    {
+      "type": "bitmap",
+      "file": "replay_example:font/replay.png",
+      "ascent": 12,
+      "height": 16,
+      "chars": [
+        "\uE100\uE101\uE102\uE103\uE104\uE105\uE106\uE107\uE108\uE109\uE10A\uE10B\uE10C\uE10D\uE10E"
+      ]
+    }
+  ]
+}
