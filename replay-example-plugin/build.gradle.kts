@@ -4,6 +4,7 @@ plugins {
 
 dependencies {
     compileOnly(project(":replay-api"))
+    testImplementation(project(":replay-api"))
     compileOnly(libs.paper.api)
     testCompileOnly(libs.paper.api)
     testImplementation(libs.junit.jupiter)
