@@ -4,7 +4,7 @@ main: dev.voldechse.replayframework.example.ReplayExamplePlugin
 api-version: '26.2'
 dependencies:
   server:
-    - name: ReplayFramework
+    ReplayFramework:
       required: true
       load: BEFORE
       join-classpath: true

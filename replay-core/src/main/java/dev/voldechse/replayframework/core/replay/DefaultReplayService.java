@@ -6,8 +6,10 @@ import dev.voldechse.replayframework.api.metadata.ReplayMetadata;
 import dev.voldechse.replayframework.api.query.ReplayPage;
 import dev.voldechse.replayframework.api.query.ReplayQuery;
 import dev.voldechse.replayframework.api.replay.ReplayService;
+import dev.voldechse.replayframework.api.replay.ReplaySummary;
 import dev.voldechse.replayframework.core.port.ReplayRepository;
 import dev.voldechse.replayframework.storage.ReplayStorage;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -42,6 +44,14 @@ public final class DefaultReplayService implements ReplayService {
     }
 
     @Override
+    public CompletionStage<ReplayPage<ReplaySummary>> querySummaries(ReplayQuery query) {
+        Objects.requireNonNull(query, "query");
+        return repository.page(query).thenApply(page -> new ReplayPage<>(
+                page.items().stream().map(DefaultReplayService::summary).toList(),
+                page.nextCursor()));
+    }
+
+    @Override
     public CompletionStage<Void> delete(ReplayId replayId) {
         Objects.requireNonNull(replayId, "replayId");
         return repository.transition(new ReplayRepository.ReplayTransition(
@@ -68,5 +78,17 @@ public final class DefaultReplayService implements ReplayService {
                 row.description(),
                 row.metadataRevision(),
                 values);
+    }
+
+    private static ReplaySummary summary(ReplayRepository.ReplayRow row) {
+        return new ReplaySummary(
+                row.replayId(),
+                row.title(),
+                row.description(),
+                row.status(),
+                row.adapterId(),
+                Duration.ofNanos(row.durationNanos()),
+                row.createdAt(),
+                row.totalBytes());
     }
 }

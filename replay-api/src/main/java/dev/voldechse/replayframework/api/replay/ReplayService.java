@@ -28,6 +28,14 @@ public interface ReplayService {
     CompletionStage<ReplayPage<ReplayMetadata>> query(ReplayQuery query);
 
     /**
+     * Executes a catalog query and returns fixed replay fields needed by list views.
+     *
+     * @param query immutable query AST
+     * @return stage completed with one summary page
+     */
+    CompletionStage<ReplayPage<ReplaySummary>> querySummaries(ReplayQuery query);
+
+    /**
      * Deletes a replay and its artifacts asynchronously.
      *
      * @param replayId replay identifier

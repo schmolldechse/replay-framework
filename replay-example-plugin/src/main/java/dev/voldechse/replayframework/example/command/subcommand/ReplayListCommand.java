@@ -7,7 +7,9 @@ import dev.voldechse.replayframework.api.query.ReplayPage;
 import dev.voldechse.replayframework.api.query.ReplayQuery;
 import dev.voldechse.replayframework.api.recording.RecordingStatus;
 import dev.voldechse.replayframework.example.command.ReplayCommand;
+import dev.voldechse.replayframework.example.ui.ReplayBrowser;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Supplier;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
@@ -18,12 +20,21 @@ import org.bukkit.plugin.java.JavaPlugin;
 public final class ReplayListCommand {
     private final JavaPlugin plugin;
     private final Supplier<ReplayCommand.Context> contextSupplier;
+    private final Supplier<Optional<ReplayBrowser>> browserSupplier;
 
     public ReplayListCommand(
             JavaPlugin plugin,
             Supplier<ReplayCommand.Context> contextSupplier) {
+        this(plugin, contextSupplier, () -> Optional.empty());
+    }
+
+    public ReplayListCommand(
+            JavaPlugin plugin,
+            Supplier<ReplayCommand.Context> contextSupplier,
+            Supplier<Optional<ReplayBrowser>> browserSupplier) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.contextSupplier = Objects.requireNonNull(contextSupplier, "contextSupplier");
+        this.browserSupplier = Objects.requireNonNull(browserSupplier, "browserSupplier");
     }
 
     public LiteralArgumentBuilder<CommandSourceStack> build() {
@@ -38,6 +49,13 @@ public final class ReplayListCommand {
                 context.getSource(), ReplayCommand.LIST_PERMISSION);
         ReplayCommand.Context runtime = ReplayCommand.requireContext(contextSupplier);
         CommandSender sender = context.getSource().getSender();
+        if (sender instanceof org.bukkit.entity.Player player) {
+            Optional<ReplayBrowser> browser = Optional.ofNullable(browserSupplier.get()).orElse(Optional.empty());
+            if (browser.isPresent()) {
+                browser.get().open(player);
+                return 1;
+            }
+        }
         ReplayQuery query = ReplayQuery.builder()
                 .status(RecordingStatus.AVAILABLE)
                 .orderBy(ReplayQuery.SortField.CREATED_AT, ReplayQuery.SortDirection.DESCENDING)

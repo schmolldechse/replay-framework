@@ -13,8 +13,9 @@ import dev.voldechse.replayframework.example.command.subcommand.ReplayListComman
 import dev.voldechse.replayframework.example.command.subcommand.ReplayMetadataCommands;
 import dev.voldechse.replayframework.example.command.subcommand.ReplayPlaybackCommands;
 import dev.voldechse.replayframework.example.command.subcommand.ReplayRecordingCommands;
-import dev.voldechse.replayframework.example.viewer.ExampleViewerEnvironment;
+import dev.voldechse.replayframework.example.ui.ReplayBrowser;
 import dev.voldechse.replayframework.example.command.argument.ReplaySuggestions;
+import dev.voldechse.replayframework.example.viewer.ExampleViewerEnvironment;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -75,14 +76,23 @@ public final class ReplayCommand implements AutoCloseable {
      * while the runtime service is still bootstrapping.
      */
     public ReplayCommand(JavaPlugin plugin, Supplier<Context> contextSupplier) {
+        this(plugin, contextSupplier, () -> Optional.empty());
+    }
+
+    /** Creates a command composer with a late-bound Example replay browser. */
+    public ReplayCommand(
+            JavaPlugin plugin,
+            Supplier<Context> contextSupplier,
+            Supplier<Optional<ReplayBrowser>> browserSupplier) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.contextSupplier = Objects.requireNonNull(contextSupplier, "contextSupplier");
+        Objects.requireNonNull(browserSupplier, "browserSupplier");
         this.recordingCommands = new ReplayRecordingCommands(plugin, contextSupplier);
         ReplaySuggestions suggestions = new ReplaySuggestions(
                 contextSupplier,
                 recordingCommands::activeSessions);
         recordingCommands.suggestions(suggestions);
-        this.listCommand = new ReplayListCommand(plugin, contextSupplier);
+        this.listCommand = new ReplayListCommand(plugin, contextSupplier, browserSupplier);
         this.infoCommand = new ReplayInfoCommand(plugin, contextSupplier, suggestions);
         this.playbackCommands = new ReplayPlaybackCommands(plugin, contextSupplier, suggestions);
         this.metadataCommands = new ReplayMetadataCommands(plugin, contextSupplier, suggestions);

@@ -9,8 +9,14 @@ import dev.voldechse.replayframework.api.ReplayFramework;
 import dev.voldechse.replayframework.api.ReplayFrameworkProvider;
 import dev.voldechse.replayframework.api.metadata.QueryCapabilities;
 import dev.voldechse.replayframework.api.metadata.ReplayMetadataKey;
+import dev.voldechse.replayframework.api.playback.PlaybackBufferOptions;
 import dev.voldechse.replayframework.example.command.ReplayCommand;
 import dev.voldechse.replayframework.example.resourcepack.ExampleResourcePackService;
+import dev.voldechse.replayframework.example.ui.ExampleItemModels;
+import dev.voldechse.replayframework.example.ui.PlaybackHotbar;
+import dev.voldechse.replayframework.example.ui.PlaybackStatusRenderer;
+import dev.voldechse.replayframework.example.ui.ReplayBrowser;
+import dev.voldechse.replayframework.example.ui.ReplayBrowserListener;
 import dev.voldechse.replayframework.example.viewer.ExampleViewerEnvironment;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import java.io.IOException;
@@ -19,11 +25,13 @@ import java.time.Duration;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
+import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -36,16 +44,22 @@ public final class ReplayExamplePlugin extends JavaPlugin {
     private static final long FRAMEWORK_WAIT_TICKS = 20L * 30L;
 
     private final AtomicReference<ReplayCommand.Context> commandContext = new AtomicReference<>();
+    private final AtomicReference<Optional<ReplayBrowser>> browserReference =
+            new AtomicReference<>(Optional.empty());
     private final AtomicBoolean closing = new AtomicBoolean();
     private ReplayCommand replayCommand;
     private BukkitTask initializationTask;
     private ExampleResourcePackService resourcePackService;
     private ExampleViewerEnvironment viewerEnvironment;
+    private PlaybackHotbar playbackHotbar;
+    private PlaybackStatusRenderer statusRenderer;
+    private ReplayBrowser replayBrowser;
+    private ReplayBrowserListener browserListener;
     private long frameworkWaitTicks;
 
     @Override
     public void onEnable() {
-        replayCommand = new ReplayCommand(this, commandContext::get);
+        replayCommand = new ReplayCommand(this, commandContext::get, browserReference::get);
         getLifecycleManager().registerEventHandler(
                 LifecycleEvents.COMMANDS,
                 event -> event.registrar().register(replayCommand.buildTree(), "replay"));
@@ -67,6 +81,27 @@ public final class ReplayExamplePlugin extends JavaPlugin {
             initializationTask = null;
         }
         commandContext.set(null);
+        browserReference.set(Optional.empty());
+        ReplayBrowserListener listener = browserListener;
+        browserListener = null;
+        if (listener != null) {
+            listener.close();
+        }
+        PlaybackStatusRenderer renderer = statusRenderer;
+        statusRenderer = null;
+        if (renderer != null) {
+            renderer.close();
+        }
+        ReplayBrowser browser = replayBrowser;
+        replayBrowser = null;
+        if (browser != null) {
+            browser.close();
+        }
+        PlaybackHotbar hotbar = playbackHotbar;
+        playbackHotbar = null;
+        if (hotbar != null) {
+            hotbar.close();
+        }
         if (replayCommand != null) {
             replayCommand.close();
         }
@@ -101,10 +136,32 @@ public final class ReplayExamplePlugin extends JavaPlugin {
         frameworkWaitTicks = 0L;
 
         Map<String, ReplayMetadataKey<?>> metadataKeys = registerExampleMetadata(framework);
-        Optional<ExampleViewerEnvironment> environment;
+        Optional<ExampleViewerEnvironment> environment = Optional.empty();
         try {
-            environment = Optional.of(createViewerEnvironment(framework));
+            ExampleItemModels models = ExampleItemModels.load(this);
+            ExampleViewerEnvironment createdEnvironment = createViewerEnvironment(framework, models);
+            PlaybackHotbar hotbar = new PlaybackHotbar(this, createdEnvironment, models);
+            playbackHotbar = hotbar;
+            PlaybackStatusRenderer renderer = new PlaybackStatusRenderer(
+                    this, framework.events(), createdEnvironment, hotbar);
+            statusRenderer = renderer;
+            ReplayBrowser browser = new ReplayBrowser(
+                    this,
+                    framework.replays(),
+                    createdEnvironment,
+                    models,
+                    hotbar,
+                    renderer);
+            replayBrowser = browser;
+            ReplayBrowserListener listener = new ReplayBrowserListener(
+                    this, browser, hotbar, createdEnvironment, models);
+            browserListener = listener;
+            listener.register();
+
+            environment = Optional.of(createdEnvironment);
+            browserReference.set(Optional.of(browser));
         } catch (RuntimeException failure) {
+            closeUiAfterSetupFailure();
             environment = Optional.empty();
             getLogger().warning(
                     "Example viewer commands remain unavailable: "
@@ -144,7 +201,9 @@ public final class ReplayExamplePlugin extends JavaPlugin {
         }
     }
 
-    private ExampleViewerEnvironment createViewerEnvironment(ReplayFramework framework) {
+    private ExampleViewerEnvironment createViewerEnvironment(
+            ReplayFramework framework,
+            ExampleItemModels models) {
         FileConfiguration configuration = getConfig();
         ExampleResourcePackService packService = null;
         try {
@@ -164,7 +223,12 @@ public final class ReplayExamplePlugin extends JavaPlugin {
                     this,
                     framework.playbacks(),
                     packService,
-                    ExampleViewerEnvironment.Configuration.defaults(location));
+                    new ExampleViewerEnvironment.Configuration(
+                            location,
+                            GameMode.ADVENTURE,
+                            PlaybackBufferOptions.builder().build(),
+                            Set.of("replay"),
+                            models::isControlItem));
             resourcePackService = packService;
             viewerEnvironment = environment;
             return environment;
@@ -173,6 +237,34 @@ public final class ReplayExamplePlugin extends JavaPlugin {
                 packService.close();
             }
             throw failure;
+        }
+    }
+
+    private void closeUiAfterSetupFailure() {
+        browserReference.set(Optional.empty());
+        if (browserListener != null) {
+            browserListener.close();
+            browserListener = null;
+        }
+        if (statusRenderer != null) {
+            statusRenderer.close();
+            statusRenderer = null;
+        }
+        if (replayBrowser != null) {
+            replayBrowser.close();
+            replayBrowser = null;
+        }
+        if (playbackHotbar != null) {
+            playbackHotbar.close();
+            playbackHotbar = null;
+        }
+        if (viewerEnvironment != null) {
+            viewerEnvironment.close();
+            viewerEnvironment = null;
+        }
+        if (resourcePackService != null) {
+            resourcePackService.close();
+            resourcePackService = null;
         }
     }
 
