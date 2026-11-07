@@ -17,7 +17,7 @@ final class StorageSelectionModuleTest {
 
     @Test
     void localSelectionBindsExactlyOneSharedBackendInstance() throws Exception {
-        Path dataDirectory = Files.createTempDirectory("replay-storage-selection-");
+        Path dataDirectory = dev.voldechse.replayframework.runtime.ConfiguredRuntimeFixture.create("replay-storage-selection-");
         Injector injector = Guice.createInjector(new StorageSelectionModule(
                 new ReplayConfigurationLoader(new GsonBuilder().create())
                         .load(dataDirectory)

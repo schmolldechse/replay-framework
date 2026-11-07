@@ -3,7 +3,6 @@ import org.gradle.jvm.tasks.Jar
 
 plugins {
     `java-library`
-    alias(libs.plugins.paperweight.userdev)
     alias(libs.plugins.run.paper)
 }
 
@@ -13,6 +12,7 @@ dependencies {
     implementation(project(":replay-format"))
     implementation(project(":replay-adapter:api"))
     implementation(project(":replay-adapter:paper-26_2"))
+    implementation(project(":replay-adapter:paper-26_3"))
     implementation(project(":replay-storage:api"))
     implementation(project(":replay-storage:local"))
     implementation(project(":replay-storage:s3"))
@@ -21,17 +21,15 @@ dependencies {
     implementation(libs.gson)
     implementation(libs.guice)
     implementation(libs.aws.s3)
-    paperweight.paperDevBundle(libs.versions.paper.get())
+    compileOnly(libs.paper.api)
 
     testImplementation(libs.junit.jupiter)
+    testImplementation(libs.paper.api)
     testRuntimeOnly(libs.junit.platform.launcher)
 }
 
-paperweight.reobfArtifactConfiguration =
-    io.papermc.paperweight.userdev.ReobfArtifactConfiguration.MOJANG_PRODUCTION
-
 tasks.runServer {
-    minecraftVersion("26.2")
+    minecraftVersion(providers.gradleProperty("minecraftVersion").orElse("26.3").get())
 }
 
 tasks.processResources {

@@ -21,7 +21,7 @@ class ExamplePackAssetTest {
                         .toList());
 
         assertEquals(
-                "replay_example:item/speed_0_25",
+                "replay_example:speed_0_25",
                 ExamplePackAsset.SPEED_0_25.itemModelKey().orElseThrow());
         assertEquals(
                 "assets/replay_example/textures/item/speed_0_25.png",

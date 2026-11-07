@@ -17,7 +17,7 @@ class ReplayConfigurationLoaderTest {
 
     @Test
     void createsSafeLocalDefaultsOnFirstLoadAndKeepsExistingSelection() throws Exception {
-        Path dataDirectory = Files.createTempDirectory("replay-config-loader-");
+        Path dataDirectory = dev.voldechse.replayframework.runtime.ConfiguredRuntimeFixture.create("replay-config-loader-");
         ReplayConfigurationLoader loader = newLoader();
 
         ReplayRuntimeConfiguration first = loader.load(dataDirectory);
@@ -36,7 +36,7 @@ class ReplayConfigurationLoaderTest {
 
     @Test
     void rejectsUnknownStorageBackendBeforeRuntimeComposition() throws Exception {
-        Path dataDirectory = Files.createTempDirectory("replay-config-loader-invalid-");
+        Path dataDirectory = dev.voldechse.replayframework.runtime.ConfiguredRuntimeFixture.create("replay-config-loader-invalid-");
         ReplayConfigurationLoader loader = newLoader();
         loader.load(dataDirectory);
         Path configFile = dataDirectory.resolve("config.json");
@@ -52,7 +52,7 @@ class ReplayConfigurationLoaderTest {
 
     @Test
     void ignoresMalformedUnselectedBackendSections() throws Exception {
-        Path dataDirectory = Files.createTempDirectory("replay-config-loader-unselected-");
+        Path dataDirectory = dev.voldechse.replayframework.runtime.ConfiguredRuntimeFixture.create("replay-config-loader-unselected-");
         ReplayConfigurationLoader loader = newLoader();
         loader.load(dataDirectory);
         Path configFile = dataDirectory.resolve("config.json");
@@ -67,7 +67,7 @@ class ReplayConfigurationLoaderTest {
 
     @Test
     void loadsConfiguredShutdownTimeoutAndUsesDefaultForOlderFiles() throws Exception {
-        Path dataDirectory = Files.createTempDirectory("replay-config-loader-shutdown-");
+        Path dataDirectory = dev.voldechse.replayframework.runtime.ConfiguredRuntimeFixture.create("replay-config-loader-shutdown-");
         ReplayConfigurationLoader loader = newLoader();
 
         ReplayRuntimeConfiguration defaults = loader.load(dataDirectory);
@@ -87,7 +87,7 @@ class ReplayConfigurationLoaderTest {
 
     @Test
     void rejectsInvalidShutdownTimeoutConfiguration() throws Exception {
-        Path dataDirectory = Files.createTempDirectory("replay-config-loader-invalid-shutdown-");
+        Path dataDirectory = dev.voldechse.replayframework.runtime.ConfiguredRuntimeFixture.create("replay-config-loader-invalid-shutdown-");
         ReplayConfigurationLoader loader = newLoader();
         loader.load(dataDirectory);
         Path configFile = dataDirectory.resolve("config.json");

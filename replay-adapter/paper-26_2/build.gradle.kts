@@ -6,7 +6,7 @@ plugins {
 dependencies {
     implementation(project(":replay-adapter:api"))
     compileOnly(libs.packetevents.spigot)
-    paperweight.paperDevBundle(libs.versions.paper.get())
+    paperweight.paperDevBundle(libs.versions.paper262.get())
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher)
 }

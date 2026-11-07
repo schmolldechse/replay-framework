@@ -473,6 +473,15 @@ public final class Paper26SnapshotProvider
                                 targetKey + ":attributes"));
                     }
                 }
+                if (entity instanceof net.minecraft.world.entity.Leashable leashable
+                        && leashable.getLeashHolder() != null) {
+                    packets.add(blueprint(
+                            new net.minecraft.network.protocol.game.ClientboundSetEntityLinkPacket(
+                                    entity, leashable.getLeashHolder()),
+                            Paper26CheckpointEncoder.CheckpointPacketFamily.PASSENGERS,
+                            worldKey,
+                            targetKey + ":leash"));
+                }
                 if (!entity.getPassengers().isEmpty()) {
                     packets.add(blueprint(
                             new ClientboundSetPassengersPacket(entity),

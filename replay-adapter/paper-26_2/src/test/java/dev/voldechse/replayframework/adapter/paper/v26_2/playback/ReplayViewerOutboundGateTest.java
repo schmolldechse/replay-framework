@@ -76,6 +76,26 @@ class ReplayViewerOutboundGateTest {
         assertNull(failure.get());
     }
 
+    @Test
+    void liveObserverStateAlwaysPassesTheReplayGate() {
+        for (String name : List.of("set_health", "player_position", "player_abilities", "set_player_inventory", "set_title_text")) {
+            var descriptor = new PacketDescriptor("play.clientbound.minecraft:" + name,
+                    PacketPhase.PLAY, PacketDescriptor.Direction.CLIENTBOUND, 9,
+                    PacketDisposition.STATEFUL, true, true, false, "test/" + name,
+                    PacketDescriptor.PlaybackScope.VIEWER_LOCAL);
+            var failure = new AtomicReference<Throwable>();
+            var channel = new EmbeddedChannel(gateFor(PacketRegistry.of(List.of(descriptor)), failure));
+            try {
+                var livePacket = new TestPacket(9);
+                assertTrue(channel.writeOutbound(livePacket), name);
+                assertSame(livePacket, channel.readOutbound(), name);
+                assertNull(failure.get());
+            } finally {
+                channel.finishAndReleaseAll();
+            }
+        }
+    }
+
     private static ReplayViewerOutboundGate gateFor(
             PacketRegistry registry,
             AtomicReference<Throwable> failure) {

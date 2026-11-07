@@ -8,7 +8,8 @@ plugins only use the `ReplayFramework` service after it has been published.
 
 Prepare a Paper server with the following components:
 
-- Paper **26.2** running on **Java 26**.
+- Paper **26.2 or 26.3** running on **Java 26**. The runtime selects the
+  matching adapter at startup. The pinned builds are Paper 26.2 build 135 and Paper 26.3 build 244 (stable).
 - PacketEvents installed as a server plugin. The runtime declares it as a
   required dependency.
 - A reachable PostgreSQL database. The framework uses it for the replay
@@ -21,9 +22,9 @@ schema.
 
 ## Install the runtime
 
-1. Build the runtime with `.\gradlew.bat :replay-runtime-paper:build` or obtain
+1. Build the runtime with `.\gradlew.bat :replay-runtime-paper:jar` or obtain
    its corresponding runtime JAR.
-2. Copy the reobfuscated JAR from `replay-runtime-paper/build/libs/` into the
+2. Copy the bundled JAR from `replay-runtime-paper/build/libs/` into the
    server's `plugins/` directory.
 3. Install PacketEvents in the same directory.
 4. Start the server once. The runtime creates
@@ -133,4 +134,3 @@ events may be delivered off the server thread.
 - Add typed fields and catalog search through [Metadata](metadata.md).
 - Tune database, artifact storage, and resource budgets in
   [Configuration](configuration.md).
-

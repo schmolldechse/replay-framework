@@ -38,7 +38,7 @@ class PostgresReplayQueryCompilerTest {
                         .where(arenaKey, MetadataPredicate.equalTo("castle"))
                         .build());
 
-        assertTrue(compiled.whereClause().contains("@>"));
+        assertEquals(" AND r.metadata @> cast(:metadata_value_0 as jsonb)", compiled.whereClause());
         assertEquals(1, compiled.parameters().size());
         PostgresReplayQueryCompiler.Parameter parameter = compiled.parameters().get(0);
         assertEquals(PostgresReplayQueryCompiler.ParameterKind.JSONB, parameter.kind());

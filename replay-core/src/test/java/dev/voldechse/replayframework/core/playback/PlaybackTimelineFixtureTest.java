@@ -80,7 +80,7 @@ final class PlaybackTimelineFixtureTest {
                 Runnable::run);
 
         SeekEngine.SeekResult result = engine
-                .seekTo(Duration.ofSeconds(6L), PlaybackSpeed.NORMAL, false)
+                .seekTo(Duration.ofSeconds(6L), PlaybackSpeed.NORMAL, false, () -> true)
                 .toCompletableFuture()
                 .join();
 
@@ -107,14 +107,14 @@ final class PlaybackTimelineFixtureTest {
                 Runnable::run);
 
         CompletionStage<SeekEngine.SeekResult> result = engine
-                .seekTo(Duration.ofSeconds(30L), PlaybackSpeed.NORMAL, true);
+                .seekTo(Duration.ofSeconds(30L), PlaybackSpeed.NORMAL, true, () -> true);
 
         assertTrue(!result.toCompletableFuture().isDone());
         assertEquals(List.of(), bridge.calls);
 
         availability.complete(new PlaybackTimeline.BufferProgress(
                 Duration.ZERO,
-                Duration.ofSeconds(20L)));
+                Duration.ofSeconds(20L), true));
 
         SeekEngine.SeekResult applied = result.toCompletableFuture().join();
         assertEquals(20_000_000_000L, applied.positionNanos());
@@ -153,7 +153,7 @@ final class PlaybackTimelineFixtureTest {
     }
 
     @Test
-    void schedulerDoesNotSendFramesBeforeAvailabilityCompletes() {
+    void schedulerDoesNotSendFramesBeforeTheirRangeLoads() {
         AtomicLong nowNanos = new AtomicLong();
         PlaybackClock clock = new PlaybackClock(
                 20_000_000_000L,
@@ -178,7 +178,7 @@ final class PlaybackTimelineFixtureTest {
 
         availability.complete(new PlaybackTimeline.BufferProgress(
                 Duration.ZERO,
-                Duration.ofSeconds(3L)));
+                Duration.ofSeconds(3L), true));
         scheduler.runOnce(1_000_000_000L);
 
         assertEquals(List.of(due), bridge.frames());
@@ -223,7 +223,7 @@ final class PlaybackTimelineFixtureTest {
         CompletableFuture<PlaybackTimeline.BufferProgress> availability =
                 CompletableFuture.completedFuture(new PlaybackTimeline.BufferProgress(
                         Duration.ZERO,
-                        Duration.ofSeconds(20L)));
+                        Duration.ofSeconds(20L), true));
         FakePlaybackData data = new FakePlaybackData(List.of(initial), List.of(), availability);
         RecordingBridge bridge = new RecordingBridge();
         PlaybackTimeline timeline = new PlaybackTimeline(
@@ -242,17 +242,18 @@ final class PlaybackTimelineFixtureTest {
         nowNanos.set(1_000_000_000L);
         timeline.runSchedulerOnce(nowNanos.get());
 
+        Duration frozenPosition = timeline.snapshot().position();
         nowNanos.set(5_000_000_000L);
         assertEquals(PlaybackStatus.BUFFERING, timeline.snapshot().status());
-        assertEquals(Duration.ofSeconds(1L), timeline.snapshot().position());
+        assertEquals(frozenPosition, timeline.snapshot().position());
 
         pending.complete(new PlaybackTimeline.BufferProgress(
                 Duration.ZERO,
-                Duration.ofSeconds(20L)));
+                Duration.ofSeconds(20L), true));
         timeline.runSchedulerOnce(nowNanos.get());
 
         assertEquals(PlaybackStatus.PLAYING, timeline.snapshot().status());
-        assertEquals(Duration.ofSeconds(1L), timeline.snapshot().position());
+        assertEquals(frozenPosition, timeline.snapshot().position());
         timeline.closeAsync().toCompletableFuture().join();
     }
 
@@ -270,6 +271,17 @@ final class PlaybackTimelineFixtureTest {
         private final List<Object> calls = new ArrayList<>();
 
         @Override
+
+        public void setIdentityContext(dev.voldechse.replayframework.adapter.playback.PlaybackIdentityContext context) {
+
+            java.util.Objects.requireNonNull(context);
+
+        }
+
+
+
+        @Override
+
         public void send(RawPacketFrame frame) {
             calls.add(frame);
         }
@@ -329,7 +341,7 @@ final class PlaybackTimelineFixtureTest {
                     deltaFrames,
                     CompletableFuture.completedFuture(new PlaybackTimeline.BufferProgress(
                             Duration.ZERO,
-                            Duration.ofSeconds(20L))));
+                            Duration.ofSeconds(20L), true)));
         }
 
         private FakePlaybackData(
@@ -362,14 +374,14 @@ final class PlaybackTimelineFixtureTest {
         public CompletionStage<List<RawPacketFrame>> framesBetween(
                 Duration startInclusive,
                 Duration endInclusive) {
-            return CompletableFuture.completedFuture(deltaFrames);
+            return availability.thenApply(ignored -> deltaFrames);
         }
 
         @Override
         public PlaybackTimeline.BufferProgress progress(Duration position) {
             return new PlaybackTimeline.BufferProgress(
                     Duration.ZERO,
-                    Duration.ofSeconds(20L));
+                    Duration.ofSeconds(20L), true);
         }
 
         @Override

@@ -156,10 +156,10 @@ final class Paper26CheckpointFixtureTest {
                         delta.family(),
                         delta.worldKey(),
                         delta.targetKey(),
+                        delta.position(),
                         delta.payload()));
 
         collector.observe(new CaptureBridge.CapturePacket(
-                UUID.randomUUID(),
                 100L,
                 4L,
                 0,

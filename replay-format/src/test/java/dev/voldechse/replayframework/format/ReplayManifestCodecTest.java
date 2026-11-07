@@ -38,7 +38,7 @@ class ReplayManifestCodecTest {
                 "paper-26.2",
                 775,
                 "registry-ä",
-                1,
+                ReplayManifest.CURRENT_FORMAT_REVISION,
                 30_000L,
                 List.of(segment, checkpoint, index));
         ReplayManifest second = new ReplayManifest(
@@ -69,12 +69,12 @@ class ReplayManifestCodecTest {
         assertThrows(
                 IllegalArgumentException.class,
                 () -> new ReplayManifest(
-                        "not-a-uuid", "paper-26.2", 775, "registry", 1, 0L, List.of()));
+                        "not-a-uuid", "paper-26.2", 775, "registry", ReplayManifest.CURRENT_FORMAT_REVISION, 0L, List.of()));
         assertThrows(
                 IllegalArgumentException.class,
                 () -> new ReplayManifest(
                         "123e4567-e89b-12d3-a456-426614174000",
-                        "paper-26.2", 775, "registry", 1, 0L,
+                        "paper-26.2", 775, "registry", ReplayManifest.CURRENT_FORMAT_REVISION, 0L,
                         List.of(new ReplayManifest.ArtifactFile(
                                 ReplayManifest.ArtifactType.INDEX,
                                 "/index.bin", 1L, SHA))));
@@ -82,7 +82,7 @@ class ReplayManifestCodecTest {
                 IllegalArgumentException.class,
                 () -> new ReplayManifest(
                         "123e4567-e89b-12d3-a456-426614174000",
-                        "paper-26.2", 775, "registry", 1, 0L,
+                        "paper-26.2", 775, "registry", ReplayManifest.CURRENT_FORMAT_REVISION, 0L,
                         List.of(new ReplayManifest.ArtifactFile(
                                 ReplayManifest.ArtifactType.INDEX,
                                 "../index.bin", 1L, SHA))));
@@ -90,7 +90,7 @@ class ReplayManifestCodecTest {
                 IllegalArgumentException.class,
                 () -> new ReplayManifest(
                         "123e4567-e89b-12d3-a456-426614174000",
-                        "paper-26.2", 775, "registry", 1, 0L,
+                        "paper-26.2", 775, "registry", ReplayManifest.CURRENT_FORMAT_REVISION, 0L,
                         List.of(new ReplayManifest.ArtifactFile(
                                 ReplayManifest.ArtifactType.INDEX,
                                 "index.bin", 1L, SHA.toUpperCase()))));
@@ -104,7 +104,7 @@ class ReplayManifestCodecTest {
                 + "\"adapterId\":\"paper-26.2\","
                 + "\"protocolVersion\":775,"
                 + "\"registryFingerprint\":\"registry\","
-                + "\"formatRevision\":1,"
+                + "\"formatRevision\":3,"
                 + "\"durationNanos\":0,"
                 + "\"files\":[]"
                 + "}";
@@ -112,7 +112,7 @@ class ReplayManifestCodecTest {
         assertEquals(validJson, new String(codec.encode(codec.decode(validJson.getBytes(StandardCharsets.UTF_8))), StandardCharsets.UTF_8));
         assertThrows(
                 CorruptReplayArtifactException.class,
-                () -> codec.decode(validJson.replace("\"formatRevision\":1", "\"formatRevision\":2")
+                () -> codec.decode(validJson.replace("\"formatRevision\":3", "\"formatRevision\":2")
                         .getBytes(StandardCharsets.UTF_8)));
         assertThrows(
                 CorruptReplayArtifactException.class,
@@ -128,7 +128,7 @@ class ReplayManifestCodecTest {
                 + "\"adapterId\":\"paper-26.2\","
                 + "\"protocolVersion\":775,"
                 + "\"registryFingerprint\":\"registry\","
-                + "\"formatRevision\":1,"
+                + "\"formatRevision\":3,"
                 + "\"durationNanos\":0,"
                 + "\"files\":[]"
                 + "}";

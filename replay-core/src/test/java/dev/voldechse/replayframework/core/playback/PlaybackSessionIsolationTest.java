@@ -180,7 +180,7 @@ final class PlaybackSessionIsolationTest {
                     PrefetchPlanner.Direction direction) {
                 return CompletableFuture.completedFuture(new PlaybackTimeline.BufferProgress(
                         Duration.ZERO,
-                        Duration.ofSeconds(20L)));
+                        Duration.ofSeconds(20L), true));
             }
 
             @Override
@@ -199,7 +199,7 @@ final class PlaybackSessionIsolationTest {
             public PlaybackTimeline.BufferProgress progress(Duration position) {
                 return new PlaybackTimeline.BufferProgress(
                         Duration.ZERO,
-                        Duration.ofSeconds(20L));
+                        Duration.ofSeconds(20L), true);
             }
 
             @Override
@@ -207,6 +207,11 @@ final class PlaybackSessionIsolationTest {
             }
         };
         PlaybackBridge bridge = new PlaybackBridge() {
+            @Override
+            public void setIdentityContext(dev.voldechse.replayframework.adapter.playback.PlaybackIdentityContext context) {
+                java.util.Objects.requireNonNull(context);
+            }
+
             @Override
             public void send(RawPacketFrame frame) {
             }
@@ -550,7 +555,7 @@ final class PlaybackSessionIsolationTest {
                 PrefetchPlanner.Direction direction) {
             return CompletableFuture.completedFuture(new PlaybackTimeline.BufferProgress(
                     Duration.ZERO,
-                    Duration.ofSeconds(20L)));
+                    Duration.ofSeconds(20L), true));
         }
 
         @Override
@@ -569,7 +574,7 @@ final class PlaybackSessionIsolationTest {
         public PlaybackTimeline.BufferProgress progress(Duration position) {
             return new PlaybackTimeline.BufferProgress(
                     Duration.ZERO,
-                    Duration.ofSeconds(20L));
+                    Duration.ofSeconds(20L), true);
         }
 
         @Override
@@ -582,6 +587,17 @@ final class PlaybackSessionIsolationTest {
         private final AtomicInteger closeCount = new AtomicInteger();
 
         @Override
+
+        public void setIdentityContext(dev.voldechse.replayframework.adapter.playback.PlaybackIdentityContext context) {
+
+            java.util.Objects.requireNonNull(context);
+
+        }
+
+
+
+        @Override
+
         public void send(RawPacketFrame frame) {
         }
 

@@ -9,6 +9,7 @@ dependencies {
     api(project(":replay-format"))
     compileOnly(libs.paper.api)
     testImplementation(libs.junit.jupiter)
+    testImplementation(libs.paper.api)
     testRuntimeOnly(libs.junit.platform.launcher)
 }
 

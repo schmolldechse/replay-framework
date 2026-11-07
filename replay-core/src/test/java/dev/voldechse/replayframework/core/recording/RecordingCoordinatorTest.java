@@ -64,7 +64,7 @@ final class RecordingCoordinatorTest {
                 router,
                 registry,
                 repository,
-                (scope, participants) -> {
+                recordingRequest -> {
                     repository.events.add("scope");
                     return CompletableFuture.completedFuture(resolved(request(16L)));
                 },
@@ -98,7 +98,7 @@ final class RecordingCoordinatorTest {
                 router,
                 registry,
                 repository,
-                (scope, participants) -> CompletableFuture.completedFuture(resolved(request(16L))),
+                recordingRequest -> CompletableFuture.completedFuture(resolved(request(16L))),
                 (session, reason) -> CompletableFuture.completedFuture(session),
                 request -> CompletableFuture.failedFuture(new IllegalStateException("checkpoint")));
         coordinatorRef.set(coordinator);
@@ -124,7 +124,7 @@ final class RecordingCoordinatorTest {
                 router,
                 registry,
                 repository,
-                (scope, participants) -> CompletableFuture.completedFuture(resolved(request(16L))),
+                recordingRequest -> CompletableFuture.completedFuture(resolved(request(16L))),
                 (session, reason) -> CompletableFuture.completedFuture(session));
         coordinatorRef.set(coordinator);
 
@@ -153,7 +153,7 @@ final class RecordingCoordinatorTest {
                 router,
                 registry,
                 repository,
-                (scope, participants) -> CompletableFuture.completedFuture(resolved(request(16L))),
+                recordingRequest -> CompletableFuture.completedFuture(resolved(request(16L))),
                 (session, reason) -> {
                     finalizations.incrementAndGet();
                     return CompletableFuture.completedFuture(session);
@@ -183,7 +183,6 @@ final class RecordingCoordinatorTest {
                 Set.of(),
                 packet -> true);
         CapturedPacket chat = CapturedPacket.from(new CaptureBridge.CapturePacket(
-                UUID.randomUUID(),
                 10L,
                 1L,
                 0,
@@ -262,7 +261,6 @@ final class RecordingCoordinatorTest {
 
     private static CaptureBridge.CapturePacket packet(byte[] payload) {
         return new CaptureBridge.CapturePacket(
-                UUID.randomUUID(),
                 10L,
                 1L,
                 0,
