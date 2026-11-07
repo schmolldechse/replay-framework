@@ -13,6 +13,7 @@ import dev.voldechse.replayframework.adapter.PacketRegistry;
 import dev.voldechse.replayframework.adapter.paper.v26_3.Paper26_3PacketRegistry;
 import dev.voldechse.replayframework.adapter.paper.v26_3.capture.Paper26_3SyntheticStateCollector.SyntheticStatePacket;
 import dev.voldechse.replayframework.adapter.paper.v26_3.checkpoint.Paper26_3CheckpointEncoder;
+import dev.voldechse.replayframework.adapter.paper.v26_3.checkpoint.Paper26_3NativePacketCodec;
 import dev.voldechse.replayframework.api.recording.BlockPosition;
 import dev.voldechse.replayframework.api.recording.RecordingScope;
 import dev.voldechse.replayframework.format.PacketPhase;
@@ -29,6 +30,7 @@ import java.util.Optional;
 import java.util.function.Function;
 import net.kyori.adventure.key.Key;
 import org.bukkit.entity.Player;
+import org.bukkit.plugin.java.JavaPlugin;
 
 /**
  * Global Paper 26.3 capture installation shared by all active recording
@@ -38,6 +40,7 @@ public final class Paper26_3CaptureBridge implements CaptureBridge {
 
     private final PaperConnectionAccessor accessor;
     private final PacketRegistry registry;
+    private final Paper26_3EntityStateCapture entityStateCapture;
     private final AtomicReference<State> state = new AtomicReference<>(State.NEW);
     private final AtomicBoolean failureReported = new AtomicBoolean();
     private final Set<Paper26_3SyntheticStateCollector> syntheticCollectors =
@@ -71,6 +74,24 @@ public final class Paper26_3CaptureBridge implements CaptureBridge {
     public Paper26_3CaptureBridge(PaperConnectionAccessor accessor, PacketRegistry registry) {
         this.accessor = Objects.requireNonNull(accessor, "accessor");
         this.registry = verifyRegistry(registry);
+        this.entityStateCapture = null;
+    }
+
+    /** Creates the production bridge with recipient-independent entity movement capture. */
+    public Paper26_3CaptureBridge(
+            JavaPlugin owner,
+            PaperConnectionAccessor accessor,
+            PacketRegistry registry,
+            Paper26_3NativePacketCodec codec) {
+        this.accessor = Objects.requireNonNull(accessor, "accessor");
+        this.registry = verifyRegistry(registry);
+        this.entityStateCapture = new Paper26_3EntityStateCapture(
+                Objects.requireNonNull(owner, "owner"),
+                Objects.requireNonNull(codec, "codec"),
+                this::hasActiveRecording,
+                accessor::currentServerTick,
+                this::captureSyntheticMovement,
+                this::fail);
     }
 
     @Override
@@ -97,6 +118,9 @@ public final class Paper26_3CaptureBridge implements CaptureBridge {
         try {
             installedListener = PacketEvents.getAPI().getEventManager().registerListener(
                     packetListener, PacketListenerPriority.MONITOR);
+            if (entityStateCapture != null) {
+                entityStateCapture.install();
+            }
         } catch (Throwable failure) {
             fail(failure);
         }
@@ -114,6 +138,7 @@ public final class Paper26_3CaptureBridge implements CaptureBridge {
 
         // UNINSTALLED is an expected lifecycle end, not an integrity failure.
         unregisterPacketListener();
+        closeEntityStateCapture();
         closeSyntheticCollectors();
     }
 
@@ -167,6 +192,31 @@ public final class Paper26_3CaptureBridge implements CaptureBridge {
                         Optional.empty(),
                         Optional.empty()));
         currentSink.accept(captured);
+    }
+
+    private void captureSyntheticMovement(
+            Paper26_3EntityStateCapture.SyntheticMovement movement) {
+        if (state.get() != State.INSTALLED) {
+            return;
+        }
+        CaptureBridge.PacketSink currentSink = sink;
+        if (currentSink == null || !currentSink.hasActiveSinks()) {
+            return;
+        }
+        var packet = movement.packet();
+        currentSink.accept(new CaptureBridge.CapturePacket(
+                movement.captureTimeNanos(),
+                movement.serverTick(),
+                allocateSequence(movement.serverTick()),
+                PacketPhase.PLAY,
+                packet.packetId(),
+                packet.payload(),
+                new CaptureContext(
+                        packet.descriptor().disposition(),
+                        Optional.of(movement.world()),
+                        Optional.of(movement.position()),
+                        Optional.empty(),
+                        Optional.empty())));
     }
 
     /**
@@ -223,6 +273,11 @@ public final class Paper26_3CaptureBridge implements CaptureBridge {
             }
 
             byte[] payload = copyPayload(event);
+            if (entityStateCapture != null
+                    && entityStateCapture.suppressesRecipientMovement(
+                            descriptor.typeName(), payload)) {
+                return;
+            }
             long serverTick = accessor.currentServerTick();
             CaptureBridge.CapturePacket packet = new CaptureBridge.CapturePacket(
                     System.nanoTime(),
@@ -314,6 +369,7 @@ public final class Paper26_3CaptureBridge implements CaptureBridge {
         }
 
         unregisterPacketListener();
+        closeEntityStateCapture();
 
         if (failureReported.compareAndSet(false, true)) {
             CaptureBridge.FailureHandler currentFailureHandler = failureHandler;
@@ -369,6 +425,19 @@ public final class Paper26_3CaptureBridge implements CaptureBridge {
             } catch (Throwable ignored) {
                 // Capture shutdown remains best effort after the hook is gone.
             }
+        }
+    }
+
+    private boolean hasActiveRecording() {
+        CaptureBridge.PacketSink currentSink = sink;
+        return state.get() == State.INSTALLED
+                && currentSink != null
+                && currentSink.hasActiveSinks();
+    }
+
+    private void closeEntityStateCapture() {
+        if (entityStateCapture != null) {
+            entityStateCapture.close();
         }
     }
 
