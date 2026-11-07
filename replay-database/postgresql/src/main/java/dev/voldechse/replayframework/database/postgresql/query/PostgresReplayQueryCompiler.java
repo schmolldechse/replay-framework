@@ -130,6 +130,7 @@ public final class PostgresReplayQueryCompiler {
                 parameters.add(new Parameter(
                         keyParameter, criterion.key().key().asString(), ParameterKind.TEXT));
             } else if (predicate instanceof MetadataPredicate.EqualTo<?> equalTo) {
+                where.append(" AND ");
                 appendContainment(
                         where, parameters, "metadata_value_" + index,
                         criterion.key().key(), registered, equalTo.value());
@@ -147,6 +148,7 @@ public final class PostgresReplayQueryCompiler {
                 }
                 where.append(')');
             } else if (predicate instanceof MetadataPredicate.Contains<?> contains) {
+                where.append(" AND ");
                 appendContainment(
                         where, parameters, "metadata_value_" + index,
                         criterion.key().key(), registered, contains.value());
