@@ -26,6 +26,8 @@ import java.util.function.Supplier;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import net.kyori.adventure.key.Key;
+import org.bukkit.Bukkit;
+import org.bukkit.World;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -95,7 +97,8 @@ public final class ReplayRecordingCommands implements AutoCloseable {
     private void addWorldBranch(ArgumentBuilder<CommandSourceStack, ?> parent) {
         LiteralArgumentBuilder<CommandSourceStack> world = Commands.literal("world");
         RequiredArgumentBuilder<CommandSourceStack, String> worldName =
-                Commands.argument("world", StringArgumentType.word());
+                Commands.argument("world", StringArgumentType.string())
+                        .suggests(suggestions.worlds());
         worldName.executes(this::executeStart);
         addParticipantBranch(worldName);
         worldName.then(buildRegionBranch());
@@ -205,7 +208,11 @@ public final class ReplayRecordingCommands implements AutoCloseable {
         String worldRaw = optionalString(command, "world");
         Key world = null;
         if (worldRaw != null) {
-            world = ReplayArguments.parseWorldKey(worldRaw);
+            World selectedWorld = Bukkit.getWorld(worldRaw);
+            if (selectedWorld == null) {
+                throw new IllegalArgumentException("World is not loaded: " + worldRaw);
+            }
+            world = selectedWorld.getKey();
             scope.addWorld(world);
         }
 
