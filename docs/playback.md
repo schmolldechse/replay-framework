@@ -201,6 +201,14 @@ its replay output idle. A newer seek invalidates an older generation, which is
 why integrations must handle a superseded seek stage without treating it as a
 replay corruption error.
 
+Checkpoint reconstruction starts at the checkpoint's indexed segment-body
+offset, not at its timestamp alone. The offset is an exclusive state boundary:
+the checkpoint already represents every earlier frame, while the frame that
+starts at the boundary and all later frames remain replay deltas. This matters
+when several frames and a checkpoint share the same nanosecond timestamp; their
+recording order remains deterministic without applying a frame twice or
+silently omitting it.
+
 This is why regular recording checkpoints and compatible adapter/protocol data
 are essential. A damaged artifact, a missing floor checkpoint, or an
 incompatible adapter prevents reliable playback and results in failure rather

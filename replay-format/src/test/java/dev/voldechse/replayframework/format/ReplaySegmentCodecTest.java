@@ -50,6 +50,11 @@ class ReplaySegmentCodecTest {
         assertTrue(writtenHeader.uncompressedLength() > 0L);
         assertEquals(writtenHeader, decoded.header());
         assertEquals(3, decoded.frames().size());
+        assertEquals(3, decoded.frameOffsets().size());
+        assertEquals(0L, decoded.frameOffsets().getFirst());
+        assertTrue(decoded.frameOffsets().get(0) < decoded.frameOffsets().get(1));
+        assertTrue(decoded.frameOffsets().get(1) < decoded.frameOffsets().get(2));
+        assertTrue(decoded.frameOffsets().getLast() < writtenHeader.uncompressedLength());
 
         assertFrame(decoded.frames().get(0), 100L, 40L, 0,
                 PacketPhase.CONFIGURATION, 3, new byte[]{0x01, 0x02, 0x03});

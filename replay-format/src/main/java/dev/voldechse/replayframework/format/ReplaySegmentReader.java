@@ -40,10 +40,12 @@ public final class ReplaySegmentReader {
                         new ReplayFrameCodec.CountingInputStream(compressed);
                 // Do not reserve memory from the untrusted header frame count.
                 List<RawPacketFrame> frames = new ArrayList<>();
+                List<Long> frameOffsets = new ArrayList<>();
                 RawPacketFrame previous = null;
 
                 try {
                     for (long index = 0; index < header.frameCount(); index++) {
+                        long frameOffset = body.count();
                         RawPacketFrame frame;
                         try {
                             frame = ReplayFrameCodec.readRecord(body);
@@ -54,6 +56,7 @@ public final class ReplaySegmentReader {
                             throw corrupt("frames are not ordered by time, tick and sequence");
                         }
                         frames.add(frame);
+                        frameOffsets.add(frameOffset);
                         previous = frame;
                     }
 
@@ -67,7 +70,7 @@ public final class ReplaySegmentReader {
                         throw corrupt("segment contains bytes after the Zstandard stream");
                     }
                     validateHeaderAgainstFrames(header, frames);
-                    return new DecodedSegment(header, frames);
+                    return new DecodedSegment(header, frames, frameOffsets);
                 } catch (CorruptReplaySegmentException exception) {
                     throw exception;
                 } catch (IOException exception) {
@@ -249,11 +252,47 @@ public final class ReplaySegmentReader {
     }
 
     /** Decoded segment data is immutable after construction. */
-    public record DecodedSegment(SegmentHeader header, List<RawPacketFrame> frames) {
+    public record DecodedSegment(
+            SegmentHeader header,
+            List<RawPacketFrame> frames,
+            List<Long> frameOffsets) {
+
+        /** Preserves the original construction API for callers with decoded frames. */
+        public DecodedSegment(SegmentHeader header, List<RawPacketFrame> frames) {
+            this(header, frames, offsetsFor(frames));
+        }
+
         public DecodedSegment {
             Objects.requireNonNull(header, "header");
             Objects.requireNonNull(frames, "frames");
             frames = List.copyOf(frames);
+            Objects.requireNonNull(frameOffsets, "frameOffsets");
+            frameOffsets = List.copyOf(frameOffsets);
+            if (frames.size() != frameOffsets.size()) {
+                throw new IllegalArgumentException(
+                        "frameOffsets must contain one entry per frame");
+            }
+            long previous = -1L;
+            for (long offset : frameOffsets) {
+                if (offset < 0L || offset <= previous
+                        || offset >= header.uncompressedLength()) {
+                    throw new IllegalArgumentException(
+                            "frame offsets must be ordered within the segment body");
+                }
+                previous = offset;
+            }
+        }
+
+        private static List<Long> offsetsFor(List<RawPacketFrame> frames) {
+            Objects.requireNonNull(frames, "frames");
+            List<Long> offsets = new ArrayList<>(frames.size());
+            long offset = 0L;
+            for (RawPacketFrame frame : frames) {
+                offsets.add(offset);
+                offset = Math.addExact(
+                        offset, ReplayFrameCodec.encodedRecordLength(frame));
+            }
+            return offsets;
         }
     }
 

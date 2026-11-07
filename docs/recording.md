@@ -215,6 +215,13 @@ checkpoint work. Checkpoint frames and normal packet frames remain separate
 artifact inputs so the playback engine can reset to a stable snapshot and then
 apply only the required delta range.
 
+Each checkpoint seek point records the ordinal of its segment and the exact
+uncompressed segment-body offset at the state boundary. Segment decoding keeps
+the start offset of every frame so playback can resume at that byte boundary,
+including when the first required delta has the same replay timestamp as the
+checkpoint. The offset is therefore part of seek correctness rather than only
+an optimization hint.
+
 Finalization stops new capture admission, unregisters the sink, and lets the
 writer drain every packet already reserved by a racing producer. The finalizer
 then transitions the catalog to `FINALIZING`, validates the sealed segment and

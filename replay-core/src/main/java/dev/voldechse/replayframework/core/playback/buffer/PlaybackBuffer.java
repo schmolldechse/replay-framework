@@ -8,6 +8,7 @@ import dev.voldechse.replayframework.core.playback.cache.MemoryPacketBuffer;
 import dev.voldechse.replayframework.core.playback.cache.SegmentCache;
 import dev.voldechse.replayframework.format.RawPacketFrame;
 import dev.voldechse.replayframework.format.ReplaySegmentReader;
+import dev.voldechse.replayframework.format.SeekPoint;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -144,6 +145,43 @@ public final class PlaybackBuffer implements AutoCloseable {
                     .thenApplyAsync(ignored -> {
                         ensureGeneration(requestGeneration);
                         return memoryBuffer.framesBetween(startInclusive, endExclusive);
+                    }, ioExecutor);
+        } catch (RuntimeException exception) {
+            return CompletableFuture.failedFuture(exception);
+        }
+    }
+
+    /** Returns deltas after the checkpoint's exclusive segment-body boundary. */
+    public CompletionStage<List<RawPacketFrame>> framesAfter(
+            SeekPoint checkpoint,
+            Duration endExclusive) {
+        try {
+            Objects.requireNonNull(checkpoint, "checkpoint");
+            long endNanos = toNanos(endExclusive, "endExclusive");
+            long maximumEnd = replay.manifest().durationNanos() == Long.MAX_VALUE
+                    ? Long.MAX_VALUE
+                    : replay.manifest().durationNanos() + 1L;
+            if (endNanos < checkpoint.elapsedNanos()
+                    || endNanos > maximumEnd) {
+                throw new IllegalArgumentException("checkpoint interval is outside replay duration");
+            }
+            ensureOpen();
+            if (endNanos == checkpoint.elapsedNanos()) {
+                return CompletableFuture.completedFuture(List.of());
+            }
+            List<SegmentCache.SegmentRef> required = segments.stream()
+                    .filter(segment -> segment.ordinal() >= checkpoint.segmentOrdinal())
+                    .filter(segment -> segment.startNanos() < endNanos)
+                    .toList();
+            if (areLoaded(required)) {
+                return CompletableFuture.completedFuture(
+                        memoryBuffer.framesAfter(checkpoint, endExclusive));
+            }
+            long requestGeneration = generation.get();
+            return loadSegments(required, requestGeneration)
+                    .thenApplyAsync(ignored -> {
+                        ensureGeneration(requestGeneration);
+                        return memoryBuffer.framesAfter(checkpoint, endExclusive);
                     }, ioExecutor);
         } catch (RuntimeException exception) {
             return CompletableFuture.failedFuture(exception);
@@ -316,7 +354,8 @@ public final class PlaybackBuffer implements AutoCloseable {
         synchronized (stateLock) {
             ensureOpen();
             ensureGeneration(requestGeneration);
-            memoryBuffer.addAll(decoded.frames());
+            memoryBuffer.addSegment(
+                    segment.ordinal(), decoded.frames(), decoded.frameOffsets());
             loadedSegments.add(segment.ordinal());
             loadedDiskBytes.put(segment.ordinal(), segment.artifact().sizeBytes());
             return decoded;

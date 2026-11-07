@@ -6,7 +6,8 @@ package dev.voldechse.replayframework.format;
  * @param elapsedNanos replay time in nanoseconds
  * @param checkpointOrdinal checkpoint to apply before deltas
  * @param segmentOrdinal segment containing the delta position
- * @param frameOffset offset in the uncompressed segment body
+ * @param frameOffset offset in the uncompressed segment body; for a checkpoint
+ *     anchor this is the first delta not represented by the checkpoint
  */
 public record SeekPoint(
         long elapsedNanos,
