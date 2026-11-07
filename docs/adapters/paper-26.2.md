@@ -18,15 +18,17 @@ Chunks, light, block entities, entity lifecycle, movement, metadata, equipment, 
 
 `SEND` is scene-safe. `REWRITE` rebuilds native packets with session-local identities. `DROP_LOCAL` covers state belonging to the recorded connection: health, experience, inventory, viewer movement, abilities, camera, menus, titles, scoreboard, teams, waypoints, commands, recipes, dialogs, and related UI. Equivalent live packets continue through the outbound gate. `BLOCKED` covers connection control and diagnostic traffic.
 
-Player chat becomes decorated unsigned system chat after applying the recorded filter mask. Action-bar chat is dropped. Explosions keep scene particles and sound but lose viewer knockback. Replay player profiles use mapped UUIDs while preserving their recorded profile names and properties. They do not enter the live tab list and never reuse a recorded chat session.
+Recorded player, system, disguised, and action-bar chat packets remain capture-policy data and are never presented to a neutral playback observer. Explosions keep scene particles and sound but lose viewer knockback. Replay player profiles use mapped UUIDs while preserving their recorded profile names and properties. They do not enter the live tab list and never reuse a recorded chat session.
 
 ## Tests
 
 - `PacketCoverageTest` loads the real 26.2 NMS registry and fails for an unreviewed PLAY packet or missing essential family.
 - Registry, native codec, checkpoint, snapshot, observer isolation, and outbound-gate tests cover their respective version-bound behavior.
-- `NeutralObserverTest` includes entity effects, minecart motion, sound, leashes, filtered chat, explosion knockback, block-breaking overlays, and idempotent reset.
+- `NeutralObserverTest` includes entity effects, minecart motion, sound, leashes, recorded chat isolation, explosion knockback, block-breaking overlays, and idempotent reset.
 
 `R` means registry/classification coverage. `R+N` additionally identifies a focused native behavior test. Registry coverage does not claim every possible payload or custom datapack renders correctly.
+
+`DROP_LOCAL*` is an additional neutral-observer guard applied before payload decoding. The stored descriptor scope remains unchanged so revision-3 artifacts retain their existing registry fingerprint and remain readable.
 
 ## Known limits
 
@@ -112,7 +114,7 @@ Map IDs and integer entity references embedded in specialized metadata are not g
 | 30 | `debug_sample` | Diagnostic or special-purpose packet without a safe playback contract | BLOCKED | no | R |
 | 31 | `delete_chat` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no | R+N |
 | 32 | `disconnect` | Transport, connection, or server control; never replay into an established connection | BLOCKED | no | R |
-| 33 | `disguised_chat` | Ordered scene effect: decorated unsigned chat presentation | SEND | no | R |
+| 33 | `disguised_chat` | Recorded connection chat retained according to capture policy but suppressed for neutral playback | DROP_LOCAL* | no | R+N |
 | 34 | `entity_event` | Ordered scene effect: entity status or animation; rewrite entity ID | REWRITE | no | R+N |
 | 35 | `entity_position_sync` | Essential scene state: scene presentation with playback-session identity rewriting | REWRITE | yes | R |
 | 36 | `explode` | Ordered scene effect: explosion presentation; remove observer knockback | SEND | no | R+N |
@@ -144,7 +146,7 @@ Map IDs and integer entity references embedded in specialized metadata are not g
 | 62 | `pong_response` | Transport, connection, or server control; never replay into an established connection | BLOCKED | no | R |
 | 63 | `place_ghost_recipe` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no | R+N |
 | 64 | `player_abilities` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no | R+N |
-| 65 | `player_chat` | Ordered scene effect: apply the filter mask and convert to decorated system chat without a foreign signature | REWRITE | no | R+N |
+| 65 | `player_chat` | Recorded connection chat retained according to capture policy but suppressed for neutral playback | DROP_LOCAL* | no | R+N |
 | 66 | `player_combat_end` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no | R+N |
 | 67 | `player_combat_enter` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no | R+N |
 | 68 | `player_combat_kill` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no | R+N |
@@ -200,7 +202,7 @@ Map IDs and integer entity references embedded in specialized metadata are not g
 | 118 | `start_configuration` | Transport, connection, or server control; never replay into an established connection | BLOCKED | no | R |
 | 119 | `stop_sound` | Ordered presentation or environment effect | SEND | no | R |
 | 120 | `store_cookie` | Transport, connection, or server control; never replay into an established connection | BLOCKED | no | R |
-| 121 | `system_chat` | Ordered scene effect: allow chat text and discard action-bar overlays | SEND | no | R+N |
+| 121 | `system_chat` | Recorded connection chat and action-bar presentation retained according to capture policy but suppressed for neutral playback | DROP_LOCAL* | no | R+N |
 | 122 | `tab_list` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no | R+N |
 | 123 | `tag_query` | Diagnostic or special-purpose packet without a safe playback contract | BLOCKED | no | R |
 | 124 | `take_item_entity` | Scene presentation with playback-session identity rewriting | REWRITE | no | R |

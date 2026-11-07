@@ -105,6 +105,12 @@ the virtual clock rather than advancing the timeline without packets. The
 bridge applies the version-specific rewrite and outbound gating required to
 keep replay packets confined to the intended viewer.
 
+Recorded player, system, disguised, and action-bar chat is connection-local
+capture data. The playback bridge suppresses it before native payload decoding,
+so a neutral observer does not receive messages that were originally delivered
+to the recorded player. This does not change `CapturePolicy.includeChat()` or
+remove chat from artifacts that elected to retain it.
+
 ## Control the timeline
 
 ```java

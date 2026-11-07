@@ -10,6 +10,9 @@ import java.util.Set;
 public final class NeutralObserverPolicy {
     private NeutralObserverPolicy() {}
 
+    private static final Set<String> RECORDED_CHAT = Set.of(
+            "player_chat", "system_chat", "disguised_chat");
+
     private static final Set<String> LOCAL = Set.of(
             "player_position", "player_rotation", "player_abilities", "set_health",
             "set_experience", "respawn", "container_close", "container_set_content",
@@ -27,5 +30,11 @@ public final class NeutralObserverPolicy {
 
     public static boolean isViewerLocal(String identifier) {
         return identifier.startsWith("minecraft:") && LOCAL.contains(identifier.substring(10));
+    }
+
+    /** Returns whether a packet presents chat received by the recorded connection. */
+    public static boolean isRecordedChatPresentation(String identifier) {
+        return identifier.startsWith("minecraft:")
+                && RECORDED_CHAT.contains(identifier.substring(10));
     }
 }

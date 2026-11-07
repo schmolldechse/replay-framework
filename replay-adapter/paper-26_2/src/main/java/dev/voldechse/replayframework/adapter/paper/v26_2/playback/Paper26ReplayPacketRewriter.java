@@ -103,6 +103,11 @@ public final class Paper26ReplayPacketRewriter {
         if (packetName.startsWith("play.clientbound.")) {
             packetName = packetName.substring("play.clientbound.".length());
         }
+        if (dev.voldechse.replayframework.adapter.playback.NeutralObserverPolicy
+                .isRecordedChatPresentation(packetName)) {
+            return RewriteResult.dropLocal(
+                    "recorded chat belongs to its original connection");
+        }
         if (isViewerLocal(packetName)
                 && descriptor.playbackScope() != PacketDescriptor.PlaybackScope.VIEWER_LOCAL) {
             throw incompatible("viewer-local Paper packet has an invalid playback scope");
@@ -154,25 +159,6 @@ public final class Paper26ReplayPacketRewriter {
                 return RewriteResult.dropLocal(
                         "game-event payload changes the current live observer's local state");
             }
-        }
-        if ("minecraft:system_chat".equals(packetName)) {
-            var value = require(packet, net.minecraft.network.protocol.game.ClientboundSystemChatPacket.class);
-            if (value.overlay()) {
-                return RewriteResult.dropLocal("recorded action bar belongs to its original viewer");
-            }
-        }
-        if ("minecraft:player_chat".equals(packetName)) {
-            var value = require(packet, net.minecraft.network.protocol.game.ClientboundPlayerChatPacket.class);
-            if (value.filterMask().isFullyFiltered()) {
-                return RewriteResult.dropLocal("recorded chat was fully filtered");
-            }
-            String filtered = value.filterMask().apply(value.body().content());
-            var content = value.filterMask().isEmpty()
-                    ? Optional.ofNullable(value.unsignedContent()).orElseGet(() -> net.minecraft.network.chat.Component.literal(value.body().content()))
-                    : net.minecraft.network.chat.Component.literal(filtered);
-            // Recorded signatures authenticate another connection and cannot be reused.
-            return RewriteResult.send(new net.minecraft.network.protocol.game.ClientboundSystemChatPacket(
-                    value.chatType().decorate(content), false));
         }
         return null;
     }
