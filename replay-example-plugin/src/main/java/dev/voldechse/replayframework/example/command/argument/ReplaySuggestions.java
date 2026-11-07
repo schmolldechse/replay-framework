@@ -1,5 +1,6 @@
 package dev.voldechse.replayframework.example.command.argument;
 
+import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import com.mojang.brigadier.suggestion.Suggestions;
@@ -15,6 +16,7 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
+import org.bukkit.Bukkit;
 
 /** Non-blocking Brigadier suggestion providers for the Example command tree. */
 public final class ReplaySuggestions {
@@ -38,6 +40,10 @@ public final class ReplaySuggestions {
 
     public SuggestionProvider<CommandSourceStack> metadataKeys() {
         return this::suggestMetadataKeys;
+    }
+
+    public SuggestionProvider<CommandSourceStack> worlds() {
+        return this::suggestWorlds;
     }
 
     private CompletableFuture<Suggestions> suggestReplayIds(
@@ -94,6 +100,14 @@ public final class ReplaySuggestions {
         if (runtime != null) {
             runtime.metadataKeys().keySet().forEach(builder::suggest);
         }
+        return builder.buildFuture();
+    }
+
+    private CompletableFuture<Suggestions> suggestWorlds(
+            CommandContext<CommandSourceStack> context,
+            SuggestionsBuilder builder) {
+        Bukkit.getWorlds().forEach(world ->
+                builder.suggest(StringArgumentType.escapeIfRequired(world.getName())));
         return builder.buildFuture();
     }
 
