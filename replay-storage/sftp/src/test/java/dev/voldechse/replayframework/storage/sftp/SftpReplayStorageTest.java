@@ -19,6 +19,7 @@ import java.util.concurrent.Executors;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 final class SftpReplayStorageTest extends ReplayStorageContract {
 
@@ -149,9 +150,8 @@ final class SftpReplayStorageTest extends ReplayStorageContract {
 
     private static String requiredProperty(String name) {
         String value = System.getProperty(name);
-        if (value == null || value.isBlank()) {
-            throw new IllegalStateException("Missing required SFTP test property: " + name);
-        }
+        assumeTrue(value != null && !value.isBlank(),
+                "SFTP contract test requires system property " + name);
         return value;
     }
 }

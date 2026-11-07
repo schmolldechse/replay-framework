@@ -145,7 +145,6 @@ final class CaptureRouterTest {
 
     private static CaptureBridge.CapturePacket packet(int packetId, byte[] payload) {
         return new CaptureBridge.CapturePacket(
-                UUID.randomUUID(),
                 100L,
                 20L,
                 0,

@@ -66,13 +66,13 @@ public final class Paper26PacketRegistry implements PacketRegistry {
             Map.entry(type("minecraft:move_entity_pos"), stateful()),
             Map.entry(type("minecraft:move_entity_pos_rot"), stateful()),
             Map.entry(type("minecraft:move_entity_rot"), stateful()),
-            Map.entry(type("minecraft:move_minecart_along_track"), unsupported()),
+            Map.entry(type("minecraft:move_minecart_along_track"), stateful()),
             Map.entry(type("minecraft:move_vehicle"), viewerLocalStateful()),
             Map.entry(type("minecraft:remove_entities"), stateful()),
             Map.entry(type("minecraft:rotate_head"), stateful()),
             Map.entry(type("minecraft:set_camera"), viewerLocalStateful()),
             Map.entry(type("minecraft:set_entity_data"), stateful()),
-            Map.entry(type("minecraft:set_entity_link"), unsupported()),
+            Map.entry(type("minecraft:set_entity_link"), stateful()),
             Map.entry(type("minecraft:set_entity_motion"), stateful()),
             Map.entry(type("minecraft:set_equipment"), stateful()),
             Map.entry(type("minecraft:set_experience"), viewerLocalStateful()),
@@ -83,7 +83,7 @@ public final class Paper26PacketRegistry implements PacketRegistry {
             Map.entry(type("minecraft:update_mob_effect"), stateful()),
             Map.entry(type("minecraft:remove_mob_effect"), stateful()),
             Map.entry(type("minecraft:projectile_power"), stateful()),
-            Map.entry(type("minecraft:waypoint"), unsupported()),
+            Map.entry(type("minecraft:waypoint"), viewerLocalStateful()),
             Map.entry(type("minecraft:player_abilities"), viewerLocalStateful()),
             Map.entry(type("minecraft:player_position"), viewerLocalStateful()),
             Map.entry(type("minecraft:player_rotation"), viewerLocalStateful()),
@@ -113,11 +113,11 @@ public final class Paper26PacketRegistry implements PacketRegistry {
             Map.entry(type("minecraft:set_player_inventory"), viewerLocalStateful()),
             Map.entry(type("minecraft:player_info_remove"), stateful()),
             Map.entry(type("minecraft:player_info_update"), stateful()),
-            Map.entry(type("minecraft:set_objective"), unsupported()),
-            Map.entry(type("minecraft:set_display_objective"), unsupported()),
-            Map.entry(type("minecraft:set_player_team"), unsupported()),
-            Map.entry(type("minecraft:set_score"), stateful()),
-            Map.entry(type("minecraft:reset_score"), stateful()),
+            Map.entry(type("minecraft:set_objective"), viewerLocalStateful()),
+            Map.entry(type("minecraft:set_display_objective"), viewerLocalStateful()),
+            Map.entry(type("minecraft:set_player_team"), viewerLocalStateful()),
+            Map.entry(type("minecraft:set_score"), viewerLocalStateful()),
+            Map.entry(type("minecraft:reset_score"), viewerLocalStateful()),
             Map.entry(type("minecraft:boss_event"), stateful()),
             Map.entry(type("minecraft:tab_list"), viewerLocalStateful()),
             Map.entry(type("minecraft:update_advancements"), stateful()),
@@ -149,19 +149,19 @@ public final class Paper26PacketRegistry implements PacketRegistry {
             Map.entry(type("minecraft:show_dialog"), configurable()),
 
             // Short-lived effects are replayed in order but never copied to checkpoints.
-            Map.entry(type("minecraft:animate"), unsupported()),
+            Map.entry(type("minecraft:animate"), ephemeral()),
             Map.entry(type("minecraft:award_stats"), stateful()),
-            Map.entry(type("minecraft:block_destruction"), unsupported()),
+            Map.entry(type("minecraft:block_destruction"), ephemeral()),
             Map.entry(type("minecraft:block_event"), ephemeral()),
             Map.entry(type("minecraft:damage_event"), ephemeral()),
-            Map.entry(type("minecraft:entity_event"), unsupported()),
+            Map.entry(type("minecraft:entity_event"), ephemeral()),
             Map.entry(type("minecraft:explode"), ephemeral()),
             Map.entry(type("minecraft:game_event"), ephemeral()),
             Map.entry(type("minecraft:hurt_animation"), ephemeral()),
             Map.entry(type("minecraft:level_event"), ephemeral()),
             Map.entry(type("minecraft:level_particles"), ephemeral()),
             Map.entry(type("minecraft:sound"), ephemeral()),
-            Map.entry(type("minecraft:sound_entity"), unsupported()),
+            Map.entry(type("minecraft:sound_entity"), ephemeral()),
             Map.entry(type("minecraft:stop_sound"), ephemeral()),
             Map.entry(type("minecraft:take_item_entity"), ephemeral()),
             Map.entry(type("minecraft:player_combat_end"), ephemeral()),
@@ -227,7 +227,8 @@ public final class Paper26PacketRegistry implements PacketRegistry {
                         classification.disposition(),
                         classification.captureByDefault(),
                         classification.replayable(),
-                        classification.checkpointRelevant(),
+                        classification.checkpointRelevant()
+                                && playbackScope(packet.typeName(), classification) != PacketDescriptor.PlaybackScope.VIEWER_LOCAL,
                         packet.codecKey(),
                         playbackScope(packet.typeName(), classification)));
             } catch (IllegalArgumentException exception) {
@@ -240,6 +241,10 @@ public final class Paper26PacketRegistry implements PacketRegistry {
         } catch (IllegalArgumentException exception) {
             throw incompatible("Paper clientbound packet registry is not unique", exception);
         }
+    }
+
+    static boolean explicitlyClassifies(String typeName) {
+        return CLASSIFICATIONS.containsKey(typeName);
     }
 
     @Override

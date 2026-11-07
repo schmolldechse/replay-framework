@@ -4,6 +4,8 @@ import dev.voldechse.replayframework.storage.ReplayStorage;
 import dev.voldechse.replayframework.storage.ReplayStorageContract;
 import org.junit.jupiter.api.AfterAll;
 
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
+
 import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Path;
@@ -75,9 +77,8 @@ class S3ReplayStorageTest extends ReplayStorageContract {
 
     private static String requiredProperty(String name) {
         String value = System.getProperty(name);
-        if (value == null || value.isBlank()) {
-            throw new IllegalStateException("Missing required S3 test property: " + name);
-        }
+        assumeTrue(value != null && !value.isBlank(),
+                "S3 contract test requires system property " + name);
         return value;
     }
 }

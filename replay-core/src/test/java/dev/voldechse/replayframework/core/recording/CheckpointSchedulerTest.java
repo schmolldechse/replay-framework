@@ -63,7 +63,6 @@ final class CheckpointSchedulerTest {
 
     private static CapturedPacket packet(long captureTimeNanos, long serverTick) {
         return new CapturedPacket(
-                UUID.randomUUID(),
                 captureTimeNanos,
                 serverTick,
                 0,

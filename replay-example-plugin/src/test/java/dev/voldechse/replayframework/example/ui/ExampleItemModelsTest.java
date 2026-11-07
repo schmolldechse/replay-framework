@@ -17,14 +17,14 @@ class ExampleItemModelsTest {
         assertEquals(45, models.browser().replaySlots().size());
         assertEquals(10, models.hotbar().rewindSeconds());
         assertEquals(
-                "replay_example:item/speed_4",
+                "replay_example:speed_4",
                 models.item(ExampleItemModels.HotbarAction.SPEED_CYCLE)
                         .speedModels()
                         .get(PlaybackSpeed.QUADRUPLE)
                         .itemModelKey()
                         .orElseThrow());
         assertEquals(
-                Optional.of("replay_example:item/play"),
+                Optional.of("replay_example:play"),
                 models.item(ExampleItemModels.HotbarAction.TOGGLE_PLAY)
                         .alternateModel()
                         .flatMap(asset -> asset.itemModelKey()));
@@ -33,8 +33,8 @@ class ExampleItemModelsTest {
     @Test
     void rejectsUnknownModelsWithConfigurationPath() {
         String invalid = validConfiguration().replace(
-                "replay_example:item/leave",
-                "replay_example:item/not-present");
+                "replay_example:leave",
+                "replay_example:not-present");
 
         IllegalArgumentException failure = assertThrows(
                 IllegalArgumentException.class,
@@ -60,12 +60,12 @@ class ExampleItemModelsTest {
                     "rewindSeconds": 10,
                     "forwardSeconds": 10,
                     "items": [
-                      {"action":"TOGGLE_PLAY","slot":0,"material":"CLOCK","model":"replay_example:item/pause","alternateModel":"replay_example:item/play"},
-                      {"action":"REWIND","slot":1,"material":"CLOCK","model":"replay_example:item/rewind"},
-                      {"action":"FORWARD","slot":2,"material":"CLOCK","model":"replay_example:item/forward"},
-                      {"action":"RESTART","slot":3,"material":"CLOCK","model":"replay_example:item/restart"},
-                      {"action":"SPEED_CYCLE","slot":4,"material":"CLOCK","model":"replay_example:item/speed_1","speedModels":{"0.25":"replay_example:item/speed_0_25","0.5":"replay_example:item/speed_0_5","1":"replay_example:item/speed_1","2":"replay_example:item/speed_2","4":"replay_example:item/speed_4"}},
-                      {"action":"LEAVE","slot":8,"material":"BARRIER","model":"replay_example:item/leave"}
+                      {"action":"TOGGLE_PLAY","slot":0,"material":"CLOCK","model":"replay_example:pause","alternateModel":"replay_example:play"},
+                      {"action":"REWIND","slot":1,"material":"CLOCK","model":"replay_example:rewind"},
+                      {"action":"FORWARD","slot":2,"material":"CLOCK","model":"replay_example:forward"},
+                      {"action":"RESTART","slot":3,"material":"CLOCK","model":"replay_example:restart"},
+                      {"action":"SPEED_CYCLE","slot":4,"material":"CLOCK","model":"replay_example:speed_1","speedModels":{"0.25":"replay_example:speed_0_25","0.5":"replay_example:speed_0_5","1":"replay_example:speed_1","2":"replay_example:speed_2","4":"replay_example:speed_4"}},
+                      {"action":"LEAVE","slot":8,"material":"BARRIER","model":"replay_example:leave"}
                     ]
                   }
                 }

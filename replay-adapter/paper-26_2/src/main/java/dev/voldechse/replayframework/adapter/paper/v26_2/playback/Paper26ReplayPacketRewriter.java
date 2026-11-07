@@ -43,31 +43,6 @@ import net.minecraft.world.entity.ai.attributes.AttributeInstance;
  * packets are handed to the version-bound identity transformer.
  */
 public final class Paper26ReplayPacketRewriter {
-    private static final Set<String> VIEWER_LOCAL = Set.of(
-            "minecraft:player_position",
-            "minecraft:player_rotation",
-            "minecraft:player_abilities",
-            "minecraft:set_health",
-            "minecraft:set_experience",
-            "minecraft:respawn",
-            "minecraft:container_close",
-            "minecraft:container_set_content",
-            "minecraft:container_set_data",
-            "minecraft:container_set_slot",
-            "minecraft:set_cursor_item",
-            "minecraft:set_held_slot",
-            "minecraft:set_player_inventory",
-            "minecraft:move_vehicle",
-            "minecraft:set_camera",
-            "minecraft:player_look_at",
-            "minecraft:set_action_bar_text",
-            "minecraft:open_screen",
-            "minecraft:mount_screen_open",
-            "minecraft:player_combat_end",
-            "minecraft:player_combat_enter",
-            "minecraft:player_combat_kill",
-            "minecraft:tab_list");
-
     private static final Set<String> IDENTITY_BEARING = Set.of(
             "minecraft:add_entity",
             "minecraft:animate",
@@ -97,13 +72,7 @@ public final class Paper26ReplayPacketRewriter {
             "minecraft:player_chat",
             "minecraft:projectile_power",
             "minecraft:take_item_entity",
-            "minecraft:sound_entity",
-            "minecraft:set_objective",
-            "minecraft:set_display_objective",
-            "minecraft:set_player_team",
-            "minecraft:set_score",
-            "minecraft:reset_score",
-            "minecraft:waypoint");
+            "minecraft:sound_entity");
 
     private final PacketRegistry registry;
     private final PlaybackIdentityContext context;
@@ -151,6 +120,9 @@ public final class Paper26ReplayPacketRewriter {
                 && descriptor.playbackScope() != PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES) {
             throw incompatible("identity-bearing Paper packet has an invalid playback scope");
         }
+        if (descriptor.playbackScope() == PacketDescriptor.PlaybackScope.VIEWER_LOCAL) {
+            return RewriteResult.dropLocal("recorded connection state does not belong to the observer");
+        }
         RewriteResult payloadResult = rewritePayloadSensitive(decodedPacket, packetName);
         if (payloadResult != null) {
             return payloadResult;
@@ -192,13 +164,24 @@ public final class Paper26ReplayPacketRewriter {
                         "game-event payload changes the current live observer's local state");
             }
         }
-        if ("minecraft:player_chat".equals(packetName)) {
-            net.minecraft.network.protocol.game.ClientboundPlayerChatPacket value =
-                    require(packet, net.minecraft.network.protocol.game.ClientboundPlayerChatPacket.class);
-            if (value.sender().equals(context.observerId())) {
-                return RewriteResult.dropLocal(
-                        "recorded player chat belongs to the live replay observer");
+        if ("minecraft:system_chat".equals(packetName)) {
+            var value = require(packet, net.minecraft.network.protocol.game.ClientboundSystemChatPacket.class);
+            if (value.overlay()) {
+                return RewriteResult.dropLocal("recorded action bar belongs to its original viewer");
             }
+        }
+        if ("minecraft:player_chat".equals(packetName)) {
+            var value = require(packet, net.minecraft.network.protocol.game.ClientboundPlayerChatPacket.class);
+            if (value.filterMask().isFullyFiltered()) {
+                return RewriteResult.dropLocal("recorded chat was fully filtered");
+            }
+            String filtered = value.filterMask().apply(value.body().content());
+            var content = value.filterMask().isEmpty()
+                    ? Optional.ofNullable(value.unsignedContent()).orElseGet(() -> net.minecraft.network.chat.Component.literal(value.body().content()))
+                    : net.minecraft.network.chat.Component.literal(filtered);
+            // Recorded signatures authenticate another connection and cannot be reused.
+            return RewriteResult.send(new net.minecraft.network.protocol.game.ClientboundSystemChatPacket(
+                    value.chatType().decorate(content), false));
         }
         return null;
     }
@@ -230,7 +213,7 @@ public final class Paper26ReplayPacketRewriter {
     }
 
     public static boolean isViewerLocal(String identifier) {
-        return VIEWER_LOCAL.contains(identifier);
+        return dev.voldechse.replayframework.adapter.playback.NeutralObserverPolicy.isViewerLocal(identifier);
     }
 
     public static boolean isViewerUi(String identifier) {
@@ -333,6 +316,51 @@ public final class Paper26ReplayPacketRewriter {
                         readByteField(value, "xRot", packetName),
                         value.isOnGround());
             }
+            case "minecraft:block_destruction" -> {
+                var value = require(packet, net.minecraft.network.protocol.game.ClientboundBlockDestructionPacket.class);
+                yield new net.minecraft.network.protocol.game.ClientboundBlockDestructionPacket(
+                        mapEntityId(value.getId()), value.getPos(), value.getProgress());
+            }
+            case "minecraft:animate" -> {
+                var value = require(packet, net.minecraft.network.protocol.game.ClientboundAnimatePacket.class);
+                yield decodeEntityEffect(value.getId(), value.getAction(), false);
+            }
+            case "minecraft:entity_event" -> {
+                var value = require(packet, net.minecraft.network.protocol.game.ClientboundEntityEventPacket.class);
+                yield decodeEntityEffect(readIntField(value, "entityId", packetName), value.getEventId(), true);
+            }
+            case "minecraft:move_minecart_along_track" -> {
+                var value = require(packet, net.minecraft.network.protocol.game.ClientboundMoveMinecartPacket.class);
+                yield new net.minecraft.network.protocol.game.ClientboundMoveMinecartPacket(
+                        mapEntityId(value.entityId()), value.lerpSteps());
+            }
+            case "minecraft:set_entity_link" -> {
+                var value = require(packet, net.minecraft.network.protocol.game.ClientboundSetEntityLinkPacket.class);
+                FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
+                try {
+                    buffer.writeInt(mapEntityId(value.getSourceId()));
+                    buffer.writeInt(value.getDestId() == 0 ? 0 : mapEntityId(value.getDestId()));
+                    yield net.minecraft.network.protocol.game.ClientboundSetEntityLinkPacket.STREAM_CODEC.decode(buffer);
+                } finally {
+                    buffer.release();
+                }
+            }
+            case "minecraft:sound_entity" -> {
+                var value = require(packet, net.minecraft.network.protocol.game.ClientboundSoundEntityPacket.class);
+                var buffer = new net.minecraft.network.RegistryFriendlyByteBuf(Unpooled.buffer(),
+                        net.minecraft.core.RegistryAccess.fromRegistryOfRegistries(net.minecraft.core.registries.BuiltInRegistries.REGISTRY));
+                try {
+                    net.minecraft.sounds.SoundEvent.STREAM_CODEC.encode(buffer, value.getSound());
+                    buffer.writeEnum(value.getSource());
+                    buffer.writeVarInt(mapEntityId(value.getId()));
+                    buffer.writeFloat(value.getVolume());
+                    buffer.writeFloat(value.getPitch());
+                    buffer.writeLong(value.getSeed());
+                    yield net.minecraft.network.protocol.game.ClientboundSoundEntityPacket.STREAM_CODEC.decode(buffer);
+                } finally {
+                    buffer.release();
+                }
+            }
             case "minecraft:rotate_head" -> rewriteHeadRotation(packet, packetName);
             case "minecraft:remove_entities" -> {
                 ClientboundRemoveEntitiesPacket value = require(packet, ClientboundRemoveEntitiesPacket.class);
@@ -378,19 +406,6 @@ public final class Paper26ReplayPacketRewriter {
                         .map(this::mapUuid)
                         .toList());
             }
-            case "minecraft:player_chat" -> {
-                net.minecraft.network.protocol.game.ClientboundPlayerChatPacket value =
-                        require(packet, net.minecraft.network.protocol.game.ClientboundPlayerChatPacket.class);
-                yield new net.minecraft.network.protocol.game.ClientboundPlayerChatPacket(
-                        value.globalIndex(),
-                        mapUuid(value.sender()),
-                        value.index(),
-                        value.signature(),
-                        value.body(),
-                        value.unsignedContent(),
-                        value.filterMask(),
-                        value.chatType());
-            }
             case "minecraft:player_info_update" -> rewritePlayerInfo(packet);
             case "minecraft:projectile_power" -> {
                 net.minecraft.network.protocol.game.ClientboundProjectilePowerPacket value =
@@ -432,6 +447,24 @@ public final class Paper26ReplayPacketRewriter {
             default -> throw incompatible(
                     "no explicit Paper 26.2 identity rewrite exists for " + packetName);
         };
+    }
+
+    /** Rebuilds packets whose public constructor requires a live world entity. */
+    private Object decodeEntityEffect(int entityId, int effect, boolean event) {
+        FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
+        try {
+            if (event) {
+                buffer.writeInt(mapEntityId(entityId));
+            } else {
+                buffer.writeVarInt(mapEntityId(entityId));
+            }
+            buffer.writeByte(effect);
+            return event
+                    ? net.minecraft.network.protocol.game.ClientboundEntityEventPacket.STREAM_CODEC.decode(buffer)
+                    : net.minecraft.network.protocol.game.ClientboundAnimatePacket.STREAM_CODEC.decode(buffer);
+        } finally {
+            buffer.release();
+        }
     }
 
     private Object rewriteAttributes(Object packet) {
@@ -495,7 +528,7 @@ public final class Paper26ReplayPacketRewriter {
                     return new ClientboundPlayerInfoUpdatePacket.Entry(
                             mappedId,
                             profile,
-                            entry.listed(),
+                            false,
                             entry.latency(),
                             entry.gameMode(),
                             entry.displayName() == null && entry.profile() != null

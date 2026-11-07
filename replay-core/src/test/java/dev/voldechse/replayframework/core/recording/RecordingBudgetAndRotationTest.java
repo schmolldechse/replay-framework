@@ -255,7 +255,7 @@ final class RecordingBudgetAndRotationTest {
 
     private static CapturedPacket packet(long captureTimeNanos, int sequence, byte[] payload) {
         return new CapturedPacket(
-                UUID.randomUUID(), captureTimeNanos, sequence, sequence,
+                captureTimeNanos, sequence, sequence,
                 PacketPhase.PLAY, 1, payload);
     }
 

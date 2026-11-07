@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -31,12 +32,12 @@ final class Paper26PacketRegistryTest {
     }
 
     @Test
-    void everyPaperPlayClientboundPacketHasExactlyOneDescriptor() {
+    void everyPaperClientboundPacketHasExactlyOneDescriptor() {
         Paper26ProtocolIntrospector.ProtocolSnapshot snapshot =
                 new Paper26ProtocolIntrospector().inspect();
         Paper26PacketRegistry registry = Paper26PacketRegistry.fromSnapshot(snapshot);
 
-        Set<PacketKey> expectedKeys = snapshot.clientboundPlayPackets().stream()
+        Set<PacketKey> expectedKeys = snapshot.clientboundPackets().stream()
                 .map(PacketKey::from)
                 .collect(java.util.stream.Collectors.toUnmodifiableSet());
         Set<PacketKey> actualKeys = registry.descriptors().stream()
@@ -44,10 +45,10 @@ final class Paper26PacketRegistryTest {
                 .collect(java.util.stream.Collectors.toUnmodifiableSet());
 
         assertEquals(expectedKeys, actualKeys);
-        assertEquals(snapshot.clientboundPlayPackets().size(), registry.descriptors().size());
+        assertEquals(snapshot.clientboundPackets().size(), registry.descriptors().size());
 
         Map<PacketKey, Paper26ProtocolIntrospector.PacketType> expectedByKey =
-                snapshot.clientboundPlayPackets().stream()
+                snapshot.clientboundPackets().stream()
                         .collect(java.util.stream.Collectors.toUnmodifiableMap(
                                 PacketKey::from,
                                 packetType -> packetType));
@@ -60,11 +61,11 @@ final class Paper26PacketRegistryTest {
     }
 
     @Test
-    void unknownPacketTypeRejectsAdapterConstruction() {
+    void unknownPacketTypeIsCapturedButNeverReplayed() {
         Paper26ProtocolIntrospector.ProtocolSnapshot snapshot =
                 new Paper26ProtocolIntrospector().inspect();
         List<Paper26ProtocolIntrospector.PacketType> packets =
-                new ArrayList<>(snapshot.clientboundPlayPackets());
+                new ArrayList<>(snapshot.clientboundPackets());
         packets.add(new Paper26ProtocolIntrospector.PacketType(
                 PacketPhase.PLAY,
                 PacketDescriptor.Direction.CLIENTBOUND,
@@ -72,16 +73,15 @@ final class Paper26PacketRegistryTest {
                 Integer.MAX_VALUE,
                 "paper-26.2/play.clientbound.synthetic.unknown"));
 
-        assertThrows(
-                IncompatibleAdapterException.class,
-                () -> Paper26PacketRegistry.fromSnapshot(new Paper26ProtocolIntrospector.ProtocolSnapshot(
-                        snapshot.minecraftVersion(),
-                        snapshot.protocolVersion(),
-                        packets)));
+        Paper26PacketRegistry registry = Paper26PacketRegistry.fromSnapshot(
+                new Paper26ProtocolIntrospector.ProtocolSnapshot(
+                        snapshot.minecraftVersion(), snapshot.protocolVersion(), packets));
+        assertTrue(registry.captureAllowed(PacketPhase.PLAY, PacketDescriptor.Direction.CLIENTBOUND, Integer.MAX_VALUE));
+        assertFalse(registry.replayAllowed(PacketPhase.PLAY, PacketDescriptor.Direction.CLIENTBOUND, Integer.MAX_VALUE));
     }
 
     @Test
-    void controlAndUnsupportedPacketsAreNeverAllowed() {
+    void controlAndUnsupportedPacketsAreCapturedButNeverReplayed() {
         Paper26ProtocolIntrospector.ProtocolSnapshot snapshot =
                 new Paper26ProtocolIntrospector().inspect();
         Paper26PacketRegistry registry = Paper26PacketRegistry.fromSnapshot(snapshot);
@@ -93,10 +93,10 @@ final class Paper26PacketRegistryTest {
 
         assertFalse(blocked.isEmpty());
         for (PacketDescriptor descriptor : blocked) {
-            assertFalse(descriptor.captureByDefault());
+            assertTrue(descriptor.captureByDefault());
             assertFalse(descriptor.replayable());
             assertFalse(descriptor.checkpointRelevant());
-            assertFalse(registry.captureAllowed(
+            assertTrue(registry.captureAllowed(
                     descriptor.phase(), descriptor.direction(), descriptor.packetId()));
             assertFalse(registry.replayAllowed(
                     descriptor.phase(), descriptor.direction(), descriptor.packetId()));
@@ -110,7 +110,7 @@ final class Paper26PacketRegistryTest {
         Paper26PacketRegistry first = Paper26PacketRegistry.fromSnapshot(snapshot);
 
         List<Paper26ProtocolIntrospector.PacketType> reversed =
-                new ArrayList<>(snapshot.clientboundPlayPackets());
+                new ArrayList<>(snapshot.clientboundPackets());
         java.util.Collections.reverse(reversed);
         Paper26PacketRegistry second = Paper26PacketRegistry.fromSnapshot(
                 new Paper26ProtocolIntrospector.ProtocolSnapshot(
@@ -136,7 +136,7 @@ final class Paper26PacketRegistryTest {
 
         assertEquals("paper-26.2", adapter.descriptor().adapterId());
         assertEquals(snapshot.protocolVersion(), adapter.descriptor().protocolVersion());
-        assertEquals(1, adapter.descriptor().adapterFormatRevision());
+        assertEquals(3, adapter.descriptor().adapterFormatRevision());
         assertEquals(registry.fingerprint(), adapter.descriptor().registryFingerprint());
         assertEquals(registry.fingerprint(), adapter.packetRegistry().fingerprint());
         adapter.verifyDescriptorAndRegistry();
@@ -161,6 +161,11 @@ final class Paper26PacketRegistryTest {
 
     private static PlaybackBridge noOpPlaybackBridge() {
         return new PlaybackBridge() {
+            @Override
+            public void setIdentityContext(dev.voldechse.replayframework.adapter.playback.PlaybackIdentityContext context) {
+                java.util.Objects.requireNonNull(context);
+            }
+
             @Override
             public void send(dev.voldechse.replayframework.format.RawPacketFrame frame) {
             }

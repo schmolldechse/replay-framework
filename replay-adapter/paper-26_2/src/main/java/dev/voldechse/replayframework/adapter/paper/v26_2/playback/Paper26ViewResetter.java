@@ -16,7 +16,6 @@ import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.protocol.game.ClientboundAddEntityPacket;
 import net.minecraft.network.protocol.game.ClientboundBossEventPacket;
-import net.minecraft.network.protocol.game.ClientboundClearTitlesPacket;
 import net.minecraft.network.protocol.game.ClientboundContainerClosePacket;
 import net.minecraft.network.protocol.game.ClientboundForgetLevelChunkPacket;
 import net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket;
@@ -44,6 +43,7 @@ final class Paper26ViewResetter {
     private final Consumer<Object> writer;
     private final Consumer<Throwable> failureHandler;
     private final ReplayViewState state = new ReplayViewState();
+    private final java.util.Map<Integer, net.minecraft.core.BlockPos> blockCracks = new java.util.HashMap<>();
 
     Paper26ViewResetter(
             PacketRegistry registry,
@@ -58,6 +58,13 @@ final class Paper26ViewResetter {
     void observe(Object packet) {
         Objects.requireNonNull(packet, "packet");
 
+        if (packet instanceof net.minecraft.network.protocol.game.ClientboundBlockDestructionPacket crack) {
+            if (crack.getProgress() >= 0 && crack.getProgress() < 10) {
+                blockCracks.put(crack.getId(), crack.getPos());
+            } else {
+                blockCracks.remove(crack.getId());
+            }
+        }
         if (packet instanceof ClientboundAddEntityPacket addEntity) {
             state.entityIds.add(addEntity.getId());
         } else if (packet instanceof ClientboundRemoveEntitiesPacket removeEntities) {
@@ -140,7 +147,9 @@ final class Paper26ViewResetter {
      */
     void reset() {
         List<Object> packets = new ArrayList<>();
-        packets.add(new ClientboundClearTitlesPacket(true));
+        blockCracks.forEach((id, pos) -> packets.add(
+                new net.minecraft.network.protocol.game.ClientboundBlockDestructionPacket(id, pos, -1)));
+
 
         if (!state.entityIds.isEmpty()) {
             packets.add(new ClientboundRemoveEntitiesPacket(state.entityIds.stream()
@@ -177,6 +186,7 @@ final class Paper26ViewResetter {
                 writer.accept(packet);
             }
             state.clear();
+        blockCracks.clear();
         } catch (Throwable failure) {
             reportFailure(failure);
             throw failure;

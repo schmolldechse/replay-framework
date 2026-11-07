@@ -241,6 +241,10 @@ class ExampleViewerEnvironmentTest {
                 case "addPotionEffect" -> true;
                 case "getItemOnCursor" -> null;
                 case "setItemOnCursor" -> null;
+                case "getScoreboard" -> Proxy.newProxyInstance(
+                        org.bukkit.scoreboard.Scoreboard.class.getClassLoader(),
+                        new Class<?>[] {org.bukkit.scoreboard.Scoreboard.class},
+                        (instance, called, arguments) -> defaultValue(called.getReturnType()));
                 case "getMaxHealth" -> 20.0;
                 case "equals" -> proxy == args[0];
                 case "hashCode" -> id.hashCode();

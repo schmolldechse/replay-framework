@@ -30,11 +30,11 @@ final class Paper26NativePacketCodecTest {
     void encodesARealClientboundPacketWithoutTransportFraming() {
         Paper26PacketRegistry registry = Paper26PacketRegistry.discover();
         Paper26CheckpointEncoder.PacketBlueprint blueprint = new Paper26CheckpointEncoder.PacketBlueprint(
-                "play.clientbound.minecraft:change_difficulty",
+                "play.clientbound.minecraft:set_border_center",
                 Paper26CheckpointEncoder.CheckpointPacketFamily.GLOBAL_STATE,
                 "minecraft:world",
                 "global",
-                new ClientboundChangeDifficultyPacket(Difficulty.NORMAL, false));
+                borderCenter());
         Paper26NativePacketCodec codec = Paper26NativePacketCodec.forTesting(
                 registry,
                 GameProtocols.CLIENTBOUND_TEMPLATE.bind(
@@ -52,9 +52,14 @@ final class Paper26NativePacketCodecTest {
         assertEquals(PacketPhase.PLAY, encoded.phase());
         assertEquals(PacketDescriptor.Direction.CLIENTBOUND, encoded.direction());
         byte[] payload = encoded.payload();
-        assertEquals(2, payload.length);
-        assertEquals(2, payload[0]);
-        assertEquals(0, payload[1]);
+        assertEquals(16, payload.length);
+        var buffer = new net.minecraft.network.FriendlyByteBuf(Unpooled.wrappedBuffer(payload));
+        try {
+            assertEquals(32.0, buffer.readDouble());
+            assertEquals(-16.0, buffer.readDouble());
+        } finally {
+            buffer.release();
+        }
         assertArrayEquals(payload, encoded.payload());
         assertTruePayloadIsDetached(encoded, payload);
     }
@@ -89,6 +94,12 @@ final class Paper26NativePacketCodecTest {
                         new Paper26CheckpointEncoder.CheckpointSnapshot(java.util.List.of())),
                 ignored -> null,
                 Runnable::run);
+    }
+
+    private static net.minecraft.network.protocol.game.ClientboundSetBorderCenterPacket borderCenter() {
+        var border = new net.minecraft.world.level.border.WorldBorder();
+        border.setCenter(32.0, -16.0);
+        return new net.minecraft.network.protocol.game.ClientboundSetBorderCenterPacket(border);
     }
 
     private static void assertTruePayloadIsDetached(

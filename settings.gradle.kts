@@ -26,6 +26,7 @@ include(
     "replay-format",
     "replay-adapter:api",
     "replay-adapter:paper-26_2",
+    "replay-adapter:paper-26_3",
     "replay-storage:api",
     "replay-storage:local",
     "replay-storage:s3",

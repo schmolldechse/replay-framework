@@ -169,7 +169,7 @@ final class ReplayViewerOutboundGate extends ChannelOutboundHandlerAdapter {
         // The Example viewer owns these packets while playback is active.
         // They are live control/status UI, not replay state that should be
         // suppressed from the observer.
-        if (Paper26ReplayPacketRewriter.isViewerUi(value.typeName())) {
+        if (value.playbackScope() == PacketDescriptor.PlaybackScope.VIEWER_LOCAL) {
             return false;
         }
         return value.replayable()

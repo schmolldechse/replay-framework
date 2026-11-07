@@ -295,14 +295,14 @@ final class ReplayFinalizerTest {
                     adapter,
                     router,
                     repository,
-                    (scope, participants) -> CompletableFuture.completedFuture(
+                    recordingRequest -> CompletableFuture.completedFuture(
                             new ResolvedRecordingScope(
-                                    scope,
+                                    recordingRequest.scope(),
                                     1L,
                                     Set.of(),
                                     List.of(),
                                     CapturePolicy.builder().build(),
-                                    participants,
+                                    recordingRequest.participants(),
                                     packet -> true)),
                     new RecordingCoordinator.RecordingTarget(
                             ReplayStorageBackend.LOCAL,

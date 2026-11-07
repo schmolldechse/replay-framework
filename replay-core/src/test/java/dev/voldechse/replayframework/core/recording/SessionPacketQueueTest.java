@@ -117,7 +117,6 @@ final class SessionPacketQueueTest {
 
     private static CapturedPacket packet(byte[] payload) {
         return new CapturedPacket(
-                java.util.UUID.randomUUID(),
                 10L,
                 1L,
                 0,
