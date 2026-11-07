@@ -312,6 +312,166 @@ class PlaybackBufferCacheTest {
     }
 
     @Test
+    void loadedAdjacentSegmentsCoverInitialAndQuietTimelineIntervals(
+            @TempDir Path temporaryDirectory) throws IOException {
+        byte[] firstBytes = writeSegment(temporaryDirectory, List.of(
+                frame(30_000_000L, 1),
+                frame(1_000_000_000L, 2)));
+        byte[] secondBytes = writeSegment(temporaryDirectory, List.of(
+                frame(2_000_000_000L, 3),
+                frame(3_000_000_000L, 4)));
+        ArtifactFile firstArtifact = segmentArtifact(firstBytes, 0);
+        ArtifactFile secondArtifact = segmentArtifact(secondBytes, 1);
+        ReplayArtifactReader.VerifiedReplay replay = verifiedReplay(
+                List.of(firstArtifact, secondArtifact),
+                Duration.ofSeconds(4L));
+        CountingStorage storage = new CountingStorage();
+        storage.artifacts.put(firstArtifact.path(), firstBytes);
+        storage.artifacts.put(secondArtifact.path(), secondBytes);
+        ReplayArtifactReader reader = reader(storage, temporaryDirectory, DIRECT_EXECUTOR);
+        DiskSegmentCache cache = new DiskSegmentCache(
+                temporaryDirectory.resolve("cache"),
+                1024L * 1024L,
+                reader,
+                DIRECT_EXECUTOR);
+        PlaybackBuffer buffer = new PlaybackBuffer(
+                replay,
+                List.of(
+                        new SegmentCache.SegmentRef(
+                                0, firstArtifact, 30_000_000L, 1_000_000_000L),
+                        new SegmentCache.SegmentRef(
+                                1, secondArtifact, 2_000_000_000L, 3_000_000_000L)),
+                reader,
+                cache,
+                new ReplaySegmentReader(),
+                PlaybackBufferOptions.builder()
+                        .preloadAhead(Duration.ofSeconds(4L))
+                        .minimumResumeBuffer(Duration.ofSeconds(3L))
+                        .memoryBudgetBytes(1024L * 1024L)
+                        .diskBudgetBytes(1024L * 1024L)
+                        .build(),
+                DIRECT_EXECUTOR);
+
+        PlaybackBuffer.BufferProgress initial = buffer.ensureAvailable(
+                        Duration.ZERO,
+                        PlaybackSpeed.NORMAL,
+                        PrefetchPlanner.Direction.FORWARD)
+                .toCompletableFuture()
+                .join();
+        PlaybackBuffer.BufferProgress quietGap = buffer.progress(Duration.ofMillis(1_500L));
+
+        assertEquals(Duration.ofSeconds(4L), initial.bufferedAhead());
+        assertTrue(initial.minimumResumeSatisfied());
+        assertEquals(Duration.ofMillis(1_500L), quietGap.bufferedBehind());
+        assertEquals(Duration.ofMillis(2_500L), quietGap.bufferedAhead());
+        buffer.close();
+        cache.close();
+    }
+
+    @Test
+    void logicalCoverageStopsAtAnUnloadedSegment(@TempDir Path temporaryDirectory)
+            throws IOException {
+        byte[] firstBytes = writeSegment(temporaryDirectory, List.of(
+                frame(30_000_000L, 1),
+                frame(1_000_000_000L, 2)));
+        byte[] secondBytes = writeSegment(temporaryDirectory, List.of(
+                frame(2_000_000_000L, 3),
+                frame(3_000_000_000L, 4)));
+        ArtifactFile firstArtifact = segmentArtifact(firstBytes, 0);
+        ArtifactFile secondArtifact = segmentArtifact(secondBytes, 1);
+        ReplayArtifactReader.VerifiedReplay replay = verifiedReplay(
+                List.of(firstArtifact, secondArtifact),
+                Duration.ofSeconds(4L));
+        CountingStorage storage = new CountingStorage();
+        storage.artifacts.put(firstArtifact.path(), firstBytes);
+        storage.artifacts.put(secondArtifact.path(), secondBytes);
+        ReplayArtifactReader reader = reader(storage, temporaryDirectory, DIRECT_EXECUTOR);
+        DiskSegmentCache cache = new DiskSegmentCache(
+                temporaryDirectory.resolve("cache"),
+                1024L * 1024L,
+                reader,
+                DIRECT_EXECUTOR);
+        PlaybackBuffer buffer = new PlaybackBuffer(
+                replay,
+                List.of(
+                        new SegmentCache.SegmentRef(
+                                0, firstArtifact, 30_000_000L, 1_000_000_000L),
+                        new SegmentCache.SegmentRef(
+                                1, secondArtifact, 2_000_000_000L, 3_000_000_000L)),
+                reader,
+                cache,
+                new ReplaySegmentReader(),
+                PlaybackBufferOptions.builder()
+                        .minimumResumeBuffer(Duration.ofSeconds(1L))
+                        .memoryBudgetBytes(1024L * 1024L)
+                        .diskBudgetBytes(1024L * 1024L)
+                        .build(),
+                DIRECT_EXECUTOR);
+
+        buffer.framesBetween(Duration.ZERO, Duration.ofNanos(1_000_000_001L))
+                .toCompletableFuture()
+                .join();
+        PlaybackBuffer.BufferProgress quietGap = buffer.progress(Duration.ofMillis(1_500L));
+        PlaybackBuffer.BufferProgress nextSegmentStart = buffer.progress(Duration.ofSeconds(2L));
+
+        assertEquals(Duration.ofMillis(500L), quietGap.bufferedAhead());
+        assertFalse(quietGap.minimumResumeSatisfied());
+        assertEquals(Duration.ZERO, nextSegmentStart.bufferedAhead());
+        buffer.close();
+        cache.close();
+    }
+
+    @Test
+    void loadedFinalSegmentCoversUntilReplayDuration(@TempDir Path temporaryDirectory)
+            throws IOException {
+        byte[] firstBytes = writeSegment(temporaryDirectory, List.of(
+                frame(30_000_000L, 1),
+                frame(1_000_000_000L, 2)));
+        byte[] secondBytes = writeSegment(temporaryDirectory, List.of(
+                frame(2_000_000_000L, 3),
+                frame(3_000_000_000L, 4)));
+        ArtifactFile firstArtifact = segmentArtifact(firstBytes, 0);
+        ArtifactFile secondArtifact = segmentArtifact(secondBytes, 1);
+        ReplayArtifactReader.VerifiedReplay replay = verifiedReplay(
+                List.of(firstArtifact, secondArtifact),
+                Duration.ofSeconds(4L));
+        CountingStorage storage = new CountingStorage();
+        storage.artifacts.put(firstArtifact.path(), firstBytes);
+        storage.artifacts.put(secondArtifact.path(), secondBytes);
+        ReplayArtifactReader reader = reader(storage, temporaryDirectory, DIRECT_EXECUTOR);
+        DiskSegmentCache cache = new DiskSegmentCache(
+                temporaryDirectory.resolve("cache"),
+                1024L * 1024L,
+                reader,
+                DIRECT_EXECUTOR);
+        PlaybackBuffer buffer = new PlaybackBuffer(
+                replay,
+                List.of(
+                        new SegmentCache.SegmentRef(
+                                0, firstArtifact, 30_000_000L, 1_000_000_000L),
+                        new SegmentCache.SegmentRef(
+                                1, secondArtifact, 2_000_000_000L, 3_000_000_000L)),
+                reader,
+                cache,
+                new ReplaySegmentReader(),
+                PlaybackBufferOptions.builder()
+                        .memoryBudgetBytes(1024L * 1024L)
+                        .diskBudgetBytes(1024L * 1024L)
+                        .build(),
+                DIRECT_EXECUTOR);
+
+        buffer.framesBetween(Duration.ofSeconds(2L), Duration.ofNanos(3_000_000_001L))
+                .toCompletableFuture()
+                .join();
+        PlaybackBuffer.BufferProgress progress = buffer.progress(Duration.ofMillis(2_500L));
+
+        assertEquals(Duration.ofMillis(500L), progress.bufferedBehind());
+        assertEquals(Duration.ofMillis(1_500L), progress.bufferedAhead());
+        buffer.close();
+        cache.close();
+    }
+
+    @Test
     void failedDecodeDoesNotPublishPartialFrames(@TempDir Path temporaryDirectory)
             throws IOException {
         byte[] invalidSegment = "not-a-segment".getBytes();
@@ -377,14 +537,20 @@ class PlaybackBufferCacheTest {
     }
 
     private static ReplayArtifactReader.VerifiedReplay verifiedReplay(ArtifactFile artifact) {
+        return verifiedReplay(List.of(artifact), Duration.ofSeconds(4L));
+    }
+
+    private static ReplayArtifactReader.VerifiedReplay verifiedReplay(
+            List<ArtifactFile> artifacts,
+            Duration duration) {
         ReplayManifest manifest = new ReplayManifest(
                 REPLAY_ID.toString(),
                 "paper-26.2",
                 0,
                 "fingerprint",
                 ReplayManifest.CURRENT_FORMAT_REVISION,
-                Duration.ofSeconds(4L).toNanos(),
-                List.of(artifact));
+                duration.toNanos(),
+                artifacts);
         return new ReplayArtifactReader.VerifiedReplay(REPLAY_ID, manifest);
     }
 

@@ -362,41 +362,62 @@ public final class PlaybackBuffer implements AutoCloseable {
     }
 
     /**
-     * Calculates contiguous decoded coverage from segment bounds rather than
-     * packet timestamps. A quiet interval is buffered when its segment loaded.
+     * Calculates contiguous decoded coverage from logical segment intervals.
+     * Segment headers retain their physical first and last frame timestamps,
+     * while known quiet time before the first frame, between adjacent segments
+     * and after the final frame is covered by the neighboring loaded segment.
      */
     private LoadedCoverage loadedCoverage(long positionNanos) {
         synchronized (stateLock) {
-            long startNanos = positionNanos;
-            for (int index = segments.size() - 1; index >= 0; index--) {
-                SegmentCache.SegmentRef segment = segments.get(index);
-                if (!loadedSegments.contains(segment.ordinal())) {
-                    continue;
-                }
-                if (segment.startNanos() > startNanos) {
-                    continue;
-                }
-                if (segment.endNanos() < startNanos) {
-                    break;
-                }
-                startNanos = segment.startNanos();
+            int anchor = loadedSegmentCovering(positionNanos);
+            if (anchor < 0) {
+                return new LoadedCoverage(positionNanos, positionNanos);
             }
 
-            long endNanos = positionNanos;
-            for (SegmentCache.SegmentRef segment : segments) {
-                if (!loadedSegments.contains(segment.ordinal())) {
-                    continue;
-                }
-                if (segment.endNanos() < endNanos) {
-                    continue;
-                }
-                if (segment.startNanos() > endNanos) {
+            long startNanos = logicalStartNanos(anchor);
+            long endNanos = logicalEndNanos(anchor);
+            for (int index = anchor - 1; index >= 0; index--) {
+                SegmentCache.SegmentRef segment = segments.get(index);
+                if (!loadedSegments.contains(segment.ordinal())
+                        || logicalEndNanos(index) < startNanos) {
                     break;
                 }
-                endNanos = segment.endNanos();
+                startNanos = logicalStartNanos(index);
+            }
+            for (int index = anchor + 1; index < segments.size(); index++) {
+                SegmentCache.SegmentRef segment = segments.get(index);
+                if (!loadedSegments.contains(segment.ordinal())
+                        || logicalStartNanos(index) > endNanos) {
+                    break;
+                }
+                endNanos = logicalEndNanos(index);
             }
             return new LoadedCoverage(startNanos, endNanos);
         }
+    }
+
+    private int loadedSegmentCovering(long positionNanos) {
+        for (int index = 0; index < segments.size(); index++) {
+            SegmentCache.SegmentRef segment = segments.get(index);
+            if (loadedSegments.contains(segment.ordinal())
+                    && logicalStartNanos(index) <= positionNanos
+                    && logicalEndNanos(index) >= positionNanos) {
+                return index;
+            }
+        }
+        return -1;
+    }
+
+    private long logicalStartNanos(int index) {
+        return index == 0 ? 0L : segments.get(index).startNanos();
+    }
+
+    private long logicalEndNanos(int index) {
+        SegmentCache.SegmentRef segment = segments.get(index);
+        if (index == segments.size() - 1) {
+            return replay.manifest().durationNanos();
+        }
+        return Math.max(segment.endNanos(), segments.get(index + 1).startNanos());
     }
 
     private long validatePosition(Duration position) {
