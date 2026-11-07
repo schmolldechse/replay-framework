@@ -18,7 +18,7 @@ Chunks, light, block entities, entity lifecycle, movement, metadata, equipment, 
 
 `SEND` is scene-safe. `REWRITE` rebuilds native packets with session-local identities. `DROP_LOCAL` covers state belonging to the recorded connection: health, experience, inventory, viewer movement, abilities, camera, menus, titles, scoreboard, teams, waypoints, commands, recipes, dialogs, post-processing, and related UI. Equivalent live packets continue through the outbound gate. `BLOCKED` covers connection control and diagnostic traffic.
 
-Player chat becomes decorated unsigned system chat after applying the recorded filter mask. Action-bar chat is dropped. Explosions keep scene particles and sound but lose viewer knockback. Replay player profiles use mapped UUIDs and names, do not enter the live tab list, and never reuse a recorded chat session.
+Player chat becomes decorated unsigned system chat after applying the recorded filter mask. Action-bar chat is dropped. Explosions keep scene particles and sound but lose viewer knockback. Replay player profiles use mapped UUIDs while preserving their recorded profile names and properties. They do not enter the live tab list and never reuse a recorded chat session.
 
 Three PLAY packets distinguish this registry from 26.2. `swing_animation` is rewritten with a session-local entity ID while retaining hand and animation data. `add_transient_block` is replayed in order and is intentionally excluded from checkpoints; seek/reset unloads the replay chunks and therefore clears its client-side lifetime. `post_effects` belongs to the recorded viewer and is dropped.
 
@@ -153,7 +153,7 @@ Map IDs and integer entity references embedded in specialized metadata are not g
 | 68 | `player_combat_enter` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no | R+N |
 | 69 | `player_combat_kill` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no | R+N |
 | 70 | `player_info_remove` | Essential scene state: remove only replay-owned player profiles | REWRITE | yes | R |
-| 71 | `player_info_update` | Essential scene state: isolate player UUID/name, hide from tab list, and discard the recorded chat session | REWRITE | yes | R |
+| 71 | `player_info_update` | Essential scene state: isolate the player UUID, preserve the recorded profile name and properties, hide the replay profile from the tab list, and discard the recorded chat session | REWRITE | yes | R |
 | 72 | `player_look_at` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no | R+N |
 | 73 | `player_position` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no | R+N |
 | 74 | `player_rotation` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no | R+N |
