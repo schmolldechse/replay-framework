@@ -25,10 +25,12 @@ included example plugin demonstrates one possible implementation.
 
 ## Support boundary
 
-The current runtime supports **Paper 26.2** on **Java 26**. Replay content
-contains raw protocol packets and is therefore tied to the adapter and
-protocol version that produced it. At present, the supported adapter is
-`paper-26_2`; a replay is not a portable video file or a cross-version format.
+The runtime supports **Paper 26.2 and 26.3** on **Java 26**. It selects the
+matching adapter when the server starts; one runtime JAR contains both. Paper
+The verified build targets are Paper 26.2 build 135 and Paper 26.3 build 244 (stable). Replay content contains
+raw protocol packets and is tied to the adapter, protocol version, and packet
+registry that produced it. A replay is not a portable video file or a
+cross-version format.
 
 The runtime plugin requires [PacketEvents](https://github.com/retrooper/packetevents)
 as a Paper server dependency. PostgreSQL is required for the catalog and
@@ -56,16 +58,19 @@ The project is a Gradle Kotlin DSL multi-project build. Build the Paper runtime
 with:
 
 ```powershell
-.\gradlew.bat :replay-runtime-paper:build
+.\gradlew.bat :replay-runtime-paper:jar
 ```
 
-Use the reobfuscated runtime artifact produced in
+Use the bundled runtime artifact produced in
 `replay-runtime-paper/build/libs/` as the server plugin. Build the example
 integration independently when needed:
 
 ```powershell
-.\gradlew.bat :replay-example-plugin:build
+.\gradlew.bat :replay-example-plugin:jar
 ```
+
+The local `runServer` task uses the newest adapter, 26.3, by default. Set
+`-PminecraftVersion=26.2` to start a 26.2 development server instead.
 
 The relevant modules are:
 
@@ -75,6 +80,7 @@ The relevant modules are:
 | `replay-runtime-paper` | Paper plugin that composes and publishes the framework. |
 | `replay-core` | Recording, playback, artifact, metadata, and catalog orchestration. |
 | `replay-adapter:paper-26_2` | Paper 26.2 packet capture, checkpoints, and playback bridge. |
+| `replay-adapter:paper-26_3` | Paper 26.3 packet capture, checkpoints, and playback bridge. |
 | `replay-format` | Packet segment, checkpoint, index, and manifest codecs. |
 | `replay-storage:*` | Local, S3, and SFTP artifact storage implementations. |
 | `replay-database:postgresql` | PostgreSQL repositories, Flyway migrations, and metadata persistence. |
@@ -122,4 +128,3 @@ shows how a plugin can provide a `/replay` command tree, an inventory browser,
 a playback hotbar, a resource pack, and a protected viewer environment on top
 of the public API. Use it as a reference rather than as a required user
 interface.
-

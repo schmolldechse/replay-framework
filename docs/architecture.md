@@ -12,19 +12,22 @@ flowchart TD
     api --> runtime["replay-runtime-paper<br/>Paper lifecycle and Guice composition"]
 
     runtime --> core["replay-core<br/>Recording, playback, metadata, catalog"]
-    runtime --> adapter["replay-adapter:paper-26_2<br/>Capture, checkpoints, playback bridge"]
+    runtime --> adapterApi["replay-adapter:api<br/>Shared adapter contract"]
+    adapterApi --> adapter262["paper-26_2<br/>Capture, checkpoints, playback"]
+    adapterApi --> adapter263["paper-26_3<br/>Capture, checkpoints, playback"]
     runtime --> format["replay-format<br/>Segments, indexes, checkpoints, manifests"]
     runtime --> storage["replay-storage:*<br/>Local, S3, SFTP artifacts"]
     runtime --> database["replay-database:postgresql<br/>Catalog, leases, metadata revisions"]
 
-    core --> adapter
+    core --> adapterApi
     core --> format
     core --> storage
     core --> database
 ```
 
-Only `replay-api` is an integration dependency. The runtime creates the
-adapter, constructs the dependency graph with Guice, runs Flyway before
+Only `replay-api` is an integration dependency. The runtime selects and opens
+the adapter matching the server's Minecraft version, constructs the dependency
+graph with Guice, runs Flyway before
 Hibernate, then publishes a `ReplayFramework` facade to Paper's
 `ServicesManager` and `ReplayFrameworkProvider`.
 
@@ -100,7 +103,7 @@ flowchart TD
     fetch --> decode
 
     decode --> scheduler["Virtual packet scheduler advances<br/>the session clock"]
-    scheduler --> bridge["Paper 26.2 rewrite and outbound gate"]
+    scheduler --> bridge["Version-specific Paper rewrite and outbound gate"]
     bridge --> viewer["One viewer's client-visible replay state"]
 
     scheduler -->|needs data| plan
@@ -170,7 +173,7 @@ they own while handling their own Paper plugin shutdown.
 
 - The framework records raw Minecraft network packets, not a standardized video
   or cross-version replay format.
-- Paper 26.2 is the only currently supported server and adapter version.
+- Paper 26.2 and 26.3 have separate adapters. Both adapters target stable Paper builds (26.2 build 135 and 26.3 build 244).
 - There is no HTTP or REST API.
 - There is no framework-owned GUI, hotbar, command tree, resource pack, or
   player-state policy.
