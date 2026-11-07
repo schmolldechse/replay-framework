@@ -130,6 +130,7 @@ public final class ReplayPaperPlugin extends JavaPlugin {
         ReplayRuntimeConfiguration configuration = new ReplayConfigurationLoader(gson)
                 .load(getDataFolder().toPath());
         ReplayRuntimeModule module = new ReplayRuntimeModule(
+                this,
                 configuration,
                 adapter,
                 gson,

@@ -17,6 +17,7 @@ import dev.voldechse.replayframework.core.event.ReplayEventDispatcher;
 import dev.voldechse.replayframework.core.diagnostics.ReplayDiagnostics;
 import dev.voldechse.replayframework.core.metadata.DefaultReplayMetadataService;
 import dev.voldechse.replayframework.core.playback.PlaybackRuntimeModule;
+import dev.voldechse.replayframework.core.playback.ObserverPlacementService;
 import dev.voldechse.replayframework.core.playback.cache.SegmentCache;
 import dev.voldechse.replayframework.core.playback.cache.DiskSegmentCache;
 import dev.voldechse.replayframework.core.recording.RecordingRuntimeModule;
@@ -26,6 +27,7 @@ import dev.voldechse.replayframework.format.ReplayCheckpointReader;
 import dev.voldechse.replayframework.format.ReplayIndexReader;
 import dev.voldechse.replayframework.format.ReplayManifestCodec;
 import dev.voldechse.replayframework.format.ReplaySegmentReader;
+import dev.voldechse.replayframework.runtime.PaperObserverPlacementService;
 import dev.voldechse.replayframework.runtime.config.ReplayRuntimeConfiguration;
 import java.nio.file.Path;
 import java.time.Clock;
@@ -38,6 +40,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import org.bukkit.plugin.java.JavaPlugin;
 
 /** Main runtime composition root for storage, database, core and adapter ports. */
 public final class ReplayRuntimeModule extends AbstractModule implements AutoCloseable {
@@ -47,12 +50,15 @@ public final class ReplayRuntimeModule extends AbstractModule implements AutoClo
     private final ExecutorService runtimeExecutor;
     private final ScheduledExecutorService shutdownScheduler;
     private final Consumer<String> logger;
+    private final JavaPlugin plugin;
 
     public ReplayRuntimeModule(
+            JavaPlugin plugin,
             ReplayRuntimeConfiguration configuration,
             ReplayAdapter adapter,
             Gson gson,
             Consumer<String> logger) {
+        this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.configuration = Objects.requireNonNull(configuration, "configuration");
         this.adapter = Objects.requireNonNull(adapter, "adapter");
         this.gson = Objects.requireNonNull(gson, "gson");
@@ -76,6 +82,8 @@ public final class ReplayRuntimeModule extends AbstractModule implements AutoClo
         bind(ReplayDiagnostics.class).in(Singleton.class);
         bind(Executor.class).toInstance(runtimeExecutor);
         bind(ReplayAdapter.class).toInstance(adapter);
+        bind(ObserverPlacementService.class)
+                .toInstance(new PaperObserverPlacementService(plugin));
         bind(ReplayService.class).to(DefaultReplayService.class).in(Singleton.class);
         bind(ReplayMetadataService.class).to(DefaultReplayMetadataService.class).in(Singleton.class);
         bind(ReplayEventPublisher.class).to(ReplayEventDispatcher.class).in(Singleton.class);

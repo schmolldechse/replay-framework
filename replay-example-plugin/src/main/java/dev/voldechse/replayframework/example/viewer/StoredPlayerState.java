@@ -139,6 +139,22 @@ final class StoredPlayerState {
                 throw new IllegalStateException("Original player location could not be restored");
             }
         });
+        restoreWithoutLocation(player, failures);
+        throwIfRestoreFailed(failures);
+    }
+
+    Location location() {
+        return location.clone();
+    }
+
+    void restoreWithoutLocation(Player player) {
+        Objects.requireNonNull(player, "player");
+        List<Throwable> failures = new ArrayList<>();
+        restoreWithoutLocation(player, failures);
+        throwIfRestoreFailed(failures);
+    }
+
+    private void restoreWithoutLocation(Player player, List<Throwable> failures) {
         restoreSection(failures, "game mode", () -> player.setGameMode(gameMode));
         restoreSection(failures, "inventory", () -> {
             PlayerInventory inventory = Objects.requireNonNull(
@@ -181,6 +197,9 @@ final class StoredPlayerState {
                 player.addPotionEffect(effect);
             }
         });
+    }
+
+    private static void throwIfRestoreFailed(List<Throwable> failures) {
         if (!failures.isEmpty()) {
             throw new RestoreException(failures);
         }

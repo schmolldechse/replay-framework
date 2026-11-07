@@ -2,6 +2,7 @@ package dev.voldechse.replayframework.api.playback;
 
 import dev.voldechse.replayframework.api.id.ReplayId;
 import java.util.Objects;
+import java.util.Optional;
 import org.bukkit.entity.Player;
 
 /**
@@ -10,17 +11,28 @@ import org.bukkit.entity.Player;
  * @param replayId replay to open
  * @param viewer Paper viewer at the integration boundary
  * @param bufferOptions session-local buffering options
+ * @param observerPlacement optional exact or replay-derived initial placement
  */
 public record PlaybackRequest(
         ReplayId replayId,
         Player viewer,
-        PlaybackBufferOptions bufferOptions) {
+        PlaybackBufferOptions bufferOptions,
+        Optional<ObserverPlacement> observerPlacement) {
+
+    /** Compatibility constructor using automatic placement in the viewer's current world. */
+    public PlaybackRequest(
+            ReplayId replayId,
+            Player viewer,
+            PlaybackBufferOptions bufferOptions) {
+        this(replayId, viewer, bufferOptions, Optional.empty());
+    }
 
     /** Validates required request values. */
     public PlaybackRequest {
         Objects.requireNonNull(replayId, "replayId");
         Objects.requireNonNull(viewer, "viewer");
         Objects.requireNonNull(bufferOptions, "bufferOptions");
+        Objects.requireNonNull(observerPlacement, "observerPlacement");
     }
 
     /**
@@ -37,6 +49,7 @@ public record PlaybackRequest(
         private ReplayId replayId;
         private Player viewer;
         private PlaybackBufferOptions bufferOptions = PlaybackBufferOptions.builder().build();
+        private Optional<ObserverPlacement> observerPlacement = Optional.empty();
 
         private Builder() {
         }
@@ -75,13 +88,20 @@ public record PlaybackRequest(
             return this;
         }
 
+        /** Selects an exact or replay-derived observer placement. */
+        public Builder observerPlacement(ObserverPlacement observerPlacement) {
+            this.observerPlacement = Optional.of(
+                    Objects.requireNonNull(observerPlacement, "observerPlacement"));
+            return this;
+        }
+
         /**
          * Builds the immutable request.
          *
          * @return playback request
          */
         public PlaybackRequest build() {
-            return new PlaybackRequest(replayId, viewer, bufferOptions);
+            return new PlaybackRequest(replayId, viewer, bufferOptions, observerPlacement);
         }
     }
 }

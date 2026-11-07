@@ -1,7 +1,9 @@
 package dev.voldechse.replayframework.adapter;
 
 import dev.voldechse.replayframework.adapter.playback.PlaybackIdentityContext;
+import dev.voldechse.replayframework.adapter.playback.ObserverAnchor;
 import dev.voldechse.replayframework.format.RawPacketFrame;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.Objects;
@@ -18,6 +20,19 @@ public interface PlaybackBridge {
     /** Routes asynchronous adapter failures back into the owning playback session. */
     default void setFailureHandler(Consumer<Throwable> failureHandler) {
         Objects.requireNonNull(failureHandler, "failureHandler");
+    }
+
+    /**
+     * Decodes ordered observer anchors from an initial checkpoint. Native
+     * packet interpretation remains owned by the versioned adapter.
+     */
+    default List<ObserverAnchor> observerAnchors(List<RawPacketFrame> checkpointFrames) {
+        Objects.requireNonNull(checkpointFrames, "checkpointFrames");
+        return List.of();
+    }
+
+    /** Activates live replay-packet suppression after observer placement. */
+    default void activateReplayIsolation() {
     }
 
     /**
