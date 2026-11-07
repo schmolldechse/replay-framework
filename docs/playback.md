@@ -5,9 +5,10 @@ independent position, play intent, speed, buffer window, and lifecycle. Two
 viewers can watch the same replay without affecting one another.
 
 The framework replays raw, adapter-bound packets. It owns the playback bridge,
-timeline, buffering, and checkpoint reconstruction; your plugin owns the
-viewer experience around it, including permissions, safe location, game mode,
-inventory, hotbar, resource pack, and restoration of normal player state.
+timeline, buffering, checkpoint reconstruction, and safe initial observer
+placement; your plugin owns the remaining viewer experience around it,
+including permissions, game mode, inventory, hotbar, resource pack, and
+restoration of normal player state.
 
 ## Open a viewer session
 
@@ -19,6 +20,7 @@ PlaybackRequest request = PlaybackRequest.builder()
         .replay(replayId)
         .viewer(player)
         .buffer(framework.defaults().playbackBufferOptions())
+        .observerPlacement(ObserverPlacement.automatic(replayWorld))
         .build();
 
 framework.playbacks().open(request).thenAccept(session -> {
@@ -26,16 +28,50 @@ framework.playbacks().open(request).thenAccept(session -> {
 });
 ```
 
-`PlaybackService.open(...)` validates the replay and viewer boundary,
-prepares the viewer bridge, and returns a `CompletionStage<PlaybackSession>`.
+`PlaybackService.open(...)` validates the replay and viewer boundary, places
+the observer, prepares the viewer bridge, and returns a
+`CompletionStage<PlaybackSession>`.
 Handle failure asynchronously. The `Player` reference is used only at this
 Paper-facing boundary; `PlaybackSession.viewerId()` provides the stable viewer
 UUID thereafter.
 
 An integration should arrange the viewer environment before opening playback
 and undo it after `close()`, `ENDED`, or `FAILED`. The framework deliberately
-does not teleport players, clear inventories, reserve worlds, or render
-controls. `replay-example-plugin` demonstrates those optional responsibilities.
+does not clear inventories, reserve worlds, render controls, or restore the
+player's pre-replay position. `replay-example-plugin` demonstrates those
+optional responsibilities.
+
+## Place the observer
+
+Observer placement completes before the initial checkpoint is applied. The
+default, used when no placement is supplied, derives a position from a player
+or entity in the initial replay checkpoint and uses the viewer's current
+world. Integrations that create a dedicated replay world should select it
+explicitly:
+
+```java
+.observerPlacement(ObserverPlacement.automatic(replayWorld))
+```
+
+Automatic placement prefers a replayed player, falls back to another replayed
+entity, and tests candidate positions around that anchor. It fails the open
+operation when the checkpoint has no usable anchor. This is preferable to
+placing the observer at an unrelated spawn location where the replay chunks
+are not visible.
+
+An integration can instead select an exact position:
+
+```java
+.observerPlacement(ObserverPlacement.fixed(
+        new Location(replayWorld, 500.5, 92.5, -199.5, 0.0F, 0.0F)))
+```
+
+The runtime rejects unloaded worlds, non-finite or out-of-bounds coordinates,
+positions outside the world border, and positions whose feet or head intersect
+an unsafe block. It loads the destination chunk asynchronously and uses
+Paper's asynchronous teleport API. Do not block the server thread on the
+returned playback stage. A rejected or changed teleport fails opening rather
+than applying replay packets from the wrong location.
 
 ## Internal playback pipeline
 

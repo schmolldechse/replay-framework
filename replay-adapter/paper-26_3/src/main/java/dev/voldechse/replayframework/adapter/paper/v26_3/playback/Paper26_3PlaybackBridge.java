@@ -7,10 +7,14 @@ import dev.voldechse.replayframework.adapter.PacketRegistry;
 import dev.voldechse.replayframework.adapter.PlaybackBridge;
 import dev.voldechse.replayframework.adapter.codec.PacketCodec;
 import dev.voldechse.replayframework.adapter.playback.PlaybackIdentityContext;
+import dev.voldechse.replayframework.adapter.playback.ObserverAnchor;
 import dev.voldechse.replayframework.adapter.paper.v26_3.capture.PaperConnectionAccessor;
 import dev.voldechse.replayframework.format.PacketPhase;
 import dev.voldechse.replayframework.format.RawPacketFrame;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.Objects;
 import java.util.Set;
@@ -21,6 +25,9 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.game.ClientboundAddEntityPacket;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.MobCategory;
 import org.bukkit.entity.Player;
 
 /** Paper 26.3 implementation of the versions-neutral playback port. */
@@ -115,6 +122,52 @@ public final class Paper26_3PlaybackBridge implements PlaybackBridge {
             throw new IllegalStateException("Paper playback bridge is already closed");
         }
         this.failureHandler.set(failureHandler);
+    }
+
+    @Override
+    public List<ObserverAnchor> observerAnchors(List<RawPacketFrame> checkpointFrames) {
+        return observerAnchors(checkpointFrames, registry, codec);
+    }
+
+    static List<ObserverAnchor> observerAnchors(
+            List<RawPacketFrame> checkpointFrames,
+            PacketRegistry registry,
+            PacketCodec<Object> codec) {
+        Objects.requireNonNull(checkpointFrames, "checkpointFrames");
+        Objects.requireNonNull(registry, "registry");
+        Objects.requireNonNull(codec, "codec");
+        List<ObserverAnchor> anchors = new ArrayList<>();
+        for (RawPacketFrame frame : checkpointFrames) {
+            PacketDescriptor descriptor = registry.find(
+                    frame.phase(), PacketDescriptor.Direction.CLIENTBOUND, frame.packetId())
+                    .orElse(null);
+            if (descriptor == null || !descriptor.typeName().endsWith(":add_entity")) {
+                continue;
+            }
+            Object decoded = codec.decode(frame);
+            if (decoded instanceof ClientboundAddEntityPacket packet) {
+                EntityType<?> entityType = packet.getType();
+                boolean player = "player".equals(EntityType.getKey(entityType).getPath());
+                if (!player && entityType.getCategory() == MobCategory.MISC) {
+                    continue;
+                }
+                ObserverAnchor.Kind kind = player
+                        ? ObserverAnchor.Kind.PLAYER
+                        : ObserverAnchor.Kind.ENTITY;
+                anchors.add(new ObserverAnchor(
+                        kind,
+                        packet.getX(), packet.getY(), packet.getZ(),
+                        packet.getYRot(), packet.getXRot()));
+            }
+        }
+        anchors.sort(Comparator.comparing(ObserverAnchor::kind));
+        return List.copyOf(anchors);
+    }
+
+    @Override
+    public void activateReplayIsolation() {
+        requireUsable("activateReplayIsolation");
+        gate.activateIsolation();
     }
 
     @Override

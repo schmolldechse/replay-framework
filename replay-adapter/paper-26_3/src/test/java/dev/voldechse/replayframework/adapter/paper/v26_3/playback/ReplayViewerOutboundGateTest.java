@@ -58,6 +58,32 @@ class ReplayViewerOutboundGateTest {
     }
 
     @Test
+    void forwardsTeleportTrafficUntilReplayIsolationIsActivated() {
+        PacketRegistry registry = PacketRegistry.of(List.of(REPLAYABLE));
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        ReplayViewerOutboundGate gate = new ReplayViewerOutboundGate(
+                registry,
+                message -> new PaperConnectionAccessor.WirePacket(
+                        PacketPhase.PLAY,
+                        PacketDescriptor.Direction.CLIENTBOUND,
+                        ((TestPacket) message).packetId(),
+                        new byte[] {7}),
+                false,
+                failure::set);
+        EmbeddedChannel channel = new EmbeddedChannel(gate);
+
+        TestPacket teleportChunk = new TestPacket(7);
+        assertTrue(channel.writeOutbound(teleportChunk));
+        assertSame(teleportChunk, channel.readOutbound());
+
+        gate.activateIsolation();
+        channel.runPendingTasks();
+        assertFalse(channel.writeOutbound(new TestPacket(7)));
+        assertTrue(channel.outboundMessages().isEmpty());
+        assertNull(failure.get());
+    }
+
+    @Test
     void forwardsControlPacketsAndWritesReplayThroughTheBypass() {
         PacketRegistry registry = PacketRegistry.of(List.of(REPLAYABLE, CONTROL));
         AtomicReference<Throwable> failure = new AtomicReference<>();

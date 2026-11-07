@@ -41,7 +41,8 @@ public final class PlaybackRuntimeModule extends AbstractModule {
             Executor ioExecutor,
             PlaybackCoordinator coordinator,
             PlaybackEventDispatcher eventDispatcher,
-            ReplayDiagnostics diagnostics) {
+            ReplayDiagnostics diagnostics,
+            ObserverPlacementService observerPlacementService) {
         return new DefaultPlaybackService(
                 repository,
                 artifactReader,
@@ -54,7 +55,8 @@ public final class PlaybackRuntimeModule extends AbstractModule {
                 ioExecutor,
                 coordinator,
                 eventDispatcher,
-                diagnostics);
+                diagnostics,
+                observerPlacementService);
     }
 
     @Provides

@@ -29,10 +29,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
-import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
-import org.bukkit.Location;
-import org.bukkit.World;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
@@ -217,13 +214,11 @@ public final class ReplayExamplePlugin extends JavaPlugin {
                     this,
                     new ExampleResourcePackService.Configuration(uri, sha1, timeout, prompt));
 
-            Location location = viewerLocation(configuration);
             ExampleViewerEnvironment environment = new ExampleViewerEnvironment(
                     this,
                     framework.playbacks(),
                     packService,
                     new ExampleViewerEnvironment.Configuration(
-                            location,
                             GameMode.ADVENTURE,
                             framework.defaults().playbackBufferOptions(),
                             Set.of("replay"),
@@ -273,25 +268,6 @@ public final class ReplayExamplePlugin extends JavaPlugin {
             throw new IllegalStateException("Missing Example configuration: " + path);
         }
         return value;
-    }
-
-    private static Location viewerLocation(FileConfiguration configuration) {
-        World world = Bukkit.getWorld(requiredString(configuration, "viewer.world"));
-        if (world == null) {
-            throw new IllegalStateException("Configured Example viewer world is not loaded");
-        }
-        if (!configuration.isSet("viewer.x")
-                || !configuration.isSet("viewer.y")
-                || !configuration.isSet("viewer.z")) {
-            throw new IllegalStateException("Example viewer coordinates are incomplete");
-        }
-        return new Location(
-                world,
-                configuration.getDouble("viewer.x"),
-                configuration.getDouble("viewer.y"),
-                configuration.getDouble("viewer.z"),
-                (float) configuration.getDouble("viewer.yaw", 0.0D),
-                (float) configuration.getDouble("viewer.pitch", 0.0D));
     }
 
     private static ReplayMetadataKey<String> createCategoryKey() {

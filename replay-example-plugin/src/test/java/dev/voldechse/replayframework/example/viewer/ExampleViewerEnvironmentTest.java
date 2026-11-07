@@ -30,36 +30,23 @@ import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
-import org.bukkit.World;
 import org.junit.jupiter.api.Test;
 
 class ExampleViewerEnvironmentTest {
 
     @Test
-    void copiesViewerConfigurationAndNormalizesCommandRoots() {
-        World world = (World) Proxy.newProxyInstance(
-                World.class.getClassLoader(),
-                new Class<?>[]{World.class},
-                (proxy, method, args) -> defaultValue(method.getReturnType()));
-        Location location = new Location(world, 1.0, 2.0, 3.0, 90.0f, 10.0f);
-
+    void normalizesViewerCommandRoots() {
         ExampleViewerEnvironment.Configuration configuration =
                 new ExampleViewerEnvironment.Configuration(
-                        location,
                         GameMode.ADVENTURE,
                         PlaybackBufferOptions.builder().build(),
                         Set.of("Replay"),
                         item -> false);
 
-        location.setX(99.0);
-
-        assertEquals(1.0, configuration.replayLocation().getX());
         assertEquals(Set.of("replay"), configuration.allowedCommandRoots());
-        assertNotSame(configuration.replayLocation(), configuration.replayLocation());
         assertThrows(
                 IllegalArgumentException.class,
                 () -> new ExampleViewerEnvironment.Configuration(
-                        new Location(null, 1.0, 2.0, 3.0),
                         GameMode.ADVENTURE,
                         PlaybackBufferOptions.builder().build(),
                         Set.of("/replay"),

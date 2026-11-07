@@ -3,6 +3,7 @@ package dev.voldechse.replayframework.example.viewer;
 import dev.voldechse.replayframework.api.id.ReplayId;
 import dev.voldechse.replayframework.api.playback.PlaybackBufferOptions;
 import dev.voldechse.replayframework.api.playback.PlaybackRequest;
+import dev.voldechse.replayframework.api.playback.ObserverPlacement;
 import dev.voldechse.replayframework.api.playback.PlaybackService;
 import dev.voldechse.replayframework.api.playback.PlaybackSession;
 import dev.voldechse.replayframework.example.resourcepack.ExampleResourcePackService;
@@ -31,6 +32,7 @@ import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
+import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -50,14 +52,12 @@ public final class ExampleViewerEnvironment {
     /**
      * Immutable configuration for the Example viewer environment.
      *
-     * @param replayLocation target location used while viewing
      * @param playbackGameMode game mode used while viewing
      * @param bufferOptions session-local playback buffer options
      * @param allowedCommandRoots command roots that remain available
      * @param controlItemMatcher server-side control-item predicate
      */
     public record Configuration(
-            Location replayLocation,
             GameMode playbackGameMode,
             PlaybackBufferOptions bufferOptions,
             Set<String> allowedCommandRoots,
@@ -65,19 +65,9 @@ public final class ExampleViewerEnvironment {
 
         /** Validates and defensively copies the mutable configuration values. */
         public Configuration {
-            Objects.requireNonNull(replayLocation, "replayLocation");
             Objects.requireNonNull(playbackGameMode, "playbackGameMode");
             Objects.requireNonNull(bufferOptions, "bufferOptions");
             Objects.requireNonNull(allowedCommandRoots, "allowedCommandRoots");
-            if (replayLocation.getWorld() == null
-                    || !Double.isFinite(replayLocation.getX())
-                    || !Double.isFinite(replayLocation.getY())
-                    || !Double.isFinite(replayLocation.getZ())
-                    || !Float.isFinite(replayLocation.getYaw())
-                    || !Float.isFinite(replayLocation.getPitch())) {
-                throw new IllegalArgumentException("replayLocation must have a world and finite coordinates");
-            }
-
             Set<String> normalizedRoots = new HashSet<>();
             for (String root : allowedCommandRoots) {
                 Objects.requireNonNull(root, "allowedCommandRoots entry");
@@ -90,31 +80,13 @@ public final class ExampleViewerEnvironment {
                 normalizedRoots.add(root.toLowerCase(Locale.ROOT));
             }
 
-            replayLocation = replayLocation.clone();
             allowedCommandRoots = Set.copyOf(normalizedRoots);
             controlItemMatcher = controlItemMatcher == null ? item -> false : controlItemMatcher;
         }
 
-        /**
-         * Returns a defensive copy so callers cannot mutate the target used
-         * by a later viewer.
-         *
-         * @return copied replay location
-         */
-        @Override
-        public Location replayLocation() {
-            return replayLocation.clone();
-        }
-
-        /**
-         * Creates the conservative default Example configuration.
-         *
-         * @param replayLocation target location for viewers
-         * @return default configuration
-         */
-        public static Configuration defaults(Location replayLocation) {
+        /** Creates the conservative default Example configuration. */
+        public static Configuration defaults() {
             return new Configuration(
-                    replayLocation,
                     GameMode.ADVENTURE,
                     PlaybackBufferOptions.builder().build(),
                     Set.of("replay"),
@@ -282,7 +254,7 @@ public final class ExampleViewerEnvironment {
             throw new IllegalStateException("Viewer was no longer pending preparation");
         }
 
-        preparePlayer(player, viewerWorld);
+        preparePlayer(player);
 
         if (!registry.transition(
                 entry,
@@ -295,6 +267,7 @@ public final class ExampleViewerEnvironment {
                 .replay(entry.replayId())
                 .viewer(player)
                 .buffer(configuration.bufferOptions())
+                .observerPlacement(ObserverPlacement.automatic(viewerWorld))
                 .build();
         CompletionStage<PlaybackSession> openStage = playbackService.open(request);
         if (openStage == null) {
@@ -314,12 +287,7 @@ public final class ExampleViewerEnvironment {
         return entry.openResult();
     }
 
-    private void preparePlayer(Player player, World viewerWorld) {
-        Location target = configuration.replayLocation();
-        target.setWorld(viewerWorld);
-        if (!player.teleport(target)) {
-            throw new IllegalStateException("Viewer teleportation was rejected");
-        }
+    private void preparePlayer(Player player) {
         player.setGameMode(configuration.playbackGameMode());
         PlayerInventory inventory = Objects.requireNonNull(player.getInventory(), "player.inventory");
         inventory.clear();
@@ -342,9 +310,7 @@ public final class ExampleViewerEnvironment {
         if (plugin.getServer().getWorld(worldName) != null) {
             throw new IllegalStateException("Viewer world name is already in use: " + worldName);
         }
-        World template = Objects.requireNonNull(
-                configuration.replayLocation().getWorld(),
-                "replayLocation.world");
+        World template = Objects.requireNonNull(entry.player().getWorld(), "player.world");
         World world = new WorldCreator(worldName)
                 .environment(template.getEnvironment())
                 .type(WorldType.FLAT)
@@ -431,7 +397,9 @@ public final class ExampleViewerEnvironment {
         }
 
         return closePlaybackBeforeRestore(entry)
-                .thenCompose(ignored -> onMain(() -> restorePlayerAndRelease(entry, terminalFailure)));
+                .thenCompose(ignored -> onMain(
+                                () -> restorePlayerAndRelease(entry, terminalFailure))
+                        .thenCompose(Function.identity()));
     }
 
     private CompletionStage<Void> closePlaybackBeforeRestore(
@@ -484,20 +452,47 @@ public final class ExampleViewerEnvironment {
         });
     }
 
-    private Void restorePlayerAndRelease(
+    private CompletionStage<Void> restorePlayerAndRelease(
             ViewerSessionRegistry.ViewerSession entry,
             Throwable terminalFailure) {
         StoredPlayerState state = entry.storedPlayerState();
-        if (state != null) {
-            try {
-                state.restore(entry.player());
-            } catch (Throwable restoreFailure) {
-                logFailure("player restore", entry, restoreFailure);
-            }
+        if (state == null || !entry.player().isOnline()) {
+            deleteViewerWorld(entry);
+            return finishRestoreOnMain(entry, terminalFailure);
         }
-        deleteViewerWorld(entry);
-        finishRestoreOnMain(entry, terminalFailure);
-        return null;
+
+        CompletionStage<Boolean> teleport;
+        try {
+            teleport = entry.player().teleportAsync(
+                    state.location(), PlayerTeleportEvent.TeleportCause.PLUGIN);
+        } catch (Throwable failure) {
+            teleport = CompletableFuture.failedFuture(failure);
+        }
+        return teleport.<CompletionStage<Void>>handle((success, failure) -> {
+                    boolean restoredPosition = failure == null && Boolean.TRUE.equals(success);
+                    if (!restoredPosition) {
+                        logFailure(
+                                "player location restore",
+                                entry,
+                                failure == null
+                                        ? new IllegalStateException(
+                                                "Original player location could not be restored")
+                                        : unwrap(failure));
+                    }
+                    return onMain(() -> {
+                        try {
+                            state.restoreWithoutLocation(entry.player());
+                        } catch (Throwable restoreFailure) {
+                            logFailure("player restore", entry, restoreFailure);
+                        }
+                        if (restoredPosition) {
+                            deleteViewerWorld(entry);
+                        }
+                        finishRestoreOnMain(entry, terminalFailure);
+                        return null;
+                    });
+                })
+                .thenCompose(Function.identity());
     }
 
     private void deleteViewerWorld(ViewerSessionRegistry.ViewerSession entry) {

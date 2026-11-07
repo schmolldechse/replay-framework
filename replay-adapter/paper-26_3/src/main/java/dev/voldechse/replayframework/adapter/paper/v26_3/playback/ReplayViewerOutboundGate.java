@@ -33,6 +33,7 @@ final class ReplayViewerOutboundGate extends ChannelOutboundHandlerAdapter {
     private final Consumer<Throwable> failureHandler;
     private final AtomicReference<State> state = new AtomicReference<>(State.NEW);
     private final AtomicBoolean failureReported = new AtomicBoolean();
+    private final AtomicBoolean isolationActive = new AtomicBoolean();
     private volatile ChannelHandlerContext context;
 
     ReplayViewerOutboundGate(
@@ -53,7 +54,17 @@ final class ReplayViewerOutboundGate extends ChannelOutboundHandlerAdapter {
             PacketRegistry registry,
             Function<Object, PaperConnectionAccessor.WirePacket> inspector,
             Consumer<Throwable> failureHandler) {
+        this(registry, inspector, true, failureHandler);
+    }
+
+    /** Constructor variant for verifying delayed production activation. */
+    ReplayViewerOutboundGate(
+            PacketRegistry registry,
+            Function<Object, PaperConnectionAccessor.WirePacket> inspector,
+            boolean isolationInitiallyActive,
+            Consumer<Throwable> failureHandler) {
         this(registry, inspector, () -> {}, failureHandler);
+        isolationActive.set(isolationInitiallyActive);
     }
 
     private ReplayViewerOutboundGate(
@@ -149,6 +160,19 @@ final class ReplayViewerOutboundGate extends ChannelOutboundHandlerAdapter {
         current.flush();
     }
 
+    /** Starts suppressing live replay-state packets after the safe teleport. */
+    void activateIsolation() {
+        ChannelHandlerContext current = context;
+        if (current == null || state.get() != State.ACTIVE) {
+            throw new IllegalStateException("replay viewer gate is not active");
+        }
+        if (current.executor().inEventLoop()) {
+            isolationActive.set(true);
+        } else {
+            current.executor().execute(() -> isolationActive.set(true));
+        }
+    }
+
     /** Marks the gate closed before the accessor removes the pipeline entry. */
     void close() {
         state.set(State.CLOSED);
@@ -156,7 +180,8 @@ final class ReplayViewerOutboundGate extends ChannelOutboundHandlerAdapter {
     }
 
     private boolean shouldSuppress(PaperConnectionAccessor.WirePacket wirePacket) {
-        if (wirePacket.phase() != PacketPhase.PLAY
+        if (!isolationActive.get()
+                || wirePacket.phase() != PacketPhase.PLAY
                 || wirePacket.direction() != PacketDescriptor.Direction.CLIENTBOUND) {
             return false;
         }

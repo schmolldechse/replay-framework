@@ -5,9 +5,11 @@ import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
 import dev.voldechse.replayframework.adapter.PlaybackBridge;
 import dev.voldechse.replayframework.adapter.ReplayAdapter;
 import dev.voldechse.replayframework.adapter.playback.PlaybackIdentityContext;
+import dev.voldechse.replayframework.adapter.playback.ObserverAnchor;
 import dev.voldechse.replayframework.api.id.PlaybackSessionId;
 import dev.voldechse.replayframework.api.id.ReplayId;
 import dev.voldechse.replayframework.api.playback.PlaybackRequest;
+import dev.voldechse.replayframework.api.playback.ObserverPlacement;
 import dev.voldechse.replayframework.api.playback.PlaybackService;
 import dev.voldechse.replayframework.api.playback.PlaybackSession;
 import dev.voldechse.replayframework.api.playback.PlaybackSnapshot;
@@ -53,6 +55,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.bukkit.entity.Player;
+import org.bukkit.Location;
+import org.bukkit.World;
 
 /** Opens and manages one isolated playback graph per viewer. */
 final class DefaultPlaybackService implements PlaybackService {
@@ -74,6 +78,7 @@ final class DefaultPlaybackService implements PlaybackService {
     private final PlaybackCoordinator coordinator;
     private final PlaybackEventDispatcher eventDispatcher;
     private final ReplayDiagnostics diagnostics;
+    private final ObserverPlacementService observerPlacementService;
 
     DefaultPlaybackService(
             ReplayRepository replayRepository,
@@ -99,7 +104,8 @@ final class DefaultPlaybackService implements PlaybackService {
                 commandExecutor,
                 coordinator,
                 eventDispatcher,
-                new ReplayDiagnostics());
+                new ReplayDiagnostics(),
+                (viewer, candidates) -> CompletableFuture.completedFuture(null));
     }
 
     DefaultPlaybackService(
@@ -115,6 +121,26 @@ final class DefaultPlaybackService implements PlaybackService {
             PlaybackCoordinator coordinator,
             PlaybackEventDispatcher eventDispatcher,
             ReplayDiagnostics diagnostics) {
+        this(replayRepository, artifactReader, adapter, sharedSegmentCache, indexReader,
+                checkpointReader, segmentReader, ioExecutor, commandExecutor, coordinator,
+                eventDispatcher, diagnostics,
+                (viewer, candidates) -> CompletableFuture.completedFuture(null));
+    }
+
+    DefaultPlaybackService(
+            ReplayRepository replayRepository,
+            ReplayArtifactReader artifactReader,
+            ReplayAdapter adapter,
+            SegmentCache sharedSegmentCache,
+            ReplayIndexReader indexReader,
+            ReplayCheckpointReader checkpointReader,
+            ReplaySegmentReader segmentReader,
+            Executor ioExecutor,
+            Executor commandExecutor,
+            PlaybackCoordinator coordinator,
+            PlaybackEventDispatcher eventDispatcher,
+            ReplayDiagnostics diagnostics,
+            ObserverPlacementService observerPlacementService) {
         this.replayRepository = Objects.requireNonNull(replayRepository, "replayRepository");
         this.artifactReader = Objects.requireNonNull(artifactReader, "artifactReader");
         this.adapter = Objects.requireNonNull(adapter, "adapter");
@@ -127,6 +153,8 @@ final class DefaultPlaybackService implements PlaybackService {
         this.coordinator = Objects.requireNonNull(coordinator, "coordinator");
         this.eventDispatcher = Objects.requireNonNull(eventDispatcher, "eventDispatcher");
         this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics");
+        this.observerPlacementService = Objects.requireNonNull(
+                observerPlacementService, "observerPlacementService");
     }
 
     @Override
@@ -211,7 +239,7 @@ final class DefaultPlaybackService implements PlaybackService {
                         index,
                         buildSegmentRefs(manifest, index),
                         buildCheckpointFiles(manifest, index)))
-                .thenApply(artifacts -> {
+                .thenCompose(artifacts -> {
                     PlaybackBuffer buffer = new PlaybackBuffer(
                             verified,
                             artifacts.segments(),
@@ -253,9 +281,18 @@ final class DefaultPlaybackService implements PlaybackService {
                             listener);
                     bridge.setFailureHandler(timeline::failFromBridge);
                     resources.timeline.set(timeline);
-                    return timeline;
+                    SeekPoint initialPoint = artifacts.index()
+                            .seekCheckpointFloor(Duration.ZERO)
+                            .orElseThrow(() -> corrupt("replay has no initial checkpoint"));
+                    return cachedCheckpoint(
+                                    checkpoints,
+                                    verified,
+                                    artifacts.checkpoints(),
+                                    initialPoint)
+                            .thenCompose(frames -> placeObserver(request, bridge, frames))
+                            .thenRun(bridge::activateReplayIsolation)
+                            .thenCompose(ignored -> timeline.prepare());
                 })
-                .thenCompose(PlaybackTimeline::prepare)
                 .thenApply(snapshot -> {
                     validateInitialSnapshot(snapshot);
                     DefaultPlaybackSession session = new DefaultPlaybackSession(
@@ -268,6 +305,39 @@ final class DefaultPlaybackService implements PlaybackService {
                     diagnostics.playbackStarted(session);
                     return (PlaybackSession) session;
                 });
+    }
+
+    private CompletionStage<Void> placeObserver(
+            PlaybackRequest request,
+            PlaybackBridge bridge,
+            List<RawPacketFrame> initialFrames) {
+        ObserverPlacement placement = request.observerPlacement().orElseGet(
+                () -> ObserverPlacement.automatic(request.viewer().getWorld()));
+        List<Location> candidates;
+        if (placement instanceof ObserverPlacement.Fixed fixed) {
+            candidates = List.of(fixed.target());
+        } else if (placement instanceof ObserverPlacement.Automatic automatic) {
+            World world = automatic.targetWorld();
+            List<ObserverAnchor> anchors = bridge.observerAnchors(initialFrames);
+            if (anchors.isEmpty()) {
+                return CompletableFuture.failedFuture(new IllegalStateException(
+                        "Replay contains no safe observer anchor"));
+            }
+            List<Location> derived = new ArrayList<>(anchors.size() * 2);
+            for (ObserverAnchor anchor : anchors) {
+                derived.add(new Location(
+                        world, anchor.x(), anchor.y() + 2.5D, anchor.z(),
+                        anchor.yaw(), anchor.pitch()));
+                derived.add(new Location(
+                        world, anchor.x(), anchor.y(), anchor.z(),
+                        anchor.yaw(), anchor.pitch()));
+            }
+            candidates = List.copyOf(derived);
+        } else {
+            return CompletableFuture.failedFuture(
+                    new IllegalStateException("Unsupported observer placement"));
+        }
+        return observerPlacementService.place(request.viewer(), candidates);
     }
 
     private CompletionStage<ReplayIndex> fetchAndReadIndex(
