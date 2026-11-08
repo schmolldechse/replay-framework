@@ -76,8 +76,7 @@ class NeutralObserverTest {
 
     @Test
     void playerInfoPreservesTheRecordedProfileNameWhileIsolatingItsIdentity() {
-        var profile = new com.mojang.authlib.GameProfile(
-                observer, "PlayerA", new com.mojang.authlib.properties.PropertyMap());
+        var profile = new com.mojang.authlib.GameProfile(observer, "PlayerA");
         var entry = new ClientboundPlayerInfoUpdatePacket.Entry(
                 observer,
                 profile,
@@ -125,6 +124,35 @@ class NeutralObserverTest {
         } finally {
             buffer.release();
         }
+    }
+
+    @Test
+    void entityReferenceMetadataIsRemappedWithoutChangingOrdinaryIntegers() {
+        var packet = new ClientboundSetEntityDataPacket(42, List.of(
+                new net.minecraft.network.syncher.SynchedEntityData.DataValue<>(
+                        0,
+                        net.minecraft.network.syncher.EntityDataSerializers.OPTIONAL_UNSIGNED_INT,
+                        java.util.OptionalInt.of(43)),
+                new net.minecraft.network.syncher.SynchedEntityData.DataValue<>(
+                        1,
+                        net.minecraft.network.syncher.EntityDataSerializers.OPTIONAL_UNSIGNED_INT,
+                        java.util.OptionalInt.empty()),
+                new net.minecraft.network.syncher.SynchedEntityData.DataValue<>(
+                        2,
+                        net.minecraft.network.syncher.EntityDataSerializers.INT,
+                        43)));
+        var rewriter = rewriter();
+
+        var rewritten = (ClientboundSetEntityDataPacket) rewriter
+                .rewrite(packet, descriptor("set_entity_data"))
+                .packet();
+
+        assertEquals(rewriter.mapEntityId(42), rewritten.id());
+        assertEquals(
+                java.util.OptionalInt.of(rewriter.mapEntityId(43)),
+                rewritten.packedItems().get(0).value());
+        assertEquals(java.util.OptionalInt.empty(), rewritten.packedItems().get(1).value());
+        assertEquals(43, rewritten.packedItems().get(2).value());
     }
 
     @Test

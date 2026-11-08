@@ -4,6 +4,7 @@ import com.github.retrooper.packetevents.PacketEvents;
 import com.github.retrooper.packetevents.event.PacketListener;
 import com.github.retrooper.packetevents.event.PacketListenerCommon;
 import com.github.retrooper.packetevents.event.PacketListenerPriority;
+import com.github.retrooper.packetevents.event.PacketReceiveEvent;
 import com.github.retrooper.packetevents.event.PacketSendEvent;
 import dev.voldechse.replayframework.adapter.CaptureBridge;
 import dev.voldechse.replayframework.adapter.CaptureContext;
@@ -53,6 +54,11 @@ public final class Paper26CaptureBridge implements CaptureBridge {
         public void onPacketSend(PacketSendEvent event) {
             capture(event);
         }
+
+        @Override
+        public void onPacketReceive(PacketReceiveEvent event) {
+            capture(event);
+        }
     };
 
     private volatile CaptureBridge.PacketSink sink;
@@ -92,7 +98,8 @@ public final class Paper26CaptureBridge implements CaptureBridge {
                 Objects.requireNonNull(owner, "owner"),
                 Objects.requireNonNull(codec, "codec"),
                 this::hasActiveRecording,
-                this::captureSyntheticMovement,
+                this.accessor::currentServerTick,
+                this::captureSyntheticEntityState,
                 this::fail);
     }
 
@@ -198,8 +205,8 @@ public final class Paper26CaptureBridge implements CaptureBridge {
         });
     }
 
-    private void captureSyntheticMovement(
-            Paper26EntityStateCapture.SyntheticMovement movement) {
+    private void captureSyntheticEntityState(
+            Paper26SyntheticEntityState statePacket) {
         if (state.get() != State.INSTALLED) {
             return;
         }
@@ -207,7 +214,7 @@ public final class Paper26CaptureBridge implements CaptureBridge {
         if (currentSink == null || !currentSink.hasActiveSinks()) {
             return;
         }
-        var packet = movement.packet();
+        var packet = statePacket.packet();
         captureOrder.publish(point -> {
             currentSink.accept(new CaptureBridge.CapturePacket(
                     point.captureTimeNanos(),
@@ -218,8 +225,8 @@ public final class Paper26CaptureBridge implements CaptureBridge {
                     packet.payload(),
                     new CaptureContext(
                             packet.descriptor().disposition(),
-                            Optional.of(movement.world()),
-                            Optional.of(movement.position()),
+                            Optional.of(statePacket.world()),
+                            Optional.of(statePacket.position()),
                             Optional.empty(),
                             Optional.empty())));
         });
@@ -280,8 +287,8 @@ public final class Paper26CaptureBridge implements CaptureBridge {
 
             byte[] payload = copyPayload(event);
             if (entityStateCapture != null
-                    && entityStateCapture.suppressesRecipientMovement(
-                            descriptor.typeName(), payload)) {
+                    && entityStateCapture.suppressesRecipientState(
+                            descriptor.typeName(), payload, accessor.currentServerTick())) {
                 return;
             }
             captureOrder.publish(point -> {
@@ -307,6 +314,19 @@ public final class Paper26CaptureBridge implements CaptureBridge {
                     collector.observe(packet);
                 }
             });
+        } catch (Throwable failure) {
+            fail(failure);
+        }
+    }
+
+    private void capture(PacketReceiveEvent event) {
+        if (state.get() != State.INSTALLED || event.isCancelled()
+                || entityStateCapture == null
+                || !"PLAY".equals(event.getConnectionState().name())) {
+            return;
+        }
+        try {
+            entityStateCapture.captureClientPacket(event);
         } catch (Throwable failure) {
             fail(failure);
         }

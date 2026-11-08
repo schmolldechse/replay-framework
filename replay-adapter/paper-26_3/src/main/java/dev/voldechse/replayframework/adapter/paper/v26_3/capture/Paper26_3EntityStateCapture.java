@@ -1,60 +1,60 @@
 package dev.voldechse.replayframework.adapter.paper.v26_3.capture;
 
 import com.destroystokyo.paper.event.entity.EntityRemoveFromWorldEvent;
+import com.github.retrooper.packetevents.event.PacketReceiveEvent;
 import dev.voldechse.replayframework.adapter.paper.v26_3.checkpoint.Paper26_3NativePacketCodec;
 import dev.voldechse.replayframework.api.recording.BlockPosition;
+import io.papermc.paper.event.entity.EntityEquipmentChangedEvent;
 import io.papermc.paper.event.entity.EntityMoveEvent;
+import java.util.EnumMap;
+import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
-import net.kyori.adventure.key.Key;
-import net.minecraft.network.protocol.game.ClientboundEntityPositionSyncPacket;
-import net.minecraft.network.protocol.game.ClientboundRotateHeadPacket;
-import net.minecraft.world.entity.PositionPath;
-import net.minecraft.world.phys.Vec3;
+import java.util.function.LongSupplier;
 import org.bukkit.Location;
+import org.bukkit.craftbukkit.CraftEquipmentSlot;
 import org.bukkit.craftbukkit.entity.CraftEntity;
-import org.bukkit.entity.Entity;
+import org.bukkit.craftbukkit.entity.CraftLivingEntity;
+import org.bukkit.craftbukkit.inventory.CraftItemStack;
+import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
-import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
-/** Captures authoritative Paper 26.3 player and living-entity movement. */
+/**
+ * Coordinates packet-driven player state with event fallbacks for non-player
+ * entities that have no serverbound packet source.
+ */
 final class Paper26_3EntityStateCapture implements Listener, AutoCloseable {
-
-    private static final Set<String> AUTHORITATIVE_MOVEMENT = Set.of(
-            "play.clientbound.minecraft:entity_position_sync",
-            "play.clientbound.minecraft:move_entity_pos",
-            "play.clientbound.minecraft:move_entity_pos_rot",
-            "play.clientbound.minecraft:move_entity_rot",
-            "play.clientbound.minecraft:rotate_head",
-            "play.clientbound.minecraft:teleport_entity");
 
     private final JavaPlugin owner;
     private final Paper26_3NativePacketCodec codec;
     private final BooleanSupplier active;
-    private final Consumer<SyntheticMovement> emitter;
+    private final Consumer<Paper26_3SyntheticEntityState> emitter;
     private final Consumer<Throwable> failureHandler;
-    private final AuthoritativeMovementIndex movementIndex = new AuthoritativeMovementIndex();
+    private final Paper26_3AuthoritativeStateIndex stateIndex =
+            new Paper26_3AuthoritativeStateIndex();
+    private final Paper26_3PlayerStateCapture playerStateCapture;
     private final AtomicBoolean installed = new AtomicBoolean();
 
     Paper26_3EntityStateCapture(
             JavaPlugin owner,
             Paper26_3NativePacketCodec codec,
             BooleanSupplier active,
-            Consumer<SyntheticMovement> emitter,
+            LongSupplier serverTick,
+            Consumer<Paper26_3SyntheticEntityState> emitter,
             Consumer<Throwable> failureHandler) {
         this.owner = Objects.requireNonNull(owner, "owner");
         this.codec = Objects.requireNonNull(codec, "codec");
         this.active = Objects.requireNonNull(active, "active");
         this.emitter = Objects.requireNonNull(emitter, "emitter");
         this.failureHandler = Objects.requireNonNull(failureHandler, "failureHandler");
+        this.playerStateCapture = new Paper26_3PlayerStateCapture(
+                owner, codec, active, serverTick, emitter, failureHandler, stateIndex);
     }
 
     void install() {
@@ -64,69 +64,94 @@ final class Paper26_3EntityStateCapture implements Listener, AutoCloseable {
         owner.getServer().getPluginManager().registerEvents(this, owner);
     }
 
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onPlayerMove(PlayerMoveEvent event) {
-        capture(event.getPlayer(), event.getFrom(), event.getTo(),
-                event.hasChangedPosition() || event.hasChangedOrientation());
+    void captureClientPacket(PacketReceiveEvent event) {
+        if (installed.get()) {
+            playerStateCapture.capture(event);
+        }
     }
 
+    /** Fallback for non-player movement, which has no serverbound player packet. */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onEntityMove(EntityMoveEvent event) {
-        capture(event.getEntity(), event.getFrom(), event.getTo(),
-                event.hasChangedPosition() || event.hasChangedOrientation());
+        if (event.getEntity() instanceof Player
+                || (!event.hasChangedPosition() && !event.hasChangedOrientation())) {
+            return;
+        }
+        captureMovement(event.getEntity(), event.getFrom(), event.getTo());
+    }
+
+    /** Fallback for non-player equipment, which has no owner connection to sample. */
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onEquipmentChanged(EntityEquipmentChangedEvent event) {
+        if (event.getEntity() instanceof Player || !capturing()
+                || !(event.getEntity() instanceof CraftLivingEntity craftEntity)) {
+            return;
+        }
+        Location location = event.getEntity().getLocation();
+        if (location.getWorld() == null || event.getEquipmentChanges().isEmpty()) {
+            return;
+        }
+        try {
+            Map<net.minecraft.world.entity.EquipmentSlot, net.minecraft.world.item.ItemStack> changed =
+                    new EnumMap<>(net.minecraft.world.entity.EquipmentSlot.class);
+            event.getEquipmentChanges().forEach((slot, change) -> changed.put(
+                    CraftEquipmentSlot.getNMS(slot),
+                    CraftItemStack.asNMSCopy(change.newItem())));
+            int entityId = craftEntity.getHandle().getId();
+            stateIndex.markEquipment(entityId);
+            emit(location, Paper26_3EntityPacketFactory.equipment(entityId, changed));
+        } catch (Throwable failure) {
+            failureHandler.accept(failure);
+        }
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onEntityRemoved(EntityRemoveFromWorldEvent event) {
         if (event.getEntity() instanceof CraftEntity craftEntity) {
-            movementIndex.remove(craftEntity.getHandle().getId());
+            stateIndex.remove(craftEntity.getHandle().getId());
+        }
+        if (event.getEntity() instanceof Player player) {
+            playerStateCapture.remove(player.getUniqueId());
         }
     }
 
-    boolean suppressesRecipientMovement(String descriptorTypeName, byte[] payload) {
-        Objects.requireNonNull(descriptorTypeName, "descriptorTypeName");
-        Objects.requireNonNull(payload, "payload");
-        return movementIndex.suppresses(descriptorTypeName, payload);
+    boolean suppressesRecipientState(
+            String descriptorTypeName,
+            byte[] payload,
+            long observedServerTick) {
+        return stateIndex.suppresses(descriptorTypeName, payload, observedServerTick);
     }
 
-    void markAuthoritative(int entityId) {
-        movementIndex.mark(entityId);
-    }
-
-    private void capture(Entity entity, Location from, Location to, boolean changed) {
-        if (!installed.get() || !active.getAsBoolean() || !changed || to == null
-                || to.getWorld() == null || !(entity instanceof CraftEntity craftEntity)) {
+    private void captureMovement(
+            org.bukkit.entity.Entity entity,
+            Location from,
+            Location to) {
+        if (!capturing() || to == null || to.getWorld() == null
+                || !(entity instanceof CraftEntity craftEntity)) {
             return;
         }
         try {
-            net.minecraft.world.entity.Entity handle = craftEntity.getHandle();
-            int entityId = handle.getId();
-            markAuthoritative(entityId);
-            Key world = to.getWorld().getKey();
-            BlockPosition position = new BlockPosition(
-                    to.getBlockX(), to.getBlockY(), to.getBlockZ());
-            emit(world, position,
-                    new ClientboundEntityPositionSyncPacket(
-                            entityId,
-                            PositionPath.of(new Vec3(to.getX(), to.getY(), to.getZ())),
-                            to.getYaw(),
-                            to.getPitch(),
-                            handle.onGround()));
+            int entityId = craftEntity.getHandle().getId();
+            stateIndex.markMovement(entityId);
+            emit(to, Paper26_3EntityPacketFactory.position(craftEntity.getHandle(), to));
             if (from == null || from.getYaw() != to.getYaw()) {
-                emit(world, position,
-                        new ClientboundRotateHeadPacket(handle, rotationByte(to.getYaw())));
+                emit(to, Paper26_3EntityPacketFactory.headRotation(
+                        craftEntity.getHandle(), to.getYaw()));
             }
         } catch (Throwable failure) {
             failureHandler.accept(failure);
         }
     }
 
-    private void emit(
-            Key world,
-            BlockPosition position,
-            net.minecraft.network.protocol.Packet<?> packet) {
-        emitter.accept(new SyntheticMovement(
-                codec.encodeState(packet), world, position));
+    private boolean capturing() {
+        return installed.get() && active.getAsBoolean();
+    }
+
+    private void emit(Location location, net.minecraft.network.protocol.Packet<?> packet) {
+        emitter.accept(new Paper26_3SyntheticEntityState(
+                codec.encodeState(packet),
+                location.getWorld().getKey(),
+                new BlockPosition(location.getBlockX(), location.getBlockY(), location.getBlockZ())));
     }
 
     @Override
@@ -134,62 +159,7 @@ final class Paper26_3EntityStateCapture implements Listener, AutoCloseable {
         if (installed.compareAndSet(true, false)) {
             HandlerList.unregisterAll(this);
         }
-        movementIndex.clear();
-    }
-
-    private static byte rotationByte(float yaw) {
-        return (byte) Math.floor(yaw * 256.0F / 360.0F);
-    }
-
-    static final class AuthoritativeMovementIndex {
-        private final Set<Integer> entityIds = ConcurrentHashMap.newKeySet();
-
-        void mark(int entityId) {
-            entityIds.add(entityId);
-        }
-
-        void remove(int entityId) {
-            entityIds.remove(entityId);
-        }
-
-        boolean suppresses(String descriptorTypeName, byte[] payload) {
-            if (!AUTHORITATIVE_MOVEMENT.contains(descriptorTypeName)) {
-                return false;
-            }
-            return entityIds.contains(readVarInt(payload));
-        }
-
-        void clear() {
-            entityIds.clear();
-        }
-
-        private static int readVarInt(byte[] payload) {
-            int value = 0;
-            int shift = 0;
-            for (byte element : payload) {
-                int current = element & 0xFF;
-                value |= (current & 0x7F) << shift;
-                if ((current & 0x80) == 0) {
-                    return value;
-                }
-                shift += 7;
-                if (shift >= 35) {
-                    break;
-                }
-            }
-            throw new IllegalArgumentException("movement payload has no valid entity ID");
-        }
-    }
-
-    record SyntheticMovement(
-            Paper26_3NativePacketCodec.EncodedStatePacket packet,
-            Key world,
-            BlockPosition position) {
-
-        SyntheticMovement {
-            Objects.requireNonNull(packet, "packet");
-            Objects.requireNonNull(world, "world");
-            Objects.requireNonNull(position, "position");
-        }
+        playerStateCapture.close();
+        stateIndex.clear();
     }
 }
