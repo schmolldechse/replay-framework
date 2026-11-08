@@ -105,6 +105,14 @@ the virtual clock rather than advancing the timeline without packets. The
 bridge applies the version-specific rewrite and outbound gating required to
 keep replay packets confined to the intended viewer.
 
+Decoded segments are atomic memory-residency units. If any frame from a segment
+is registered as loaded, the complete segment remains available until the
+retention window or memory budget evicts that segment as a whole. This prevents
+prefetch retention from creating silent gaps inside a loaded segment. The
+memory budget must be large enough for at least one decoded recording segment,
+including per-frame accounting overhead; an undersized budget fails explicitly
+instead of retaining a partial segment.
+
 Recorded player, system, disguised, and action-bar chat is connection-local
 capture data. The playback bridge suppresses it before native payload decoding,
 so a neutral observer does not receive messages that were originally delivered
