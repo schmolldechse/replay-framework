@@ -658,7 +658,11 @@ public final class RecordingCoordinator {
                 adapter.checkpointEncoder(),
                 request.scope(),
                 (elapsedNanos, serverTick, kind) -> new CheckpointEncoder.CheckpointRequest(
-                        request.scope(), elapsedNanos, serverTick, kind));
+                        request.scope(),
+                        elapsedNanos,
+                        serverTick,
+                        kind,
+                        session.recordingStartCaptureTimeNanos()));
         RecordingSegmentAppender appender = new RecordingSegmentAppender(
                 workspace,
                 adapter.descriptor().adapterId(),

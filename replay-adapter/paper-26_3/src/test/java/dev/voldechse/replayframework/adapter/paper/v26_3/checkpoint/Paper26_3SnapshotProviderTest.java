@@ -103,6 +103,40 @@ final class Paper26_3SnapshotProviderTest {
     }
 
     @Test
+    void allocatesTheActualCapturePointOnlyAfterPreloadingCompletes() {
+        RecordingWorldAccess access = new RecordingWorldAccess();
+        CompletableFuture<Void> preloadGate = new CompletableFuture<>();
+        access.preloadResult.set(preloadGate);
+        AtomicBoolean pointAllocated = new AtomicBoolean();
+        CheckpointEncoder.CapturePoint expected =
+                new CheckpointEncoder.CapturePoint(42L, 7L, 3);
+        Paper26_3SnapshotProvider provider = new Paper26_3SnapshotProvider(
+                task -> CompletableFuture.completedFuture(task.get()),
+                access,
+                () -> {
+                    pointAllocated.set(true);
+                    return expected;
+                });
+        RecordingScope scope = RecordingScope.builder()
+                .chunkLoadingPolicy(ChunkLoadingPolicy.PRELOAD_SCOPE)
+                .addRegion(new CuboidRegion(
+                        net.kyori.adventure.key.Key.key("minecraft:world"),
+                        new BlockPosition(0, 0, 0),
+                        new BlockPosition(15, 15, 15)))
+                .build();
+
+        CompletionStage<Paper26_3CheckpointEncoder.CheckpointSnapshot> stage = provider.snapshot(
+                new CheckpointEncoder.CheckpointRequest(
+                        scope, 10L, 2L, CheckpointEncoder.CheckpointKind.PERIODIC));
+        assertFalse(pointAllocated.get());
+
+        preloadGate.complete(null);
+        Paper26_3CheckpointEncoder.CheckpointSnapshot snapshot =
+                stage.toCompletableFuture().join();
+        assertEquals(java.util.Optional.of(expected), snapshot.capturePoint());
+    }
+
+    @Test
     void propagatesSchedulerFailureAndRejectsCallsAfterClose() {
         RuntimeException failure = new RuntimeException("scheduler unavailable");
         Paper26_3SnapshotProvider provider = new Paper26_3SnapshotProvider(
@@ -141,6 +175,8 @@ final class Paper26_3SnapshotProviderTest {
                 new AtomicReference<>();
         private final AtomicReference<List<Paper26_3SnapshotProvider.ChunkCoordinate>> preloadedChunks =
                 new AtomicReference<>();
+        private final AtomicReference<CompletionStage<Void>> preloadResult =
+                new AtomicReference<>(CompletableFuture.completedFuture(null));
 
         @Override
         public List<String> worldKeys() {
@@ -167,7 +203,7 @@ final class Paper26_3SnapshotProviderTest {
             accessThread.set(Thread.currentThread());
             preloadCalled.set(true);
             preloadedChunks.set(List.copyOf(chunks));
-            return CompletableFuture.completedFuture(null);
+            return preloadResult.get();
         }
 
         @Override

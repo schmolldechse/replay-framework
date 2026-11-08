@@ -83,10 +83,9 @@ final class SessionPacketQueue {
      */
     Optional<CapturedPacket> awaitNext() throws InterruptedException {
         for (;;) {
-            Entry entry = entries.poll();
-            if (entry != null) {
-                queuedBytes.addAndGet(-entry.bytes());
-                return Optional.of(entry.packet());
+            Optional<CapturedPacket> next = pollNext();
+            if (next.isPresent()) {
+                return next;
             }
 
             if (state.get() != State.OPEN && producersInFlight.get() == 0) {
@@ -95,6 +94,21 @@ final class SessionPacketQueue {
             }
             signal.acquire();
         }
+    }
+
+    /**
+     * Removes the next already-published packet without waiting.
+     *
+     * <p>This is used by the single writer to advance exactly to an adapter
+     * checkpoint barrier after an asynchronous snapshot completes.</p>
+     */
+    Optional<CapturedPacket> pollNext() {
+        Entry entry = entries.poll();
+        if (entry == null) {
+            return Optional.empty();
+        }
+        queuedBytes.addAndGet(-entry.bytes());
+        return Optional.of(entry.packet());
     }
 
     /** Returns true only after closing has been observed and the queue drained. */

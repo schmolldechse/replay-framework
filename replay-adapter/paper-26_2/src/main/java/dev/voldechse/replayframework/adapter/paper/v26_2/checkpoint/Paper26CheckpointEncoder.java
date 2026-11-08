@@ -79,6 +79,51 @@ public final class Paper26CheckpointEncoder implements CheckpointEncoder {
      */
     @Override
     public CompletionStage<ReplayCheckpoint> encode(CheckpointRequest request) {
+        try {
+            return snapshot(request).thenApplyAsync(snapshot -> {
+                List<RawPacketFrame> frames = encodeFrames(
+                        Objects.requireNonNull(snapshot, "snapshot"),
+                        request.elapsedNanos(),
+                        request.serverTick());
+                int provisionalOrdinal = request.kind() == CheckpointKind.INITIAL ? 0 : 1;
+                return new ReplayCheckpoint(provisionalOrdinal, request.elapsedNanos(), frames);
+            }, executor);
+        } catch (Throwable failure) {
+            return CompletableFuture.failedFuture(failure);
+        }
+    }
+
+    @Override
+    public CompletionStage<CheckpointCapture> capture(CheckpointRequest request) {
+        try {
+            return snapshot(request).thenApplyAsync(snapshot -> {
+                CheckpointSnapshot detached = Objects.requireNonNull(snapshot, "snapshot");
+                CapturePoint point = detached.capturePoint().orElseGet(() -> new CapturePoint(
+                        request.requestedCaptureTimeNanos(),
+                        request.serverTick(),
+                        Integer.MAX_VALUE));
+                long elapsedNanos;
+                try {
+                    elapsedNanos = Math.subtractExact(
+                            point.captureTimeNanos(), request.recordingStartCaptureTimeNanos());
+                } catch (ArithmeticException overflow) {
+                    throw new CheckpointEncodingException(
+                            "checkpoint capture time cannot be rebased", overflow);
+                }
+                if (elapsedNanos < request.elapsedNanos()) {
+                    throw new CheckpointEncodingException(
+                            "checkpoint snapshot precedes its requested capture point");
+                }
+                return new CheckpointCapture(
+                        point,
+                        encodeFrames(detached, elapsedNanos, point.serverTick()));
+            }, executor);
+        } catch (Throwable failure) {
+            return CompletableFuture.failedFuture(failure);
+        }
+    }
+
+    private CompletionStage<CheckpointSnapshot> snapshot(CheckpointRequest request) {
         Objects.requireNonNull(request, "request");
         if (request.kind() != CheckpointKind.INITIAL
                 && request.kind() != CheckpointKind.PERIODIC
@@ -98,17 +143,16 @@ public final class Paper26CheckpointEncoder implements CheckpointEncoder {
         }
 
         try {
-            return snapshotStage.thenApplyAsync(
-                    snapshot -> encodeSnapshot(request, Objects.requireNonNull(snapshot, "snapshot")),
-                    executor);
+            return snapshotStage;
         } catch (Throwable failure) {
             return CompletableFuture.failedFuture(failure);
         }
     }
 
-    private ReplayCheckpoint encodeSnapshot(
-            CheckpointRequest request,
-            CheckpointSnapshot snapshot) {
+    private List<RawPacketFrame> encodeFrames(
+            CheckpointSnapshot snapshot,
+            long elapsedNanos,
+            long serverTick) {
         List<PacketBlueprint> blueprints = new ArrayList<>();
         blueprints.addAll(globalStateEncoder.encode(snapshot));
         blueprints.addAll(chunkEncoder.encode(snapshot));
@@ -132,16 +176,15 @@ public final class Paper26CheckpointEncoder implements CheckpointEncoder {
                     "nativePacketCodec returned null");
             validateEncodedPacket(blueprint, encoded);
             frames.add(new RawPacketFrame(
-                    request.elapsedNanos(),
-                    request.serverTick(),
+                    elapsedNanos,
+                    serverTick,
                     index,
                     encoded.phase(),
                     encoded.packetId(),
                     encoded.payload()));
         }
 
-        int provisionalOrdinal = request.kind() == CheckpointKind.INITIAL ? 0 : 1;
-        return new ReplayCheckpoint(provisionalOrdinal, request.elapsedNanos(), frames);
+        return List.copyOf(frames);
     }
 
     private boolean isCheckpointEligible(PacketBlueprint blueprint) {
@@ -378,8 +421,21 @@ public final class Paper26CheckpointEncoder implements CheckpointEncoder {
     }
 
     /** Immutable detached state passed from Paper world access to assembly. */
-    public record CheckpointSnapshot(List<PacketBlueprint> packets) {
+    public record CheckpointSnapshot(
+            java.util.Optional<CapturePoint> capturePoint,
+            List<PacketBlueprint> packets) {
+
+        public CheckpointSnapshot(List<PacketBlueprint> packets) {
+            this(java.util.Optional.empty(), packets);
+        }
+
+        public CheckpointSnapshot(CapturePoint capturePoint, List<PacketBlueprint> packets) {
+            this(java.util.Optional.of(
+                    Objects.requireNonNull(capturePoint, "capturePoint")), packets);
+        }
+
         public CheckpointSnapshot {
+            Objects.requireNonNull(capturePoint, "capturePoint");
             Objects.requireNonNull(packets, "packets");
             List<PacketBlueprint> copied = new ArrayList<>(packets.size());
             for (PacketBlueprint packet : packets) {

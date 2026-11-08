@@ -7,6 +7,7 @@ import com.github.retrooper.packetevents.event.PacketListenerPriority;
 import com.github.retrooper.packetevents.event.PacketSendEvent;
 import dev.voldechse.replayframework.adapter.CaptureBridge;
 import dev.voldechse.replayframework.adapter.CaptureContext;
+import dev.voldechse.replayframework.adapter.CheckpointEncoder;
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.PacketRegistry;
@@ -46,7 +47,7 @@ public final class Paper26_3CaptureBridge implements CaptureBridge {
     private final Set<Paper26_3SyntheticStateCollector> syntheticCollectors =
             ConcurrentHashMap.newKeySet();
     private final Object handlerStateLock = new Object();
-    private final Object sequenceLock = new Object();
+    private final Object captureOrderLock = new Object();
     private final PacketListener packetListener = new PacketListener() {
         @Override
         public void onPacketSend(PacketSendEvent event) {
@@ -178,20 +179,22 @@ public final class Paper26_3CaptureBridge implements CaptureBridge {
             throw new IllegalStateException("Paper capture bridge has no packet sink");
         }
         Key world = Key.key(packet.worldKey());
-        CaptureBridge.CapturePacket captured = new CaptureBridge.CapturePacket(
-                packet.captureTimeNanos(),
-                packet.serverTick(),
-                allocateSequence(packet.serverTick()),
-                packet.phase(),
-                packet.packetId(),
-                packet.payload(),
-                new CaptureContext(
-                        descriptor.disposition(),
-                        Optional.of(world),
-                        Optional.ofNullable(packet.position()),
-                        Optional.empty(),
-                        Optional.empty()));
-        currentSink.accept(captured);
+        synchronized (captureOrderLock) {
+            CaptureBridge.CapturePacket captured = new CaptureBridge.CapturePacket(
+                    packet.captureTimeNanos(),
+                    packet.serverTick(),
+                    allocateSequence(packet.serverTick()),
+                    packet.phase(),
+                    packet.packetId(),
+                    packet.payload(),
+                    new CaptureContext(
+                            descriptor.disposition(),
+                            Optional.of(world),
+                            Optional.ofNullable(packet.position()),
+                            Optional.empty(),
+                            Optional.empty()));
+            currentSink.accept(captured);
+        }
     }
 
     private void captureSyntheticMovement(
@@ -204,19 +207,21 @@ public final class Paper26_3CaptureBridge implements CaptureBridge {
             return;
         }
         var packet = movement.packet();
-        currentSink.accept(new CaptureBridge.CapturePacket(
-                movement.captureTimeNanos(),
-                movement.serverTick(),
-                allocateSequence(movement.serverTick()),
-                PacketPhase.PLAY,
-                packet.packetId(),
-                packet.payload(),
-                new CaptureContext(
-                        packet.descriptor().disposition(),
-                        Optional.of(movement.world()),
-                        Optional.of(movement.position()),
-                        Optional.empty(),
-                        Optional.empty())));
+        synchronized (captureOrderLock) {
+            currentSink.accept(new CaptureBridge.CapturePacket(
+                    movement.captureTimeNanos(),
+                    movement.serverTick(),
+                    allocateSequence(movement.serverTick()),
+                    PacketPhase.PLAY,
+                    packet.packetId(),
+                    packet.payload(),
+                    new CaptureContext(
+                            packet.descriptor().disposition(),
+                            Optional.of(movement.world()),
+                            Optional.of(movement.position()),
+                            Optional.empty(),
+                            Optional.empty())));
+        }
     }
 
     /**
@@ -278,21 +283,23 @@ public final class Paper26_3CaptureBridge implements CaptureBridge {
                             descriptor.typeName(), payload)) {
                 return;
             }
-            long serverTick = accessor.currentServerTick();
-            CaptureBridge.CapturePacket packet = new CaptureBridge.CapturePacket(
-                    System.nanoTime(),
-                    serverTick,
-                    allocateSequence(serverTick),
-                    phase,
-                    packetId,
-                    payload,
-                    captureContext(event, descriptor, phase, packetId, payload, serverTick));
-            for (Paper26_3SyntheticStateCollector collector : syntheticCollectors) {
-                collector.observe(packet);
-            }
-            CaptureBridge.PacketSink currentSink = sink;
-            if (currentSink != null) {
-                currentSink.accept(packet);
+            synchronized (captureOrderLock) {
+                long serverTick = accessor.currentServerTick();
+                CaptureBridge.CapturePacket packet = new CaptureBridge.CapturePacket(
+                        System.nanoTime(),
+                        serverTick,
+                        allocateSequence(serverTick),
+                        phase,
+                        packetId,
+                        payload,
+                        captureContext(event, descriptor, phase, packetId, payload, serverTick));
+                CaptureBridge.PacketSink currentSink = sink;
+                if (currentSink != null) {
+                    currentSink.accept(packet);
+                }
+                for (Paper26_3SyntheticStateCollector collector : syntheticCollectors) {
+                    collector.observe(packet);
+                }
             }
         } catch (Throwable failure) {
             fail(failure);
@@ -396,23 +403,33 @@ public final class Paper26_3CaptureBridge implements CaptureBridge {
         }
     }
 
+    /** Allocates an exclusive checkpoint boundary in capture publication order. */
+    public CheckpointEncoder.CapturePoint checkpointCapturePoint() {
+        synchronized (captureOrderLock) {
+            long serverTick = accessor.currentServerTick();
+            return new CheckpointEncoder.CapturePoint(
+                    System.nanoTime(), serverTick, allocateSequence(serverTick));
+        }
+    }
+
     private int allocateSequence(long serverTick) {
         if (serverTick < 0L) {
             throw incompatible("Paper server tick is negative", null);
         }
-        synchronized (sequenceLock) {
-            if (serverTick < sequenceTick) {
-                throw incompatible("Paper server tick moved backwards", null);
-            }
-            if (serverTick != sequenceTick) {
-                sequenceTick = serverTick;
-                nextSequence = 0;
-            }
-            if (nextSequence == Integer.MAX_VALUE) {
-                throw incompatible("Paper capture sequence overflow", null);
-            }
-            return nextSequence++;
+        if (!Thread.holdsLock(captureOrderLock)) {
+            throw new IllegalStateException("capture order lock is not held");
         }
+        if (serverTick < sequenceTick) {
+            throw incompatible("Paper server tick moved backwards", null);
+        }
+        if (serverTick != sequenceTick) {
+            sequenceTick = serverTick;
+            nextSequence = 0;
+        }
+        if (nextSequence == Integer.MAX_VALUE) {
+            throw incompatible("Paper capture sequence overflow", null);
+        }
+        return nextSequence++;
     }
 
     private void closeSyntheticCollectors() {

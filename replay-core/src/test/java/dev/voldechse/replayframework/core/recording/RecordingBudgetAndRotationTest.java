@@ -175,6 +175,79 @@ final class RecordingBudgetAndRotationTest {
     }
 
     @Test
+    void advancesDeltasToTheActualCheckpointCaptureBarrier(@TempDir Path workspace)
+            throws Exception {
+        SessionPacketQueue queue = new SessionPacketQueue(1024);
+        queue.enqueue(new CapturedPacket(
+                10L, 10L, 0, PacketPhase.PLAY, 1, new byte[] {1}));
+        queue.enqueue(new CapturedPacket(
+                12L, 12L, 0, PacketPhase.PLAY, 1, new byte[] {2}));
+        queue.enqueue(new CapturedPacket(
+                18L, 18L, 0, PacketPhase.PLAY, 1, new byte[] {3}));
+        queue.closeForEnqueue();
+
+        CheckpointEncoder encoder = new CheckpointEncoder() {
+            @Override
+            public java.util.concurrent.CompletionStage<ReplayCheckpoint> encode(
+                    CheckpointRequest request) {
+                return java.util.concurrent.CompletableFuture.completedFuture(
+                        new ReplayCheckpoint(1, request.elapsedNanos(), List.of()));
+            }
+
+            @Override
+            public java.util.concurrent.CompletionStage<CheckpointCapture> capture(
+                    CheckpointRequest request) {
+                return java.util.concurrent.CompletableFuture.completedFuture(
+                        new CheckpointCapture(
+                                new CapturePoint(15L, 15L, 0),
+                                List.of(new RawPacketFrame(
+                                        15L, 15L, 0, PacketPhase.PLAY, 2,
+                                        new byte[] {9}))));
+            }
+        };
+        var scope = dev.voldechse.replayframework.api.recording.RecordingScope.builder().build();
+        CheckpointScheduler scheduler = new CheckpointScheduler(
+                Duration.ofNanos(10),
+                encoder,
+                scope,
+                (elapsedNanos, serverTick, kind) -> new CheckpointEncoder.CheckpointRequest(
+                        scope, elapsedNanos, serverTick, kind, 0L));
+        RecordingSegmentAppender appender = new RecordingSegmentAppender(
+                workspace,
+                "test-adapter",
+                0L,
+                queue,
+                new ReplayCheckpoint(0, 0L, List.of()),
+                ReplayBudget.builder().maxSegmentBytes(1024).build(),
+                scheduler,
+                CheckpointSignalSource.noop(),
+                reason -> {
+                },
+                (code, cause) -> {
+                    throw new AssertionError("unexpected writer failure: " + code, cause);
+                },
+                artifacts -> {
+                });
+
+        appender.runWriterLoop();
+        RecordingSegmentAppender.RecordingArtifacts artifacts = appender.finishForFinalization();
+        ReplayCheckpoint checkpoint = new ReplayCheckpointReader()
+                .read(artifacts.checkpointFiles().get(1));
+        assertEquals(15L, checkpoint.elapsedNanos());
+
+        var checkpointPoint = artifacts.seekPoints().stream()
+                .filter(point -> point.checkpointOrdinal() == 1 && point.elapsedNanos() == 15L)
+                .findFirst()
+                .orElseThrow();
+        var firstPostCheckpointDelta = artifacts.seekPoints().stream()
+                .filter(point -> point.checkpointOrdinal() == 1 && point.elapsedNanos() == 18L)
+                .findFirst()
+                .orElseThrow();
+        assertEquals(checkpointPoint.segmentOrdinal(), firstPostCheckpointDelta.segmentOrdinal());
+        assertEquals(checkpointPoint.frameOffset(), firstPostCheckpointDelta.frameOffset());
+    }
+
+    @Test
     void keepsAnOversizedSinglePayloadIntact(@TempDir Path workspace) throws Exception {
         byte[] payload = new byte[128];
         for (int index = 0; index < payload.length; index++) {
@@ -262,4 +335,5 @@ final class RecordingBudgetAndRotationTest {
     private static RawPacketFrame frame(long elapsedNanos, byte[] payload) {
         return new RawPacketFrame(elapsedNanos, 1L, 0, PacketPhase.PLAY, 1, payload);
     }
+
 }
