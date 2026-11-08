@@ -608,7 +608,8 @@ public final class ExampleViewerEnvironment {
                 "Example viewer operation '" + operation
                         + "' failed for viewer " + entry.viewerId()
                         + " and replay " + entry.replayId()
-                        + " (" + cause.getClass().getSimpleName() + ")");
+                        + " (" + cause.getClass().getSimpleName() + ")",
+                cause);
     }
 
     private <T> CompletionStage<T> onMain(Supplier<T> action) {

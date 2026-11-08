@@ -40,10 +40,12 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -429,7 +431,7 @@ final class DefaultPlaybackService implements PlaybackService {
         }
     }
 
-    private List<SegmentCache.SegmentRef> buildSegmentRefs(
+    static List<SegmentCache.SegmentRef> buildSegmentRefs(
             ReplayManifest manifest,
             ReplayIndex index) {
         List<ReplayManifest.ArtifactFile> artifacts = manifest.files().stream()
@@ -448,18 +450,23 @@ final class DefaultPlaybackService implements PlaybackService {
             }
         }
 
-        Map<Integer, List<SeekPoint>> pointsBySegment = new HashMap<>();
-        SeekPoint initialCheckpoint = new SeekPoint(0L, 0, 0, 0L);
+        Map<Integer, List<SeekPoint>> framePointsBySegment = new HashMap<>();
+        Set<Integer> seenCheckpointOrdinals = new HashSet<>();
         for (SeekPoint point : index.points()) {
             if (point.elapsedNanos() > manifest.durationNanos()) {
                 throw corrupt("index point exceeds replay duration");
             }
-            // The bootstrap checkpoint is not a frame in segment zero. Its
-            // zero timestamp must not become that segment's lower time bound.
-            if (point.equals(initialCheckpoint)) {
+            if (!filesByOrdinal.containsKey(point.segmentOrdinal())) {
+                throw corrupt("index references a missing segment artifact");
+            }
+            // The first point for each checkpoint ordinal is its seek anchor,
+            // not a frame contained by the referenced segment. An anchor can
+            // intentionally point at the sealed end of the preceding segment.
+            if (seenCheckpointOrdinals.add(point.checkpointOrdinal())) {
                 continue;
             }
-            pointsBySegment.computeIfAbsent(point.segmentOrdinal(), ignored -> new ArrayList<>())
+            framePointsBySegment.computeIfAbsent(
+                            point.segmentOrdinal(), ignored -> new ArrayList<>())
                     .add(point);
         }
 
@@ -470,22 +477,19 @@ final class DefaultPlaybackService implements PlaybackService {
                 .sorted(Map.Entry.comparingByKey())
                 .toList()) {
             int ordinal = entry.getKey();
-            List<SeekPoint> points = pointsBySegment.remove(ordinal);
+            List<SeekPoint> points = framePointsBySegment.remove(ordinal);
             if (points == null || points.isEmpty()) {
-                throw corrupt("segment has no index point: " + ordinal);
+                throw corrupt("segment has no frame index point: " + ordinal);
             }
             long start = points.stream().mapToLong(SeekPoint::elapsedNanos).min().orElseThrow();
-            long observedEnd = points.stream().mapToLong(SeekPoint::elapsedNanos).max().orElseThrow();
-            long end = ordinal == filesByOrdinal.keySet().stream().max(Integer::compareTo).orElseThrow()
-                    ? manifest.durationNanos()
-                    : observedEnd;
-            if (end < start || observedEnd > manifest.durationNanos() || start < previousEnd) {
+            long end = points.stream().mapToLong(SeekPoint::elapsedNanos).max().orElseThrow();
+            if (end < start || start < previousEnd) {
                 throw corrupt("segment time windows are not ordered");
             }
             result.add(new SegmentCache.SegmentRef(ordinal, entry.getValue(), start, end));
             previousEnd = end;
         }
-        if (!pointsBySegment.isEmpty()) {
+        if (!framePointsBySegment.isEmpty()) {
             throw corrupt("index references a missing segment artifact");
         }
         return List.copyOf(result);
