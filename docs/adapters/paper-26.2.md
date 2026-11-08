@@ -20,11 +20,14 @@ Chunks, light, block entities, entity lifecycle, movement, metadata, equipment, 
 
 Player chat becomes decorated unsigned system chat after applying the recorded filter mask. Action-bar chat is dropped. Explosions keep scene particles and sound but lose viewer knockback. Replay player profiles use mapped UUIDs and names, do not enter the live tab list, and never reuse a recorded chat session.
 
+During seek reconstruction, the 26.2 bridge accepts only registry descriptors whose `Checkpoint` column is `yes`. Durable chunk, block, entity, profile, movement, metadata, equipment, effect, passenger, border, time, and registry-tag changes therefore converge on the target state. Ordered effects with `Checkpoint` set to `no`, including animations, block-breaking presentation, damage effects, explosions, particles, and sounds, remain available during normal timeline playback but are skipped during reconstruction. Frames are enqueued as batches while the channel drain retains its limit of 128 packet operations and one flush per event-loop turn.
+
 ## Tests
 
 - `PacketCoverageTest` loads the real 26.2 NMS registry and fails for an unreviewed PLAY packet or missing essential family.
 - Registry, native codec, checkpoint, snapshot, observer isolation, and outbound-gate tests cover their respective version-bound behavior.
 - `NeutralObserverTest` includes entity effects, minecart motion, sound, leashes, filtered chat, explosion knockback, block-breaking overlays, and idempotent reset.
+- `Paper26PlaybackBridgeTest` verifies that reconstruction retains 26.2 checkpoint state while suppressing transient frames.
 
 `R` means registry/classification coverage. `R+N` additionally identifies a focused native behavior test. Registry coverage does not claim every possible payload or custom datapack renders correctly.
 

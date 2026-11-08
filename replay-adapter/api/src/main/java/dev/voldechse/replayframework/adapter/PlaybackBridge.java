@@ -45,6 +45,23 @@ public interface PlaybackBridge {
     void send(RawPacketFrame frame);
 
     /**
+     * Enqueues an ordered batch for one emission purpose. Adapters may filter
+     * transient packets during reconstruction and must retain bounded outbound
+     * processing. The default preserves compatibility with bridges that have
+     * no adapter-specific batching implementation.
+     *
+     * @param frames ordered frames from the matching adapter format
+     * @param mode live playback or state reconstruction
+     */
+    default void sendBatch(List<RawPacketFrame> frames, PlaybackEmissionMode mode) {
+        Objects.requireNonNull(frames, "frames");
+        Objects.requireNonNull(mode, "mode");
+        for (RawPacketFrame frame : List.copyOf(frames)) {
+            send(frame);
+        }
+    }
+
+    /**
      * Clears the current replay view using adapter-valid clientbound packets.
      *
      * @throws IllegalStateException after {@link #close()}

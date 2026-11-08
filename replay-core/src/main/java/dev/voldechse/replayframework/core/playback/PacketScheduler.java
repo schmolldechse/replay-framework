@@ -17,6 +17,26 @@ import java.util.concurrent.locks.LockSupport;
 /** Schedules due replay frames on one virtual worker. */
 final class PacketScheduler {
 
+    /** Last segment frame accepted by the observer bridge. */
+    record Cursor(long elapsedNanos, long serverTick, int sequence) {
+        Cursor {
+            if (elapsedNanos < -1L || serverTick < -1L || sequence < -1) {
+                throw new IllegalArgumentException("cursor coordinates must be at least -1");
+            }
+        }
+
+        boolean isBefore(RawPacketFrame frame) {
+            Objects.requireNonNull(frame, "frame");
+            if (elapsedNanos < 0L || frame.elapsedNanos() != elapsedNanos) {
+                return elapsedNanos < 0L || frame.elapsedNanos() > elapsedNanos;
+            }
+            if (frame.serverTick() != serverTick) {
+                return frame.serverTick() > serverTick;
+            }
+            return frame.sequence() > sequence;
+        }
+    }
+
     interface Listener {
         void onBuffering();
 
@@ -48,6 +68,7 @@ final class PacketScheduler {
     private final AtomicBoolean failureReported = new AtomicBoolean();
     private final AtomicBoolean endedReported = new AtomicBoolean();
     private final Object lifecycleLock = new Object();
+    private final Object cursorLock = new Object();
     private volatile boolean stopped;
     private volatile boolean emissionSuspended;
     private volatile Thread worker;
@@ -135,18 +156,26 @@ final class PacketScheduler {
         RawPacketFrame last = emittedDeltaFrames.stream()
                 .max(FRAME_ORDER)
                 .orElse(null);
-        if (last == null) {
-            // Checkpoint records use their own local sequence numbers.  They
-            // must never become the cursor for the segment stream: a segment
-            // may still contain a delta at the same replay time.
-            cursorElapsedNanos = checkpointNanos;
-            cursorServerTick = -1L;
-            cursorSequence = -1;
-            return;
+        synchronized (cursorLock) {
+            if (last == null) {
+                // Checkpoint records use their own local sequence numbers. They
+                // must never become the cursor for the segment stream: a segment
+                // may still contain a delta at the same replay time.
+                cursorElapsedNanos = checkpointNanos;
+                cursorServerTick = -1L;
+                cursorSequence = -1;
+                return;
+            }
+            cursorElapsedNanos = last.elapsedNanos();
+            cursorServerTick = last.serverTick();
+            cursorSequence = last.sequence();
         }
-        cursorElapsedNanos = last.elapsedNanos();
-        cursorServerTick = last.serverTick();
-        cursorSequence = last.sequence();
+    }
+
+    Cursor cursor() {
+        synchronized (cursorLock) {
+            return new Cursor(cursorElapsedNanos, cursorServerTick, cursorSequence);
+        }
     }
 
     void runOnce(long nowNanos) {
@@ -321,31 +350,33 @@ final class PacketScheduler {
                 return false;
             }
             bridge.send(frame);
-            cursorElapsedNanos = frame.elapsedNanos();
-            cursorServerTick = frame.serverTick();
-            cursorSequence = frame.sequence();
+            synchronized (cursorLock) {
+                cursorElapsedNanos = frame.elapsedNanos();
+                cursorServerTick = frame.serverTick();
+                cursorSequence = frame.sequence();
+            }
             emitted++;
         }
         return true;
     }
 
     private boolean isAfterCursor(RawPacketFrame frame) {
-        if (cursorElapsedNanos < 0L) {
-            return true;
+        synchronized (cursorLock) {
+            if (cursorElapsedNanos < 0L || frame.elapsedNanos() != cursorElapsedNanos) {
+                return cursorElapsedNanos < 0L || frame.elapsedNanos() > cursorElapsedNanos;
+            }
+            if (frame.serverTick() != cursorServerTick) {
+                return frame.serverTick() > cursorServerTick;
+            }
+            return frame.sequence() > cursorSequence;
         }
-        if (frame.elapsedNanos() != cursorElapsedNanos) {
-            return frame.elapsedNanos() > cursorElapsedNanos;
-        }
-        if (frame.serverTick() != cursorServerTick) {
-            return frame.serverTick() > cursorServerTick;
-        }
-        return frame.sequence() > cursorSequence;
     }
 
     private Duration cursorStart() {
-        return cursorElapsedNanos < 0L
+        long elapsedNanos = cursor().elapsedNanos();
+        return elapsedNanos < 0L
                 ? Duration.ZERO
-                : Duration.ofNanos(cursorElapsedNanos);
+                : Duration.ofNanos(elapsedNanos);
     }
 
     private long inclusiveEnd(long positionNanos) {

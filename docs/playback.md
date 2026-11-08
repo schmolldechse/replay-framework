@@ -186,14 +186,32 @@ reconstructs a coherent client-visible state without replaying the entire
 recording from its beginning.
 
 Internally, a seek first increments the timeline's operation generation,
-suspends scheduled frame emission, and discards replay packets waiting in the
-viewer bridge. The seek engine clamps the target to the replay duration, finds
-the floor checkpoint in the index, plans and loads the required segment range,
-then resets the bridge before it emits checkpoint frames and deltas. The
-timeline updates its clock and scheduler cursor only after the bridge reports
-its replay output idle. A newer seek invalidates an older generation, which is
-why integrations must handle a superseded seek stage without treating it as a
-replay corruption error.
+suspends scheduled frame emission, and waits for already accepted live output
+to become idle. The seek engine clamps the target to the replay duration and
+finds the floor checkpoint in the index. A backward seek, a target in another
+checkpoint lineage, an invalid scene, or a superseded operation resets the
+bridge and applies the complete checkpoint plus its required deltas.
+
+A forward seek can use an incremental path when the current scene is valid and
+the current and target positions share the same floor checkpoint. In that case
+the runtime retains the loaded chunks and replay entities and applies only
+frames after the scheduler's last accepted cursor through the target. This is
+the common path for a short forward control such as `+10s`. The conservative
+full rebuild remains the fallback whenever those invariants cannot be proven.
+
+Both paths emit reconstruction data in batches. Versioned adapters retain only
+packet descriptors marked as checkpoint-relevant during reconstruction, so
+historical sounds, particles, animations, chat-style presentation, and other
+transient frames are not replayed as a burst. Normal timeline playback still
+emits allowed transient packets at their recorded time. Paper bridges process
+at most their existing bounded number of outbound operations per event-loop
+turn and flush once per turn.
+
+The timeline updates its clock and scheduler cursor only after the bridge
+reports its replay output idle. A newer seek discards an older operation's
+queued output, marks the partially reconstructed scene invalid, and forces the
+new operation through a full rebuild. Integrations must therefore handle a
+superseded seek stage without treating it as replay corruption.
 
 This is why regular recording checkpoints and compatible adapter/protocol data
 are essential. A damaged artifact, a missing floor checkpoint, or an
