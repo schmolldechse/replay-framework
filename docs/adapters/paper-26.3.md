@@ -16,7 +16,9 @@ The adapter entry point is `Paper26_3ReplayAdapter`, provided through `Paper26_3
 
 Chunks, light, block entities, entity lifecycle, movement, metadata, equipment, passengers, leashes, active effects, and player profiles form the reconstructible scene. Animations, sounds, particles, chat, damage effects, and transient blocks are ordered deltas.
 
-Player movement is captured from `PlayerMoveEvent`; living non-player movement is captured from Paper's `EntityMoveEvent`. The adapter emits the 26.3 absolute `entity_position_sync` representation, plus `rotate_head` when required, through the same neutral capture sequence used by outbound packets. Once an entity uses this authoritative path, recipient-derived relative movement, rotation, teleport, and position-sync copies for that entity are suppressed. Movement therefore does not depend on another player tracking the moving entity and is not duplicated for multiple recipients. Scope filtering uses the moved entity's destination world and block position.
+Player visual state follows the [capture source policy](../capture-source-policy.md). PacketEvents observes accepted PLAY serverbound packets and copies only the user identity, protocol entity ID, packet type, and animation hand on the Netty thread. A coalesced server-thread sample then compares the player's position, orientation, ground state, and all equipment slots with the previous sample. The adapter emits the 26.3 `entity_position_sync` representation, `rotate_head` when required, changed `set_equipment` slots including cleared slots, and `swing_animation` with the selected hand and current item animation. Player movement, equipment, and swings do not use Paper gameplay events.
+
+Non-player entities have no owner connection or serverbound stream. `EntityMoveEvent` and `EntityEquipmentChangedEvent` are retained only as non-player fallbacks and are translated into the same version-native packets. Once either path owns a state family, recipient-derived movement and equipment copies are suppressed; the `SWAP_HANDS` entity event is also suppressed for equipment-authoritative entities. Swing suppression is limited to the accepted animation's server tick so unrelated and later animation packets remain available. Scope filtering uses the recorded entity's world and block position rather than a packet recipient.
 
 `SEND` is scene-safe. `REWRITE` rebuilds native packets with session-local identities. `DROP_LOCAL` covers state belonging to the recorded connection: health, experience, inventory, viewer movement, abilities, camera, menus, titles, scoreboard, teams, waypoints, commands, recipes, dialogs, post-processing, and related UI. Equivalent live packets continue through the outbound gate. `BLOCKED` covers connection control and diagnostic traffic.
 
@@ -31,7 +33,8 @@ Three PLAY packets distinguish this registry from 26.2. `swing_animation` is rew
 - `PacketCoverageTest` loads the real 26.3 NMS registry and fails for an unreviewed PLAY packet or missing essential family.
 - Registry, native codec, checkpoint, snapshot, observer isolation, and outbound-gate tests cover their respective version-bound behavior.
 - Snapshot tests verify that the 26.3 capture barrier is allocated only after asynchronous scope preloading completes; generic core tests verify the exclusive delta boundary stored with it.
-- `NeutralObserverTest` includes entity effects, minecart motion, sound, leashes, filtered chat, explosion knockback, block-breaking overlays, transient blocks, 26.3 swing animation, and idempotent reset.
+- `Paper26_3EntityStateCaptureTest` covers packet-driven movement/equipment authority, hand-swap and tick-scoped swing suppression, equipment deltas, and cleared slots.
+- `NeutralObserverTest` includes entity effects, minecart motion, sound, leashes, filtered chat, explosion knockback, block-breaking overlays, transient blocks, 26.3 swing animation, serializer-qualified entity-reference metadata, and idempotent reset.
 - `Paper26_3PlaybackBridgeTest` verifies that reconstruction retains 26.3 checkpoint state while suppressing transient frames.
 
 `R` means registry/classification coverage. `R+N` additionally identifies a focused native behavior test. Registry coverage does not claim every possible payload or custom datapack renders correctly.
@@ -40,7 +43,7 @@ Three PLAY packets distinguish this registry from 26.2. `swing_animation` is rew
 
 ## Known limits
 
-Map IDs and integer entity references embedded in specialized metadata are not generically rewritten. Diagnostic and game-test packets are captured but blocked. Short-lived deltas before a selected checkpoint are absent after a seek. The fingerprint is a compatibility guard, not a substitute for validating custom registries or datapacks.
+Map IDs and unclassified integer fields are not generically rewritten. `OPTIONAL_UNSIGNED_INT` entity metadata is rewritten as a verified entity reference; in 26.3 this covers firework attachment targets, frog tongue targets, and player shoulder-parrot references while ordinary integer metadata remains unchanged. Diagnostic and game-test packets are captured but blocked. Short-lived deltas before a selected checkpoint are absent after a seek. The fingerprint is a compatibility guard, not a substitute for validating custom registries or datapacks.
 
 ## STATUS
 
