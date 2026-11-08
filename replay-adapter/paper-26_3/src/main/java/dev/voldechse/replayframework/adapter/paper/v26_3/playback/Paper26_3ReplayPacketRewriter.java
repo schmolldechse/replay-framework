@@ -655,18 +655,31 @@ public final class Paper26_3ReplayPacketRewriter {
             SynchedEntityData.DataValue<?> value) {
         Objects.requireNonNull(value, "value");
         return new SynchedEntityData.DataValue(
-                value.id(), value.serializer(), rewriteMetadataValue(value.value()));
+                value.id(), value.serializer(),
+                rewriteMetadataValue(value.serializer(), value.value()));
     }
 
-    private Object rewriteMetadataValue(Object value) {
+    private Object rewriteMetadataValue(
+            net.minecraft.network.syncher.EntityDataSerializer<?> serializer,
+            Object value) {
+        if (serializer == net.minecraft.network.syncher.EntityDataSerializers.OPTIONAL_UNSIGNED_INT
+                && value instanceof java.util.OptionalInt optionalEntityId) {
+            return optionalEntityId.isPresent()
+                    ? java.util.OptionalInt.of(mapEntityId(optionalEntityId.getAsInt()))
+                    : java.util.OptionalInt.empty();
+        }
+        return rewriteNestedMetadataValue(value);
+    }
+
+    private Object rewriteNestedMetadataValue(Object value) {
         if (value instanceof UUID uuid) {
             return mapUuid(uuid);
         }
         if (value instanceof Optional<?> optional) {
-            return optional.map(this::rewriteMetadataValue);
+            return optional.map(this::rewriteNestedMetadataValue);
         }
         if (value instanceof List<?> list) {
-            return list.stream().map(this::rewriteMetadataValue).toList();
+            return list.stream().map(this::rewriteNestedMetadataValue).toList();
         }
         return value;
     }
