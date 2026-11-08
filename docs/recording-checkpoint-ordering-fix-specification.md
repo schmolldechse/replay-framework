@@ -1,9 +1,9 @@
-# Recording checkpoint ordering fix specification
+# Recording ordering reliability fix specification
 
 ## Status
 
-Implemented on branch `codex/fix-recording-checkpoint-ordering` after explicit
-approval.
+Both the checkpoint target-ordering fix and the capture-publication ordering
+fix are implemented on branch `codex/fix-recording-checkpoint-ordering`.
 
 ## Problem statement
 
@@ -51,7 +51,46 @@ The implementation is duplicated in both version-specific Paper adapters, so
 Paper 26.2 has the same latent defect even though the observed exception came
 from Paper 26.3.
 
-## Proposed implementation
+## Follow-up failure and second root cause
+
+The comparator fix was built into the runtime and verified from the loaded
+JAR. A subsequent recording still entered `FAILED` approximately 85 ms after
+activation. Replay `c4e925d8-7fd1-4518-972f-c7abdf073f8d` persisted
+`ADAPTER_ERROR` for session `0a8a90b2-01f5-42aa-91b1-f94d653819bb`.
+
+Because persisted diagnostics intentionally retain only the exception class,
+a bounded Java Flight Recorder capture was taken during a second reproduction.
+It identified the exact terminal exception:
+
+```text
+IllegalArgumentException: captured frames moved backwards
+    at RecordingSegmentAppender.validateOrder(RecordingSegmentAppender.java:488)
+    at RecordingSegmentAppender.appendPacket(RecordingSegmentAppender.java:230)
+    at RecordingSegmentAppender.processPacket(RecordingSegmentAppender.java:219)
+```
+
+The appender is correctly enforcing the replay-format ordering invariant. The
+ordering violation originates in both Paper capture adapters:
+
+- normal outbound packets allocate capture time, server tick, and sequence
+  while holding the global `captureOrderLock`;
+- synthetic entity/player movement reads `System.nanoTime()` and the server
+  tick in `Paper26EntityStateCapture` or `Paper26_3EntityStateCapture` before
+  it reaches that lock;
+- the bridge assigns only the sequence after the movement eventually acquires
+  the lock.
+
+A normal outbound packet can therefore acquire the lock while a movement
+event is waiting, publish a newer timestamp first, and then be followed by the
+older movement timestamp. The queue preserves publication order, so the
+single-owner writer correctly detects that replay time moved backwards and
+fails the session. The same race also exists for the server-tick component if
+publication crosses a tick boundary.
+
+This is a separate ordering defect from the checkpoint comparator. Both fixes
+are required for a recording to remain active and reach an explicit stop.
+
+## Implementation
 
 ### 1. Define a total target-key order in each Paper adapter
 
@@ -98,12 +137,11 @@ No change is planned for `RecordingService.active(...)`, recording-session
 IDs, replay IDs, or the `record stop` argument.
 
 The stop command already parses the full recording-session UUID and looks it
-up through the correct service. The reported session was absent because the
+up through the correct service. The reported sessions were absent because the
 writer had already failed and the coordinator intentionally removes terminal
-failed sessions from its active-session registry. Preventing the checkpoint
-ordering failure keeps the session active until an explicit or budget-driven
-stop and resolves the observed stop symptom without weakening lifecycle
-invariants or allowing failed sessions to be stopped as if they were active.
+failed sessions from its active-session registry. The stop lookup and its
+lifecycle invariants must remain unchanged; both upstream ordering failures
+must instead be prevented.
 
 ### 3. Add adapter-specific regression tests
 
@@ -122,12 +160,66 @@ The tests belong to the adapter modules because the failure is caused by
 adapter-specific checkpoint identities. No generic core behavior changes, so
 no new generic core test is required for this fix.
 
-## Files expected to change
+### 4. Allocate complete capture order at the publication boundary
+
+Update both version-specific Paper capture implementations so every published
+`CapturePacket` obtains all three ordering components while holding the same
+`captureOrderLock`:
+
+1. capture time from the monotonic clock;
+2. current Paper server tick;
+3. per-tick sequence.
+
+The bridge will provide one internal capture-order allocation path and use it
+for:
+
+- normal PacketEvents clientbound packets;
+- synthetic entity/player movement;
+- synthetic state packets;
+- checkpoint capture barriers.
+
+`SyntheticMovement` will carry only the encoded movement packet and its scope
+context. It will no longer carry a timestamp or server tick obtained before
+publication. The now-unused server-tick supplier will consequently be removed
+from the entity-state capture constructor. Synthetic state collectors may
+retain their source time and tick for state deduplication, but the bridge will
+assign their final replay ordering coordinates when publishing them.
+
+The implementation stays inside each version-bound capture adapter. No public
+Replay Framework API, replay-format contract, or Paper event behavior changes.
+
+### 5. Add capture-order regression tests
+
+Add equivalent tests for Paper 26.2 and Paper 26.3 that verify:
+
+- capture-order coordinates are allocated as one unit at the bridge boundary;
+- multiple publications in one tick receive increasing sequences;
+- moving to a later tick resets the per-tick sequence without moving capture
+  time backwards;
+- synthetic movement no longer contains a pre-publication timestamp or tick;
+- an interleaving equivalent to movement waiting behind a normal outbound
+  packet cannot publish an older frame after a newer one.
+
+The existing generic writer invariant test remains authoritative: the core
+must continue rejecting genuinely out-of-order input rather than silently
+clamping or reordering it.
+
+## Changed files
 
 - `replay-adapter/paper-26_2/src/main/java/.../checkpoint/Paper26CheckpointEncoder.java`
 - `replay-adapter/paper-26_2/src/test/java/.../Paper26CheckpointFixtureTest.java`
 - `replay-adapter/paper-26_3/src/main/java/.../checkpoint/Paper26_3CheckpointEncoder.java`
 - `replay-adapter/paper-26_3/src/test/java/.../Paper26_3CheckpointFixtureTest.java`
+- `replay-adapter/paper-26_2/src/main/java/.../capture/Paper26CaptureBridge.java`
+- `replay-adapter/paper-26_2/src/main/java/.../capture/Paper26CaptureOrder.java`
+- `replay-adapter/paper-26_2/src/main/java/.../capture/Paper26EntityStateCapture.java`
+- `replay-adapter/paper-26_2/src/test/java/.../capture/Paper26CaptureOrderTest.java`
+- `replay-adapter/paper-26_2/src/test/java/.../capture/Paper26EntityStateCaptureTest.java`
+- `replay-adapter/paper-26_3/src/main/java/.../capture/Paper26_3CaptureBridge.java`
+- `replay-adapter/paper-26_3/src/main/java/.../capture/Paper26_3CaptureOrder.java`
+- `replay-adapter/paper-26_3/src/main/java/.../capture/Paper26_3EntityStateCapture.java`
+- `replay-adapter/paper-26_3/src/test/java/.../capture/Paper26_3CaptureOrderTest.java`
+- `replay-adapter/paper-26_3/src/test/java/.../capture/Paper26_3EntityStateCaptureTest.java`
 - this specification, updated to record the completed validation
 
 No replay-format, database-schema, configuration, command syntax, or public
@@ -144,6 +236,14 @@ fix and its regression tests in one focused semantic commit, for example:
 fix: enforce total checkpoint target ordering
 ```
 
+The follow-up capture-order correction belongs to the same branch because it
+is the second verified cause of the same recording-start/stop incident and the
+branch has not yet been merged. It will remain a separate logical commit:
+
+```text
+fix: serialize capture ordering at publication
+```
+
 ## Validation plan
 
 1. Run the Paper 26.2 adapter tests.
@@ -157,6 +257,8 @@ fix: enforce total checkpoint target ordering
 7. Verify that no comparator exception occurs, the session remains active
    until stopped, the replay reaches `AVAILABLE`, and checkpoint/segment
    artifacts are published.
+8. Exercise simultaneous player movement and outbound traffic during startup
+   so the original publication race is covered by the server smoke test.
 
 If the local environment prevents a real server smoke test, that limitation
 will be reported explicitly rather than replacing it with a weaker claim.
@@ -166,6 +268,8 @@ will be reported explicitly rather than replacing it with a weaker claim.
 - Recording startup and periodic/dimension-change checkpoint generation become
   deterministic for mixed base and qualified state keys.
 - The same latent failure is removed from both supported Paper adapters.
+- Real and synthetic capture sources publish one globally ordered stream even
+  when their callbacks originate on different threads.
 - Existing replay artifacts remain readable because neither the artifact
   format nor packet payloads change; only checkpoint frame ordering is made
   well-defined.
@@ -186,6 +290,25 @@ will be reported explicitly rather than replacing it with a weaker claim.
   environment and stopped before running project tasks. The two affected test
   classes were therefore executed through JUnit Platform directly.
 - A live Paper server smoke test was not performed from this environment
-  because the blocked Gradle invocation could not produce and deploy fresh
-  runtime artifacts. The real failure record was inspected read-only and
-  confirmed the lifecycle diagnosis described above.
+  during the first implementation pass because the blocked Gradle invocation
+  could not produce and deploy fresh runtime artifacts.
+- The user subsequently built and ran the corrected runtime on Paper 26.3.
+  That smoke test confirmed the comparator fix was loaded but exposed the
+  independent capture-publication race described above.
+- A bounded JFR reproduction captured the exact `captured frames moved
+  backwards` exception in the recording writer. The recording was stopped
+  immediately after the dump and the diagnostic was limited to ten minutes of
+  history and 100 MB while active.
+- The capture-publication correction compiles directly against both the Paper
+  26.2 and Paper 26.3 development bundles.
+- `Paper26CaptureOrderTest` and `Paper26EntityStateCaptureTest`: 4 of 4 tests
+  successful.
+- `Paper26_3CaptureOrderTest` and `Paper26_3EntityStateCaptureTest`: 4 of 4
+  tests successful.
+- The regular adapter and core Gradle test invocation was attempted again, but
+  the execution environment still could not establish Gradle's required local
+  loopback connection. The eight directly affected tests were therefore
+  compiled and executed through JUnit Platform without Gradle.
+- A fresh Paper 26.3 server smoke test remains outstanding and must verify that
+  a recording stays active during concurrent player movement and can be
+  stopped into the `AVAILABLE` state.
