@@ -19,6 +19,7 @@ import dev.voldechse.replayframework.format.ReplayCheckpointReader;
 import dev.voldechse.replayframework.format.ReplayCheckpointWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -27,8 +28,9 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import net.kyori.adventure.key.Key;
-import net.minecraft.network.protocol.game.ClientboundChangeDifficultyPacket;
-import net.minecraft.world.Difficulty;
+import net.minecraft.network.PacketListener;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.PacketType;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.Test;
 
@@ -40,6 +42,77 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 final class Paper26CheckpointFixtureTest {
+    private static final Packet<PacketListener> TEST_PACKET = new Packet<>() {
+        @Override
+        public PacketType<? extends Packet<PacketListener>> type() {
+            throw new UnsupportedOperationException("fixture packet has no wire type");
+        }
+
+        @Override
+        public void handle(PacketListener listener) {
+            throw new UnsupportedOperationException("fixture packet cannot be handled");
+        }
+    };
+
+    @Test
+    void ordersQualifiedEntityTargetsWithStableTotalOrder() {
+        DescriptorSpec metadata = descriptor("minecraft:set_entity_data", 6);
+        DescriptorSpec attributes = descriptor("minecraft:update_attributes", 7);
+        PacketRegistry registry = PacketRegistry.of(List.of(
+                metadata.descriptor(),
+                attributes.descriptor()));
+        Map<String, Integer> packetIds = Map.of(
+                metadata.descriptor().typeName(), metadata.packetId(),
+                attributes.descriptor().typeName(), attributes.packetId());
+
+        List<Paper26CheckpointEncoder.PacketBlueprint> packets = new ArrayList<>();
+        for (int entityId = 48; entityId >= 1; entityId--) {
+            packets.add(blueprint(
+                    "minecraft:update_attributes",
+                    Paper26CheckpointEncoder.CheckpointPacketFamily.ENTITY_METADATA,
+                    "minecraft:world",
+                    "entity:" + entityId + ":attributes"));
+            packets.add(blueprint(
+                    "minecraft:set_entity_data",
+                    Paper26CheckpointEncoder.CheckpointPacketFamily.ENTITY_METADATA,
+                    "minecraft:world",
+                    "entity:" + entityId));
+        }
+
+        List<String> encodedTargets = new ArrayList<>();
+        Paper26CheckpointEncoder encoder = new Paper26CheckpointEncoder(
+                registry,
+                ignored -> CompletableFuture.completedFuture(
+                        new Paper26CheckpointEncoder.CheckpointSnapshot(packets)),
+                blueprint -> {
+                    encodedTargets.add(blueprint.targetKey());
+                    int packetId = packetIds.get(blueprint.descriptorTypeName());
+                    return new Paper26CheckpointEncoder.EncodedPacket(
+                            blueprint.descriptorTypeName(),
+                            PacketPhase.PLAY,
+                            PacketDescriptor.Direction.CLIENTBOUND,
+                            packetId,
+                            blueprint.family(),
+                            blueprint.worldKey(),
+                            blueprint.targetKey(),
+                            new byte[]{(byte) packetId});
+                },
+                directExecutor());
+
+        ReplayCheckpoint checkpoint = encoder.encode(new CheckpointEncoder.CheckpointRequest(
+                RecordingScope.builder().build(),
+                0L,
+                0L,
+                CheckpointEncoder.CheckpointKind.INITIAL)).toCompletableFuture().join();
+
+        List<String> expectedTargets = new ArrayList<>();
+        for (int entityId = 1; entityId <= 48; entityId++) {
+            expectedTargets.add("entity:" + entityId);
+            expectedTargets.add("entity:" + entityId + ":attributes");
+        }
+        assertEquals(expectedTargets, encodedTargets);
+        assertEquals(expectedTargets.size(), checkpoint.initializationFrames().size());
+    }
 
     @Test
     void encodesAllCheckpointFamiliesInStableOrder(@TempDir Path temporaryDirectory) throws Exception {
@@ -252,7 +325,7 @@ final class Paper26CheckpointFixtureTest {
                 family,
                 worldKey,
                 targetKey,
-                new ClientboundChangeDifficultyPacket(Difficulty.NORMAL, false));
+                TEST_PACKET);
     }
 
     private static Paper26SyntheticStateCollector.StateDelta stateDelta(
