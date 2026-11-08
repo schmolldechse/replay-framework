@@ -39,6 +39,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -217,6 +218,41 @@ class PlaybackBufferCacheTest {
     }
 
     @Test
+    void memoryBufferEvictsCompleteLocatedSegments() {
+        long frameBytes = 64L + 1L;
+        MemoryPacketBuffer buffer = new MemoryPacketBuffer(3L * frameBytes);
+        buffer.addSegment(
+                0,
+                List.of(frame(0L, 1), frame(1L, 2)),
+                List.of(0L, 1L));
+
+        buffer.addSegment(
+                1,
+                List.of(frame(10L, 3), frame(11L, 4)),
+                List.of(0L, 1L));
+
+        assertEquals(Set.of(1), buffer.residentSegmentOrdinals());
+        assertEquals(List.of(frame(10L, 3), frame(11L, 4)), buffer.framesBetween(
+                Duration.ZERO,
+                Duration.ofNanos(12L)));
+    }
+
+    @Test
+    void memoryBufferRejectsSegmentLargerThanBudget() {
+        long frameBytes = 64L + 1L;
+        MemoryPacketBuffer buffer = new MemoryPacketBuffer(frameBytes);
+
+        assertThrows(
+                MemoryPacketBuffer.MemoryBufferCapacityException.class,
+                () -> buffer.addSegment(
+                        0,
+                        List.of(frame(0L, 1), frame(1L, 2)),
+                        List.of(0L, 1L)));
+        assertTrue(buffer.residentSegmentOrdinals().isEmpty());
+        assertEquals(0L, buffer.accountedBytes());
+    }
+
+    @Test
     void plannerScalesSpeedAndPrioritizesDirection() {
         List<SegmentCache.SegmentRef> segments = List.of(
                 segmentRef(0, 0L, 1_000_000_000L, 10),
@@ -307,6 +343,135 @@ class PlaybackBufferCacheTest {
         assertTrue(progress.bufferedAhead().compareTo(Duration.ZERO) > 0);
         assertTrue(progress.memoryBytes() > 0L);
         assertTrue(progress.minimumResumeSatisfied());
+        buffer.close();
+        cache.close();
+    }
+
+    @Test
+    void prefetchedSegmentRetainsFramesBeyondExactTimeWindow(
+            @TempDir Path temporaryDirectory) throws IOException {
+        List<RawPacketFrame> firstFrames = List.of(
+                frame(0L, 1),
+                frame(1_000_000_000L, 2));
+        List<RawPacketFrame> secondFrames = List.of(
+                frame(2_000_000_000L, 3),
+                frame(3_000_000_000L, 4),
+                frame(4_000_000_000L, 5));
+        byte[] firstBytes = writeSegment(temporaryDirectory, firstFrames);
+        byte[] secondBytes = writeSegment(temporaryDirectory, secondFrames);
+        ArtifactFile firstArtifact = segmentArtifact(firstBytes, 0);
+        ArtifactFile secondArtifact = segmentArtifact(secondBytes, 1);
+        ReplayArtifactReader.VerifiedReplay replay = verifiedReplay(
+                List.of(firstArtifact, secondArtifact),
+                Duration.ofSeconds(5L));
+        CountingStorage storage = new CountingStorage();
+        storage.artifacts.put(firstArtifact.path(), firstBytes);
+        storage.artifacts.put(secondArtifact.path(), secondBytes);
+        ReplayArtifactReader reader = reader(storage, temporaryDirectory, DIRECT_EXECUTOR);
+        DiskSegmentCache cache = new DiskSegmentCache(
+                temporaryDirectory.resolve("cache"),
+                1024L * 1024L,
+                reader,
+                DIRECT_EXECUTOR);
+        PlaybackBuffer buffer = new PlaybackBuffer(
+                replay,
+                List.of(
+                        new SegmentCache.SegmentRef(
+                                0, firstArtifact, 0L, 1_000_000_000L),
+                        new SegmentCache.SegmentRef(
+                                1, secondArtifact, 2_000_000_000L, 4_000_000_000L)),
+                reader,
+                cache,
+                new ReplaySegmentReader(),
+                PlaybackBufferOptions.builder()
+                        .preloadAhead(Duration.ofSeconds(2L))
+                        .retainBehind(Duration.ofSeconds(1L))
+                        .minimumResumeBuffer(Duration.ofMillis(500L))
+                        .memoryBudgetBytes(1024L * 1024L)
+                        .diskBudgetBytes(1024L * 1024L)
+                        .build(),
+                DIRECT_EXECUTOR);
+
+        buffer.ensureAvailable(
+                        Duration.ofSeconds(1L),
+                        PlaybackSpeed.NORMAL,
+                        PrefetchPlanner.Direction.FORWARD)
+                .toCompletableFuture()
+                .join();
+
+        assertEquals(2, storage.fetchCount.get());
+        assertEquals(List.of(secondFrames.getLast()), buffer.framesBetween(
+                        Duration.ofMillis(3_500L),
+                        Duration.ofMillis(4_500L))
+                .toCompletableFuture()
+                .join());
+        assertEquals(2, storage.fetchCount.get());
+        buffer.close();
+        cache.close();
+    }
+
+    @Test
+    void budgetEvictedSegmentIsReloadedBeforeFramesAreReturned(
+            @TempDir Path temporaryDirectory) throws IOException {
+        List<RawPacketFrame> firstFrames = List.of(
+                frame(0L, 1),
+                frame(1_000_000_000L, 2));
+        List<RawPacketFrame> secondFrames = List.of(
+                frame(2_000_000_000L, 3),
+                frame(3_000_000_000L, 4));
+        byte[] firstBytes = writeSegment(temporaryDirectory, firstFrames);
+        byte[] secondBytes = writeSegment(temporaryDirectory, secondFrames);
+        ArtifactFile firstArtifact = segmentArtifact(firstBytes, 0);
+        ArtifactFile secondArtifact = segmentArtifact(secondBytes, 1);
+        ReplayArtifactReader.VerifiedReplay replay = verifiedReplay(
+                List.of(firstArtifact, secondArtifact),
+                Duration.ofSeconds(4L));
+        CountingStorage storage = new CountingStorage();
+        storage.artifacts.put(firstArtifact.path(), firstBytes);
+        storage.artifacts.put(secondArtifact.path(), secondBytes);
+        ReplayArtifactReader reader = reader(storage, temporaryDirectory, DIRECT_EXECUTOR);
+        DiskSegmentCache cache = new DiskSegmentCache(
+                temporaryDirectory.resolve("cache"),
+                1024L * 1024L,
+                reader,
+                DIRECT_EXECUTOR);
+        PlaybackBuffer buffer = new PlaybackBuffer(
+                replay,
+                List.of(
+                        new SegmentCache.SegmentRef(
+                                0, firstArtifact, 0L, 1_000_000_000L),
+                        new SegmentCache.SegmentRef(
+                                1, secondArtifact, 2_000_000_000L, 3_000_000_000L)),
+                reader,
+                cache,
+                new ReplaySegmentReader(),
+                PlaybackBufferOptions.builder()
+                        .preloadAhead(Duration.ofSeconds(2L))
+                        .retainBehind(Duration.ofSeconds(1L))
+                        .minimumResumeBuffer(Duration.ofMillis(500L))
+                        .memoryBudgetBytes(3L * (64L + 1L))
+                        .diskBudgetBytes(1024L * 1024L)
+                        .build(),
+                DIRECT_EXECUTOR);
+
+        buffer.ensureAvailable(
+                        Duration.ofSeconds(1L),
+                        PlaybackSpeed.NORMAL,
+                        PrefetchPlanner.Direction.FORWARD)
+                .toCompletableFuture()
+                .join();
+
+        assertEquals(firstFrames, buffer.framesBetween(
+                        Duration.ZERO,
+                        Duration.ofMillis(1_500L))
+                .toCompletableFuture()
+                .join());
+        assertEquals(secondFrames, buffer.framesBetween(
+                        Duration.ofSeconds(2L),
+                        Duration.ofMillis(3_500L))
+                .toCompletableFuture()
+                .join());
+        assertEquals(2, storage.fetchCount.get());
         buffer.close();
         cache.close();
     }

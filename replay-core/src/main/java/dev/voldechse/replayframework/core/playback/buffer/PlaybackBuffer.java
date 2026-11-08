@@ -99,11 +99,7 @@ public final class PlaybackBuffer implements AutoCloseable {
             return loadSegments(plan.segments(), requestGeneration)
                     .thenApplyAsync(ignored -> {
                         ensureGeneration(requestGeneration);
-                        memoryBuffer.retain(
-                                position,
-                                options.retainBehind(),
-                                Duration.ofNanos(scaledPreload(options.preloadAhead(), speed)));
-                        forgetOutsideRetainedWindow(position, speed);
+                        retainSegmentWindow(position, speed);
                         return progress(Duration.ofNanos(positionNanos));
                     }, ioExecutor);
         } catch (RuntimeException exception) {
@@ -360,6 +356,13 @@ public final class PlaybackBuffer implements AutoCloseable {
             ensureGeneration(requestGeneration);
             memoryBuffer.addSegment(
                     segment.ordinal(), decoded.frames(), decoded.frameOffsets());
+            Set<Integer> residentSegments = memoryBuffer.residentSegmentOrdinals();
+            synchronizeResidencyLocked(residentSegments);
+            if (!residentSegments.contains(segment.ordinal())) {
+                throw new IllegalStateException(
+                        "decoded segment was not retained in the memory buffer: "
+                                + segment.ordinal());
+            }
             loadedSegments.add(segment.ordinal());
             loadedDiskBytes.put(segment.ordinal(), segment.artifact().sizeBytes());
             return decoded;
@@ -380,28 +383,35 @@ public final class PlaybackBuffer implements AutoCloseable {
         }
     }
 
-    private void forgetOutsideRetainedWindow(Duration position, PlaybackSpeed speed) {
+    private void retainSegmentWindow(Duration position, PlaybackSpeed speed) {
         long positionNanos = toNanos(position, "position");
-        long lowerBound = Math.max(0L, positionNanos - toNanos(options.retainBehind(), "retainBehind"));
+        long retainBehindNanos = toNanos(options.retainBehind(), "retainBehind");
+        long preloadAheadNanos = scaledPreload(options.preloadAhead(), speed);
+        long lowerBound = Math.max(0L, positionNanos - retainBehindNanos);
         long upperBound = Math.min(
                 replay.manifest().durationNanos(),
-                saturatingAdd(positionNanos, scaledPreload(options.preloadAhead(), speed)));
+                saturatingAdd(positionNanos, preloadAheadNanos));
+        Set<Integer> retainedOrdinals = new HashSet<>();
+        for (int index = 0; index < segments.size(); index++) {
+            if (logicalEndNanos(index) >= lowerBound
+                    && logicalStartNanos(index) <= upperBound) {
+                retainedOrdinals.add(segments.get(index).ordinal());
+            }
+        }
         synchronized (stateLock) {
-            loadedSegments.removeIf(ordinal -> {
-                SegmentCache.SegmentRef segment = segmentByOrdinal(ordinal);
-                return segment == null
-                        || segment.endNanos() < lowerBound
-                        || segment.startNanos() > upperBound;
-            });
-            loadedDiskBytes.keySet().removeIf(ordinal -> !loadedSegments.contains(ordinal));
+            ensureOpen();
+            Set<Integer> residentSegments = memoryBuffer.retainSegments(
+                    position,
+                    options.retainBehind(),
+                    Duration.ofNanos(preloadAheadNanos),
+                    retainedOrdinals);
+            synchronizeResidencyLocked(residentSegments);
         }
     }
 
-    private SegmentCache.SegmentRef segmentByOrdinal(int ordinal) {
-        return segments.stream()
-                .filter(segment -> segment.ordinal() == ordinal)
-                .findFirst()
-                .orElse(null);
+    private void synchronizeResidencyLocked(Set<Integer> residentSegments) {
+        loadedSegments.retainAll(residentSegments);
+        loadedDiskBytes.keySet().retainAll(residentSegments);
     }
 
     /**

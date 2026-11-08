@@ -7,9 +7,12 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -21,6 +24,7 @@ public final class MemoryPacketBuffer {
     private final long maxBytes;
     private final Object lock = new Object();
     private final TreeMap<FrameKey, BufferedFrame> frames = new TreeMap<>(FrameKey.ORDER);
+    private final Set<Integer> residentSegments = new HashSet<>();
     private final AtomicLong nextTieBreaker = new AtomicLong();
     private long accountedBytes;
     private long positionNanos;
@@ -40,7 +44,9 @@ public final class MemoryPacketBuffer {
                 .toList());
     }
 
-    /** Adds decoded frames together with their exact segment-body locations. */
+    /**
+     * Adds one complete decoded segment together with its exact body locations.
+     */
     public void addSegment(
             int segmentOrdinal,
             List<RawPacketFrame> newFrames,
@@ -59,38 +65,50 @@ public final class MemoryPacketBuffer {
             located.add(new BufferedFrame(
                     newFrames.get(index), segmentOrdinal, frameOffsets.get(index)));
         }
-        addBuffered(located);
+        long segmentBytes = accountedBytes(located);
+        if (segmentBytes > maxBytes) {
+            throw new MemoryBufferCapacityException(
+                    "decoded segment", maxBytes, segmentBytes);
+        }
+
+        synchronized (lock) {
+            removeSegmentLocked(segmentOrdinal);
+            addBufferedLocked(located);
+            residentSegments.add(segmentOrdinal);
+            evictToBudgetLocked(segmentOrdinal);
+        }
     }
 
     private void addBuffered(Collection<BufferedFrame> newFrames) {
         Objects.requireNonNull(newFrames, "newFrames");
         List<BufferedFrame> immutableInput = List.copyOf(newFrames);
-        long batchBytes = 0L;
         for (BufferedFrame buffered : immutableInput) {
             long frameBytes = accountedBytes(buffered.frame());
             if (frameBytes > maxBytes) {
-                throw new MemoryBufferCapacityException(maxBytes, frameBytes);
+                throw new MemoryBufferCapacityException(
+                        "decoded frame", maxBytes, frameBytes);
             }
-            batchBytes = addExact(batchBytes, frameBytes);
         }
 
         synchronized (lock) {
-            long resultingBytes = addExact(accountedBytes, batchBytes);
-            if (resultingBytes < 0L) {
-                throw new MemoryBufferCapacityException(maxBytes, resultingBytes);
-            }
-            for (BufferedFrame buffered : immutableInput) {
-                RawPacketFrame frame = buffered.frame();
-                FrameKey key = new FrameKey(
-                        frame.elapsedNanos(),
-                        frame.serverTick(),
-                        frame.sequence(),
-                        nextTieBreaker.getAndIncrement());
-                frames.put(key, buffered);
-            }
-            accountedBytes = resultingBytes;
-            evictToBudgetLocked();
+            addBufferedLocked(immutableInput);
+            evictToBudgetLocked(-1);
         }
+    }
+
+    private void addBufferedLocked(Collection<BufferedFrame> newFrames) {
+        long batchBytes = accountedBytes(newFrames);
+        long resultingBytes = addExact(accountedBytes, batchBytes);
+        for (BufferedFrame buffered : newFrames) {
+            RawPacketFrame frame = buffered.frame();
+            FrameKey key = new FrameKey(
+                    frame.elapsedNanos(),
+                    frame.serverTick(),
+                    frame.sequence(),
+                    nextTieBreaker.getAndIncrement());
+            frames.put(key, buffered);
+        }
+        accountedBytes = resultingBytes;
     }
 
     /** Returns an immutable, ordered half-open frame interval. */
@@ -147,6 +165,36 @@ public final class MemoryPacketBuffer {
 
     /** Retains only the requested window and then enforces the memory budget. */
     public void retain(Duration position, Duration behind, Duration ahead) {
+        retain(position, behind, ahead, null);
+    }
+
+    /**
+     * Retains complete located segments selected by their owner while applying
+     * the time window to frames without a segment location.
+     *
+     * @return immutable ordinals of all complete segments that remain resident
+     */
+    public Set<Integer> retainSegments(
+            Duration position,
+            Duration behind,
+            Duration ahead,
+            Collection<Integer> retainedSegmentOrdinals) {
+        Objects.requireNonNull(retainedSegmentOrdinals, "retainedSegmentOrdinals");
+        Set<Integer> retained = Set.copyOf(retainedSegmentOrdinals);
+        for (int ordinal : retained) {
+            if (ordinal < 0) {
+                throw new IllegalArgumentException(
+                        "retained segment ordinal must not be negative");
+            }
+        }
+        return retain(position, behind, ahead, retained);
+    }
+
+    private Set<Integer> retain(
+            Duration position,
+            Duration behind,
+            Duration ahead,
+            Set<Integer> retainedSegmentOrdinals) {
         long positionValue = toNanos(position, "position");
         long behindValue = toNanos(behind, "behind");
         long aheadValue = toNanos(ahead, "ahead");
@@ -160,7 +208,28 @@ public final class MemoryPacketBuffer {
 
         synchronized (lock) {
             positionNanos = positionValue;
+            Set<Integer> retained = retainedSegmentOrdinals;
+            if (retained == null) {
+                retained = new HashSet<>();
+                for (var entry : frames.entrySet()) {
+                    BufferedFrame buffered = entry.getValue();
+                    long elapsedNanos = entry.getKey().elapsedNanos();
+                    if (buffered.segmentOrdinal() >= 0
+                            && elapsedNanos >= lowerBound
+                            && elapsedNanos <= upperBound) {
+                        retained.add(buffered.segmentOrdinal());
+                    }
+                }
+            }
+            for (int ordinal : List.copyOf(residentSegments)) {
+                if (!retained.contains(ordinal)) {
+                    removeSegmentLocked(ordinal);
+                }
+            }
             frames.entrySet().removeIf(entry -> {
+                if (entry.getValue().segmentOrdinal() >= 0) {
+                    return false;
+                }
                 long elapsedNanos = entry.getKey().elapsedNanos();
                 if (elapsedNanos < lowerBound || elapsedNanos > upperBound) {
                     accountedBytes = subtractExact(
@@ -170,7 +239,15 @@ public final class MemoryPacketBuffer {
                 }
                 return false;
             });
-            evictToBudgetLocked();
+            evictToBudgetLocked(-1);
+            return Set.copyOf(residentSegments);
+        }
+    }
+
+    /** Returns the ordinals whose complete decoded frames remain resident. */
+    public Set<Integer> residentSegmentOrdinals() {
+        synchronized (lock) {
+            return Set.copyOf(residentSegments);
         }
     }
 
@@ -198,16 +275,45 @@ public final class MemoryPacketBuffer {
     public void clear() {
         synchronized (lock) {
             frames.clear();
+            residentSegments.clear();
             accountedBytes = 0L;
         }
     }
 
-    private void evictToBudgetLocked() {
+    private void evictToBudgetLocked(int protectedSegmentOrdinal) {
         while (accountedBytes > maxBytes && !frames.isEmpty()) {
-            FrameKey victim = frames.keySet().stream()
+            FrameKey victim = frames.entrySet().stream()
+                    .filter(entry -> protectedSegmentOrdinal < 0
+                            || entry.getValue().segmentOrdinal()
+                            != protectedSegmentOrdinal)
+                    .map(Map.Entry::getKey)
                     .max(this::compareEvictionPriority)
-                    .orElseThrow();
-            BufferedFrame removed = frames.remove(victim);
+                    .orElseThrow(() -> new MemoryBufferCapacityException(
+                            "decoded segment", maxBytes, accountedBytes));
+            BufferedFrame buffered = frames.get(victim);
+            if (buffered.segmentOrdinal() >= 0) {
+                removeSegmentLocked(buffered.segmentOrdinal());
+            } else {
+                removeFrameLocked(victim);
+            }
+        }
+    }
+
+    private void removeSegmentLocked(int segmentOrdinal) {
+        frames.entrySet().removeIf(entry -> {
+            if (entry.getValue().segmentOrdinal() != segmentOrdinal) {
+                return false;
+            }
+            accountedBytes = subtractExact(
+                    accountedBytes, accountedBytes(entry.getValue().frame()));
+            return true;
+        });
+        residentSegments.remove(segmentOrdinal);
+    }
+
+    private void removeFrameLocked(FrameKey key) {
+        BufferedFrame removed = frames.remove(key);
+        if (removed != null) {
             accountedBytes = subtractExact(
                     accountedBytes, accountedBytes(removed.frame()));
         }
@@ -231,6 +337,14 @@ public final class MemoryPacketBuffer {
     private static long accountedBytes(RawPacketFrame frame) {
         Objects.requireNonNull(frame, "frame");
         return addExact(FRAME_ACCOUNTING_BYTES, frame.payload().length);
+    }
+
+    private static long accountedBytes(Collection<BufferedFrame> frames) {
+        long total = 0L;
+        for (BufferedFrame buffered : frames) {
+            total = addExact(total, accountedBytes(buffered.frame()));
+        }
+        return total;
     }
 
     private static long toNanos(Duration value, String name) {
@@ -298,8 +412,11 @@ public final class MemoryPacketBuffer {
 
     /** Signals that one decoded frame cannot fit the configured memory budget. */
     public static final class MemoryBufferCapacityException extends IllegalStateException {
-        private MemoryBufferCapacityException(long maxBytes, long requestedBytes) {
-            super("decoded frame exceeds memory budget: max=" + maxBytes
+        private MemoryBufferCapacityException(
+                String subject,
+                long maxBytes,
+                long requestedBytes) {
+            super(subject + " exceeds memory budget: max=" + maxBytes
                     + ", requested=" + requestedBytes);
         }
 
