@@ -77,6 +77,36 @@ class NeutralObserverTest {
     }
 
     @Test
+    void playerInfoPreservesTheRecordedProfileNameWhileIsolatingItsIdentity() {
+        var profile = new com.mojang.authlib.GameProfile(
+                observer, "PlayerA", new com.mojang.authlib.properties.PropertyMap());
+        var entry = new ClientboundPlayerInfoUpdatePacket.Entry(
+                observer,
+                profile,
+                true,
+                42,
+                net.minecraft.world.level.GameType.SURVIVAL,
+                null,
+                true,
+                0,
+                null);
+        var packet = new ClientboundPlayerInfoUpdatePacket(
+                java.util.EnumSet.of(ClientboundPlayerInfoUpdatePacket.Action.ADD_PLAYER),
+                List.of(entry));
+
+        var rewritten = (ClientboundPlayerInfoUpdatePacket) rewriter()
+                .rewrite(packet, descriptor("player_info_update"))
+                .packet();
+        var rewrittenEntry = rewritten.entries().getFirst();
+
+        assertNotEquals(observer, rewrittenEntry.profileId());
+        assertEquals(rewrittenEntry.profileId(), rewrittenEntry.profile().id());
+        assertEquals("PlayerA", rewrittenEntry.profile().name());
+        assertEquals(profile.properties(), rewrittenEntry.profile().properties());
+        assertFalse(rewrittenEntry.listed());
+    }
+
+    @Test
     void animationAndEntityEventsRewriteTheirWireEntityIdWithoutChangingTheEffect() {
         var rewriter = rewriter();
         var buffer = new FriendlyByteBuf(Unpooled.buffer());

@@ -84,18 +84,9 @@ public final class Paper26ReplayPacketRewriter {
             PlaybackIdentityContext context,
             Set<UUID> reservedUuids,
             Set<Integer> reservedEntityIds) {
-        this(registry, context, reservedUuids, reservedEntityIds, Set.of());
-    }
-
-    Paper26ReplayPacketRewriter(
-            PacketRegistry registry,
-            PlaybackIdentityContext context,
-            Set<UUID> reservedUuids,
-            Set<Integer> reservedEntityIds,
-            Set<String> reservedNames) {
         this.registry = Objects.requireNonNull(registry, "registry");
         this.context = Objects.requireNonNull(context, "context");
-        this.identities = new ReplayIdentityMap(context, reservedUuids, reservedEntityIds, reservedNames);
+        this.identities = new ReplayIdentityMap(context, reservedUuids, reservedEntityIds);
     }
 
     /** Returns an empty result for packets that must not reach the observer. */
@@ -429,7 +420,7 @@ public final class Paper26ReplayPacketRewriter {
                 net.minecraft.network.protocol.game.ClientboundSetScorePacket value =
                         require(packet, net.minecraft.network.protocol.game.ClientboundSetScorePacket.class);
                 yield new net.minecraft.network.protocol.game.ClientboundSetScorePacket(
-                        identities.mapName(value.owner()),
+                        value.owner(),
                         identities.mapObjectiveName(value.objectiveName()),
                         value.score(),
                         value.display(),
@@ -439,7 +430,7 @@ public final class Paper26ReplayPacketRewriter {
                 net.minecraft.network.protocol.game.ClientboundResetScorePacket value =
                         require(packet, net.minecraft.network.protocol.game.ClientboundResetScorePacket.class);
                 yield new net.minecraft.network.protocol.game.ClientboundResetScorePacket(
-                        identities.mapName(value.owner()),
+                        value.owner(),
                         value.objectiveName() == null
                                 ? null
                                 : identities.mapObjectiveName(value.objectiveName()));
@@ -523,7 +514,7 @@ public final class Paper26ReplayPacketRewriter {
                             ? null
                             : new GameProfile(
                                     mappedId,
-                                    identities.mapName(entry.profile().name()),
+                                    entry.profile().name(),
                                     entry.profile().properties());
                     return new ClientboundPlayerInfoUpdatePacket.Entry(
                             mappedId,
