@@ -199,6 +199,14 @@ the requested reservation exceeds its configured limit, the runtime fails that
 recording with `QUEUE_OVERFLOW` rather than blocking the network thread or
 discarding an apparently accepted frame.
 
+Paper player and living-entity movement does not rely on outbound packets sent
+to tracking clients. Each version adapter observes the corresponding Paper move
+event on the main thread and contributes an absolute position/rotation state
+packet to the neutral stream. Recipient-derived movement copies for the same
+entity are suppressed, preventing both missing self-movement and duplicate
+relative deltas when several players track one entity. Region membership is
+evaluated from the moved entity's destination rather than a packet recipient.
+
 A single virtual writer thread owns the session's artifact state. It drains the
 queue in order, emits raw packet frames, rotates segments when structural
 limits are reached, and records seek points. The checkpoint scheduler requests

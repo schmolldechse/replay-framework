@@ -128,6 +128,64 @@ public final class Paper26NativePacketCodec
         }
     }
 
+    /** Encodes one adapter-generated PLAY state packet for neutral capture. */
+    public EncodedStatePacket encodeState(Packet<?> packet) {
+        Objects.requireNonNull(packet, "packet");
+        synchronized (lock) {
+            ensureOpen();
+            if (packet.type() == null || packet.type().flow() != PacketFlow.CLIENTBOUND) {
+                throw incompatible("Paper synthetic state packet is not clientbound", null);
+            }
+            ByteBuf buffer = Unpooled.buffer();
+            try {
+                encodeNative(protocolInfo, buffer, packet);
+                int packetId = readVarInt(buffer);
+                PacketDescriptor descriptor = registry.find(
+                                PacketPhase.PLAY,
+                                PacketDescriptor.Direction.CLIENTBOUND,
+                                packetId)
+                        .orElseThrow(() -> incompatible(
+                                "synthetic state packet ID is not registered: " + packetId,
+                                null));
+                if (!descriptor.replayable()
+                        || descriptor.disposition() != PacketDisposition.STATEFUL) {
+                    throw incompatible(
+                            "synthetic packet is not replayable state: " + descriptor.typeName(),
+                            null);
+                }
+                byte[] payload = new byte[buffer.readableBytes()];
+                buffer.readBytes(payload);
+                return new EncodedStatePacket(packetId, payload, descriptor);
+            } catch (IncompatibleAdapterException exception) {
+                throw exception;
+            } catch (RuntimeException | LinkageError exception) {
+                throw incompatible("Paper 26.2 synthetic state encoding failed", exception);
+            } finally {
+                buffer.release();
+            }
+        }
+    }
+
+    /** Immutable wire data produced for an adapter-generated state transition. */
+    public record EncodedStatePacket(
+            int packetId,
+            byte[] payload,
+            PacketDescriptor descriptor) {
+
+        public EncodedStatePacket {
+            if (packetId < 0) {
+                throw new IllegalArgumentException("packetId must not be negative");
+            }
+            payload = Objects.requireNonNull(payload, "payload").clone();
+            Objects.requireNonNull(descriptor, "descriptor");
+        }
+
+        @Override
+        public byte[] payload() {
+            return payload.clone();
+        }
+    }
+
     @Override
     public void close() {
         synchronized (lock) {

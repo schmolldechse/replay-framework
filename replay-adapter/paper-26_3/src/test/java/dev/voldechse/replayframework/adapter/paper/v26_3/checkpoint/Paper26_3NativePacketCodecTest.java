@@ -65,6 +65,30 @@ final class Paper26_3NativePacketCodecTest {
     }
 
     @Test
+    void encodesAuthoritativeEntityMovementForNeutralCapture() {
+        Paper26_3PacketRegistry registry = Paper26_3PacketRegistry.discover();
+        Paper26_3NativePacketCodec codec = Paper26_3NativePacketCodec.forTesting(
+                registry,
+                GameProtocols.CLIENTBOUND_TEMPLATE.bind(
+                        net.minecraft.network.RegistryFriendlyByteBuf.decorator(RegistryAccess.EMPTY)));
+
+        var encoded = codec.encodeState(
+                new net.minecraft.network.protocol.game.ClientboundEntityPositionSyncPacket(
+                        42,
+                        net.minecraft.world.entity.PositionPath.of(
+                                new net.minecraft.world.phys.Vec3(1.25, 64.0, -2.5)),
+                        90.0F,
+                        15.0F,
+                        true));
+
+        assertEquals("play.clientbound.minecraft:entity_position_sync",
+                encoded.descriptor().typeName());
+        assertEquals(dev.voldechse.replayframework.adapter.PacketDisposition.STATEFUL,
+                encoded.descriptor().disposition());
+        assertArrayEquals(encoded.payload(), encoded.payload());
+    }
+
+    @Test
     void rejectsDescriptorMismatchAndClosedCodec() {
         Paper26_3PacketRegistry registry = Paper26_3PacketRegistry.discover();
         Paper26_3NativePacketCodec codec = Paper26_3NativePacketCodec.forTesting(
