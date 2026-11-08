@@ -342,7 +342,11 @@ public final class PlaybackBuffer implements AutoCloseable {
         }
         if (decoded.header().startElapsedNanos() != segment.startNanos()
                 || decoded.header().endElapsedNanos() != segment.endNanos()) {
-            throw new IllegalArgumentException("segment time bounds do not match segment reference");
+            throw new IllegalArgumentException(
+                    "segment " + segment.ordinal() + " time bounds do not match segment reference: "
+                            + "expected [" + segment.startNanos() + ", " + segment.endNanos()
+                            + "] but decoded [" + decoded.header().startElapsedNanos() + ", "
+                            + decoded.header().endElapsedNanos() + "]");
         }
         return decoded;
     }

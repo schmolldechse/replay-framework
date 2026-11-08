@@ -508,6 +508,45 @@ class PlaybackBufferCacheTest {
         cache.close();
     }
 
+    @Test
+    void decodedBoundaryMismatchReportsExpectedAndActualIntervals(
+            @TempDir Path temporaryDirectory) throws IOException {
+        byte[] segmentBytes = writeSegment(temporaryDirectory, List.of(
+                frame(10L, 1),
+                frame(20L, 2)));
+        ArtifactFile artifact = segmentArtifact(segmentBytes, 0);
+        ReplayArtifactReader.VerifiedReplay replay = verifiedReplay(artifact);
+        CountingStorage storage = new CountingStorage();
+        storage.artifacts.put(artifact.path(), segmentBytes);
+        ReplayArtifactReader reader = reader(storage, temporaryDirectory, DIRECT_EXECUTOR);
+        DiskSegmentCache cache = new DiskSegmentCache(
+                temporaryDirectory.resolve("cache"),
+                1024L * 1024L,
+                reader,
+                DIRECT_EXECUTOR);
+        PlaybackBuffer buffer = new PlaybackBuffer(
+                replay,
+                List.of(new SegmentCache.SegmentRef(0, artifact, 10L, 30L)),
+                reader,
+                cache,
+                new ReplaySegmentReader(),
+                PlaybackBufferOptions.builder().build(),
+                DIRECT_EXECUTOR);
+
+        Throwable failure = assertThrows(
+                Exception.class,
+                () -> buffer.framesBetween(Duration.ZERO, Duration.ofNanos(31L))
+                        .toCompletableFuture()
+                        .join());
+
+        assertEquals(
+                "segment 0 time bounds do not match segment reference: "
+                        + "expected [10, 30] but decoded [10, 20]",
+                deepestCause(failure).getMessage());
+        buffer.close();
+        cache.close();
+    }
+
     private static RawPacketFrame frame(long elapsedNanos, int payloadValue) {
         return new RawPacketFrame(
                 elapsedNanos,
@@ -585,6 +624,14 @@ class PlaybackBufferCacheTest {
         } catch (NoSuchAlgorithmException exception) {
             throw new AssertionError(exception);
         }
+    }
+
+    private static Throwable deepestCause(Throwable failure) {
+        Throwable current = failure;
+        while (current.getCause() != null) {
+            current = current.getCause();
+        }
+        return current;
     }
 
     private static final class CountingStorage implements ReplayStorage {
