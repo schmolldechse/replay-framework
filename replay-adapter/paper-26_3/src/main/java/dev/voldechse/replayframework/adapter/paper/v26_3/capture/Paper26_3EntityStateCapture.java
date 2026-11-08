@@ -10,7 +10,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
-import java.util.function.LongSupplier;
 import net.kyori.adventure.key.Key;
 import net.minecraft.network.protocol.game.ClientboundEntityPositionSyncPacket;
 import net.minecraft.network.protocol.game.ClientboundRotateHeadPacket;
@@ -40,7 +39,6 @@ final class Paper26_3EntityStateCapture implements Listener, AutoCloseable {
     private final JavaPlugin owner;
     private final Paper26_3NativePacketCodec codec;
     private final BooleanSupplier active;
-    private final LongSupplier serverTick;
     private final Consumer<SyntheticMovement> emitter;
     private final Consumer<Throwable> failureHandler;
     private final AuthoritativeMovementIndex movementIndex = new AuthoritativeMovementIndex();
@@ -50,13 +48,11 @@ final class Paper26_3EntityStateCapture implements Listener, AutoCloseable {
             JavaPlugin owner,
             Paper26_3NativePacketCodec codec,
             BooleanSupplier active,
-            LongSupplier serverTick,
             Consumer<SyntheticMovement> emitter,
             Consumer<Throwable> failureHandler) {
         this.owner = Objects.requireNonNull(owner, "owner");
         this.codec = Objects.requireNonNull(codec, "codec");
         this.active = Objects.requireNonNull(active, "active");
-        this.serverTick = Objects.requireNonNull(serverTick, "serverTick");
         this.emitter = Objects.requireNonNull(emitter, "emitter");
         this.failureHandler = Objects.requireNonNull(failureHandler, "failureHandler");
     }
@@ -106,12 +102,10 @@ final class Paper26_3EntityStateCapture implements Listener, AutoCloseable {
             net.minecraft.world.entity.Entity handle = craftEntity.getHandle();
             int entityId = handle.getId();
             markAuthoritative(entityId);
-            long captureTimeNanos = System.nanoTime();
-            long tick = serverTick.getAsLong();
             Key world = to.getWorld().getKey();
             BlockPosition position = new BlockPosition(
                     to.getBlockX(), to.getBlockY(), to.getBlockZ());
-            emit(captureTimeNanos, tick, world, position,
+            emit(world, position,
                     new ClientboundEntityPositionSyncPacket(
                             entityId,
                             PositionPath.of(new Vec3(to.getX(), to.getY(), to.getZ())),
@@ -119,7 +113,7 @@ final class Paper26_3EntityStateCapture implements Listener, AutoCloseable {
                             to.getPitch(),
                             handle.onGround()));
             if (from == null || from.getYaw() != to.getYaw()) {
-                emit(captureTimeNanos, tick, world, position,
+                emit(world, position,
                         new ClientboundRotateHeadPacket(handle, rotationByte(to.getYaw())));
             }
         } catch (Throwable failure) {
@@ -128,13 +122,11 @@ final class Paper26_3EntityStateCapture implements Listener, AutoCloseable {
     }
 
     private void emit(
-            long captureTimeNanos,
-            long tick,
             Key world,
             BlockPosition position,
             net.minecraft.network.protocol.Packet<?> packet) {
         emitter.accept(new SyntheticMovement(
-                captureTimeNanos, tick, codec.encodeState(packet), world, position));
+                codec.encodeState(packet), world, position));
     }
 
     @Override
@@ -190,16 +182,11 @@ final class Paper26_3EntityStateCapture implements Listener, AutoCloseable {
     }
 
     record SyntheticMovement(
-            long captureTimeNanos,
-            long serverTick,
             Paper26_3NativePacketCodec.EncodedStatePacket packet,
             Key world,
             BlockPosition position) {
 
         SyntheticMovement {
-            if (serverTick < 0L) {
-                throw new IllegalArgumentException("serverTick must not be negative");
-            }
             Objects.requireNonNull(packet, "packet");
             Objects.requireNonNull(world, "world");
             Objects.requireNonNull(position, "position");

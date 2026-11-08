@@ -47,7 +47,7 @@ public final class Paper26_3CaptureBridge implements CaptureBridge {
     private final Set<Paper26_3SyntheticStateCollector> syntheticCollectors =
             ConcurrentHashMap.newKeySet();
     private final Object handlerStateLock = new Object();
-    private final Object captureOrderLock = new Object();
+    private final Paper26_3CaptureOrder captureOrder;
     private final PacketListener packetListener = new PacketListener() {
         @Override
         public void onPacketSend(PacketSendEvent event) {
@@ -58,8 +58,6 @@ public final class Paper26_3CaptureBridge implements CaptureBridge {
     private volatile CaptureBridge.PacketSink sink;
     private volatile CaptureBridge.FailureHandler failureHandler;
     private volatile PacketListenerCommon installedListener;
-    private long sequenceTick = -1L;
-    private int nextSequence;
 
     /** Creates a bridge and discovers the live Paper 26.3 registry. */
     public Paper26_3CaptureBridge(PaperConnectionAccessor accessor) {
@@ -75,6 +73,8 @@ public final class Paper26_3CaptureBridge implements CaptureBridge {
     public Paper26_3CaptureBridge(PaperConnectionAccessor accessor, PacketRegistry registry) {
         this.accessor = Objects.requireNonNull(accessor, "accessor");
         this.registry = verifyRegistry(registry);
+        this.captureOrder = new Paper26_3CaptureOrder(
+                System::nanoTime, this.accessor::currentServerTick);
         this.entityStateCapture = null;
     }
 
@@ -86,11 +86,12 @@ public final class Paper26_3CaptureBridge implements CaptureBridge {
             Paper26_3NativePacketCodec codec) {
         this.accessor = Objects.requireNonNull(accessor, "accessor");
         this.registry = verifyRegistry(registry);
+        this.captureOrder = new Paper26_3CaptureOrder(
+                System::nanoTime, this.accessor::currentServerTick);
         this.entityStateCapture = new Paper26_3EntityStateCapture(
                 Objects.requireNonNull(owner, "owner"),
                 Objects.requireNonNull(codec, "codec"),
                 this::hasActiveRecording,
-                accessor::currentServerTick,
                 this::captureSyntheticMovement,
                 this::fail);
     }
@@ -179,11 +180,11 @@ public final class Paper26_3CaptureBridge implements CaptureBridge {
             throw new IllegalStateException("Paper capture bridge has no packet sink");
         }
         Key world = Key.key(packet.worldKey());
-        synchronized (captureOrderLock) {
+        captureOrder.publish(point -> {
             CaptureBridge.CapturePacket captured = new CaptureBridge.CapturePacket(
-                    packet.captureTimeNanos(),
-                    packet.serverTick(),
-                    allocateSequence(packet.serverTick()),
+                    point.captureTimeNanos(),
+                    point.serverTick(),
+                    point.sequence(),
                     packet.phase(),
                     packet.packetId(),
                     packet.payload(),
@@ -194,7 +195,7 @@ public final class Paper26_3CaptureBridge implements CaptureBridge {
                             Optional.empty(),
                             Optional.empty()));
             currentSink.accept(captured);
-        }
+        });
     }
 
     private void captureSyntheticMovement(
@@ -207,11 +208,11 @@ public final class Paper26_3CaptureBridge implements CaptureBridge {
             return;
         }
         var packet = movement.packet();
-        synchronized (captureOrderLock) {
+        captureOrder.publish(point -> {
             currentSink.accept(new CaptureBridge.CapturePacket(
-                    movement.captureTimeNanos(),
-                    movement.serverTick(),
-                    allocateSequence(movement.serverTick()),
+                    point.captureTimeNanos(),
+                    point.serverTick(),
+                    point.sequence(),
                     PacketPhase.PLAY,
                     packet.packetId(),
                     packet.payload(),
@@ -221,7 +222,7 @@ public final class Paper26_3CaptureBridge implements CaptureBridge {
                             Optional.of(movement.position()),
                             Optional.empty(),
                             Optional.empty())));
-        }
+        });
     }
 
     /**
@@ -283,16 +284,21 @@ public final class Paper26_3CaptureBridge implements CaptureBridge {
                             descriptor.typeName(), payload)) {
                 return;
             }
-            synchronized (captureOrderLock) {
-                long serverTick = accessor.currentServerTick();
+            captureOrder.publish(point -> {
                 CaptureBridge.CapturePacket packet = new CaptureBridge.CapturePacket(
-                        System.nanoTime(),
-                        serverTick,
-                        allocateSequence(serverTick),
+                        point.captureTimeNanos(),
+                        point.serverTick(),
+                        point.sequence(),
                         phase,
                         packetId,
                         payload,
-                        captureContext(event, descriptor, phase, packetId, payload, serverTick));
+                        captureContext(
+                                event,
+                                descriptor,
+                                phase,
+                                packetId,
+                                payload,
+                                point.serverTick()));
                 CaptureBridge.PacketSink currentSink = sink;
                 if (currentSink != null) {
                     currentSink.accept(packet);
@@ -300,7 +306,7 @@ public final class Paper26_3CaptureBridge implements CaptureBridge {
                 for (Paper26_3SyntheticStateCollector collector : syntheticCollectors) {
                     collector.observe(packet);
                 }
-            }
+            });
         } catch (Throwable failure) {
             fail(failure);
         }
@@ -405,31 +411,7 @@ public final class Paper26_3CaptureBridge implements CaptureBridge {
 
     /** Allocates an exclusive checkpoint boundary in capture publication order. */
     public CheckpointEncoder.CapturePoint checkpointCapturePoint() {
-        synchronized (captureOrderLock) {
-            long serverTick = accessor.currentServerTick();
-            return new CheckpointEncoder.CapturePoint(
-                    System.nanoTime(), serverTick, allocateSequence(serverTick));
-        }
-    }
-
-    private int allocateSequence(long serverTick) {
-        if (serverTick < 0L) {
-            throw incompatible("Paper server tick is negative", null);
-        }
-        if (!Thread.holdsLock(captureOrderLock)) {
-            throw new IllegalStateException("capture order lock is not held");
-        }
-        if (serverTick < sequenceTick) {
-            throw incompatible("Paper server tick moved backwards", null);
-        }
-        if (serverTick != sequenceTick) {
-            sequenceTick = serverTick;
-            nextSequence = 0;
-        }
-        if (nextSequence == Integer.MAX_VALUE) {
-            throw incompatible("Paper capture sequence overflow", null);
-        }
-        return nextSequence++;
+        return captureOrder.barrier();
     }
 
     private void closeSyntheticCollectors() {

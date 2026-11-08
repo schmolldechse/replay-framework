@@ -266,9 +266,22 @@ public final class Paper26CheckpointEncoder implements CheckpointEncoder {
             return prefixComparison;
         }
 
-        List<Integer> leftNumbers = numericParts(left, leftSeparator);
-        List<Integer> rightNumbers = numericParts(right, rightSeparator);
-        if (leftNumbers != null && rightNumbers != null) {
+        String leftBody = leftSeparator < 0 ? "" : left.substring(leftSeparator + 1);
+        String rightBody = rightSeparator < 0 ? "" : right.substring(rightSeparator + 1);
+        int leftQualifierSeparator = leftBody.indexOf(':');
+        int rightQualifierSeparator = rightBody.indexOf(':');
+        List<Integer> leftNumbers = numericParts(leftQualifierSeparator < 0
+                ? leftBody
+                : leftBody.substring(0, leftQualifierSeparator));
+        List<Integer> rightNumbers = numericParts(rightQualifierSeparator < 0
+                ? rightBody
+                : rightBody.substring(0, rightQualifierSeparator));
+        boolean leftNumeric = leftNumbers != null;
+        boolean rightNumeric = rightNumbers != null;
+        if (leftNumeric != rightNumeric) {
+            return leftNumeric ? -1 : 1;
+        }
+        if (leftNumeric) {
             int count = Math.min(leftNumbers.size(), rightNumbers.size());
             for (int index = 0; index < count; index++) {
                 int comparison = Integer.compare(leftNumbers.get(index), rightNumbers.get(index));
@@ -280,15 +293,30 @@ public final class Paper26CheckpointEncoder implements CheckpointEncoder {
             if (lengthComparison != 0) {
                 return lengthComparison;
             }
+            String leftQualifier = leftQualifierSeparator < 0
+                    ? ""
+                    : leftBody.substring(leftQualifierSeparator + 1);
+            String rightQualifier = rightQualifierSeparator < 0
+                    ? ""
+                    : rightBody.substring(rightQualifierSeparator + 1);
+            int qualifierComparison = leftQualifier.compareTo(rightQualifier);
+            if (qualifierComparison != 0) {
+                return qualifierComparison;
+            }
+        } else {
+            int bodyComparison = leftBody.compareTo(rightBody);
+            if (bodyComparison != 0) {
+                return bodyComparison;
+            }
         }
         return left.compareTo(right);
     }
 
-    private static List<Integer> numericParts(String value, int separator) {
-        if (separator < 0 || separator == value.length() - 1) {
+    private static List<Integer> numericParts(String value) {
+        if (value.isEmpty()) {
             return null;
         }
-        String[] parts = value.substring(separator + 1).split(",", -1);
+        String[] parts = value.split(",", -1);
         List<Integer> numbers = new ArrayList<>(parts.length);
         try {
             for (String part : parts) {

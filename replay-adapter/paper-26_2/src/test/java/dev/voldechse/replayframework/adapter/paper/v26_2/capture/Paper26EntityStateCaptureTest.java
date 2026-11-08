@@ -1,8 +1,12 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.capture;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.lang.reflect.RecordComponent;
+import java.util.Arrays;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class Paper26EntityStateCaptureTest {
@@ -20,6 +24,16 @@ class Paper26EntityStateCaptureTest {
                 "play.clientbound.minecraft:move_entity_pos", varInt(301)));
         assertFalse(capture.suppresses(
                 "play.clientbound.minecraft:set_entity_motion", varInt(300)));
+    }
+
+    @Test
+    void syntheticMovementDefersCaptureCoordinatesToPublication() {
+        assertEquals(
+                List.of("packet", "world", "position"),
+                Arrays.stream(Paper26EntityStateCapture.SyntheticMovement.class
+                                .getRecordComponents())
+                        .map(RecordComponent::getName)
+                        .toList());
     }
 
     private static byte[] varInt(int value) {
