@@ -215,6 +215,23 @@ checkpoint work. Checkpoint frames and normal packet frames remain separate
 artifact inputs so the playback engine can reset to a stable snapshot and then
 apply only the required delta range.
 
+Periodic and dimension checkpoints use an adapter capture barrier rather than
+the earlier scheduler trigger as their artifact timestamp. Paper allocates that
+barrier on the main thread after any requested chunk preloading and through the
+same serialized tick/sequence allocator that publishes captured packets. The
+writer then drains every packet ordered at or before the barrier, writes the
+checkpoint with its actual monotonic time and Paper tick, and leaves only later
+packets as post-checkpoint deltas. Snapshot scheduling latency therefore cannot
+backdate world state or cause the same relative delta to straddle both sides of
+the checkpoint.
+
+Each checkpoint seek point records the ordinal of its segment and the exact
+uncompressed segment-body offset at the state boundary. Segment decoding keeps
+the start offset of every frame so playback can resume at that byte boundary,
+including when the first required delta has the same replay timestamp as the
+checkpoint. The offset is therefore part of seek correctness rather than only
+an optimization hint.
+
 Finalization stops new capture admission, unregisters the sink, and lets the
 writer drain every packet already reserved by a racing producer. The finalizer
 then transitions the catalog to `FINALIZING`, validates the sealed segment and

@@ -9,7 +9,7 @@ Registry fingerprint: `dfb7e34c58fb9b0748f0d045c79d76c5706ff33fc1f4cbeded686642d
 The adapter entry point is `Paper26_3ReplayAdapter`, provided through `Paper26_3AdapterProvider`. Both follow the shared adapter design: NMS types remain inside `dev.voldechse.replayframework.adapter.paper.v26_3`, while `AbstractReplayAdapter` owns the common contracts.
 
 - `capture` attaches packet capture, resolves recording scope, and emits synthetic state changes.
-- `checkpoint` snapshots loaded Paper world state and encodes ordered native 26.3 packets.
+- `checkpoint` snapshots loaded Paper world state and encodes ordered native 26.3 packets. After optional scope preloading, it allocates an actual Paper tick/time/sequence barrier through the capture bridge; the core drains all earlier 26.3 deltas before persisting that checkpoint.
 - `playback` decodes 26.3 payloads, maps identities per viewer, filters connection-local state, and removes replay-owned objects during reset.
 
 ## Playback policy for 26.3
@@ -28,6 +28,7 @@ Three PLAY packets distinguish this registry from 26.2. `swing_animation` is rew
 
 - `PacketCoverageTest` loads the real 26.3 NMS registry and fails for an unreviewed PLAY packet or missing essential family.
 - Registry, native codec, checkpoint, snapshot, observer isolation, and outbound-gate tests cover their respective version-bound behavior.
+- Snapshot tests verify that the 26.3 capture barrier is allocated only after asynchronous scope preloading completes; generic core tests verify the exclusive delta boundary stored with it.
 - `NeutralObserverTest` includes entity effects, minecart motion, sound, leashes, recorded chat isolation, explosion knockback, block-breaking overlays, transient blocks, 26.3 swing animation, and idempotent reset.
 
 `R` means registry/classification coverage. `R+N` additionally identifies a focused native behavior test. Registry coverage does not claim every possible payload or custom datapack renders correctly.

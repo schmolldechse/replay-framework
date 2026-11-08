@@ -98,14 +98,13 @@ final class SeekEngine {
     private CompletionStage<LoadedFrames> loadFrames(
             SeekPoint point,
             long targetNanos) {
-        Duration checkpointTime = Duration.ofNanos(point.elapsedNanos());
         Duration targetEnd = Duration.ofNanos(inclusiveEnd(targetNanos));
         CompletionStage<List<RawPacketFrame>> checkpointFrames = Objects.requireNonNull(
                 data.checkpointFrames(point),
                 "checkpointFrames result");
         CompletionStage<List<RawPacketFrame>> deltaFrames = Objects.requireNonNull(
-                data.framesBetween(checkpointTime, targetEnd),
-                "framesBetween result");
+                data.framesAfter(point, targetEnd),
+                "framesAfter result");
         return checkpointFrames.thenCombineAsync(
                 deltaFrames,
                 (checkpoint, deltas) -> {
@@ -149,10 +148,7 @@ final class SeekEngine {
     }
 
     private long inclusiveEnd(long targetNanos) {
-        if (targetNanos >= durationNanos) {
-            return targetNanos;
-        }
-        return targetNanos + 1L;
+        return targetNanos == Long.MAX_VALUE ? Long.MAX_VALUE : targetNanos + 1L;
     }
 
     private static long toNanos(Duration value, String name) {

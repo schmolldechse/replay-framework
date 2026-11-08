@@ -89,9 +89,10 @@ final class CheckpointScheduler {
     }
 
     /** Encodes through the adapter port; the caller controls the execution thread. */
-    CompletionStage<ReplayCheckpoint> encode(CheckpointEncoder.CheckpointRequest request) {
+    CompletionStage<CheckpointEncoder.CheckpointCapture> capture(
+            CheckpointEncoder.CheckpointRequest request) {
         Objects.requireNonNull(request, "request");
-        return encoder.encode(request);
+        return encoder.capture(request);
     }
 
     /** Registers the already persisted initial checkpoint at ordinal zero. */
@@ -110,23 +111,23 @@ final class CheckpointScheduler {
     }
 
     /** Commits one checkpoint only after its atomic file write succeeded. */
-    void markWritten(ReplayCheckpoint checkpoint) {
+    void markWritten(ReplayCheckpoint checkpoint, long serverTick) {
         Objects.requireNonNull(checkpoint, "checkpoint");
+        if (serverTick < 0L) {
+            throw new IllegalArgumentException("serverTick must not be negative");
+        }
         if (checkpoint.ordinal() != nextOrdinal) {
             throw new IllegalArgumentException(
                     "checkpoint ordinal is not the next session ordinal: " + checkpoint.ordinal());
         }
-        long serverTick = pendingPoint == null
-                ? lastTick(checkpoint)
-                : pendingPoint.serverTick;
         if (isBefore(checkpoint.elapsedNanos(), serverTick,
                 lastWrittenElapsedNanos, lastWrittenServerTick)) {
             throw new IllegalArgumentException("checkpoint time or tick moved backwards");
         }
         if (pendingPoint != null
-                && (pendingPoint.elapsedNanos != checkpoint.elapsedNanos()
-                || pendingPoint.serverTick != serverTick)) {
-            throw new IllegalArgumentException("written checkpoint does not match pending trigger");
+                && isBefore(checkpoint.elapsedNanos(), serverTick,
+                pendingPoint.elapsedNanos, pendingPoint.serverTick)) {
+            throw new IllegalArgumentException("written checkpoint precedes its pending trigger");
         }
         try {
             nextOrdinal = Math.addExact(nextOrdinal, 1);
@@ -135,6 +136,13 @@ final class CheckpointScheduler {
         }
         lastWrittenElapsedNanos = checkpoint.elapsedNanos();
         lastWrittenServerTick = serverTick;
+        if (nextDueNanos <= checkpoint.elapsedNanos()) {
+            advanceDue(checkpoint.elapsedNanos());
+        }
+        lastObservedElapsedNanos = Math.max(lastObservedElapsedNanos, checkpoint.elapsedNanos());
+        if (lastObservedElapsedNanos == checkpoint.elapsedNanos()) {
+            lastObservedServerTick = Math.max(lastObservedServerTick, serverTick);
+        }
         pendingPoint = null;
     }
 

@@ -62,7 +62,9 @@ final class Paper26_3CheckpointFixtureTest {
         }
 
         Paper26_3CheckpointEncoder.CheckpointSnapshot snapshot =
-                new Paper26_3CheckpointEncoder.CheckpointSnapshot(List.of(
+                new Paper26_3CheckpointEncoder.CheckpointSnapshot(
+                        new CheckpointEncoder.CapturePoint(150L, 8L, 4),
+                        List.of(
                         blueprint("minecraft:update_mob_effect", Paper26_3CheckpointEncoder.CheckpointPacketFamily.RUNNING_EFFECT, "minecraft:world", "entity:9"),
                         blueprint("minecraft:set_equipment", Paper26_3CheckpointEncoder.CheckpointPacketFamily.EQUIPMENT, "minecraft:world", "entity:9"),
                         blueprint("minecraft:add_entity", Paper26_3CheckpointEncoder.CheckpointPacketFamily.ENTITY_SPAWN, "minecraft:world", "entity:9"),
@@ -112,6 +114,19 @@ final class Paper26_3CheckpointFixtureTest {
                         .toList());
         byte[] firstPayload = checkpoint.initializationFrames().get(0).payload();
         assertNotSame(firstPayload, checkpoint.initializationFrames().get(0).payload());
+
+        CheckpointEncoder.CheckpointCapture capture = encoder.capture(
+                new CheckpointEncoder.CheckpointRequest(
+                        RecordingScope.builder().build(),
+                        42L,
+                        7L,
+                        CheckpointEncoder.CheckpointKind.PERIODIC,
+                        100L))
+                .toCompletableFuture()
+                .join();
+        assertEquals(new CheckpointEncoder.CapturePoint(150L, 8L, 4), capture.point());
+        assertTrue(capture.initializationFrames().stream()
+                .allMatch(frame -> frame.elapsedNanos() == 50L && frame.serverTick() == 8L));
 
         Path checkpointPath = temporaryDirectory.resolve("initial.rfc");
         new ReplayCheckpointWriter(checkpointPath, Paper26_3CheckpointEncoder.ADAPTER_ID)

@@ -72,6 +72,7 @@ final class RecordingSegmentAppender implements AutoCloseable {
     private long lastServerTick = -1L;
     private int lastSequence = -1;
     private int activeCheckpointOrdinal;
+    private CapturedPacket deferredPacket;
     private boolean budgetStopNotified;
     private RecordingArtifacts sealedArtifacts;
 
@@ -152,7 +153,13 @@ final class RecordingSegmentAppender implements AutoCloseable {
             initializeArtifacts();
             while (true) {
                 processDimensionSignals();
-                Optional<CapturedPacket> next = queue.awaitNext();
+                Optional<CapturedPacket> next;
+                if (deferredPacket != null) {
+                    next = Optional.of(deferredPacket);
+                    deferredPacket = null;
+                } else {
+                    next = queue.awaitNext();
+                }
                 if (next.isEmpty()) {
                     break;
                 }
@@ -209,6 +216,16 @@ final class RecordingSegmentAppender implements AutoCloseable {
     }
 
     private void processPacket(CapturedPacket captured) throws IOException {
+        appendPacket(captured);
+
+        Optional<CheckpointEncoder.CheckpointRequest> periodic =
+                checkpointScheduler.dueForElapsed(lastElapsedNanos, lastServerTick);
+        periodic.ifPresent(this::writeCheckpointRequestUnchecked);
+        processDimensionSignals();
+    }
+
+    /** Appends one ordered delta without recursively scheduling a checkpoint. */
+    private void appendPacket(CapturedPacket captured) throws IOException {
         RawPacketFrame frame = toFrame(captured);
         validateOrder(frame);
         openSegmentIfNeeded(frame.elapsedNanos());
@@ -239,10 +256,6 @@ final class RecordingSegmentAppender implements AutoCloseable {
             finishOpenSegment();
         }
 
-        Optional<CheckpointEncoder.CheckpointRequest> periodic =
-                checkpointScheduler.dueForElapsed(frame.elapsedNanos(), frame.serverTick());
-        periodic.ifPresent(this::writeCheckpointRequestUnchecked);
-        processDimensionSignals();
     }
 
     private void openSegmentIfNeeded(long elapsedNanos) throws IOException {
@@ -323,31 +336,45 @@ final class RecordingSegmentAppender implements AutoCloseable {
 
     private void writeCheckpointRequest(CheckpointEncoder.CheckpointRequest request)
             throws IOException {
-        ReplayCheckpoint encoded;
+        CheckpointEncoder.CheckpointCapture capture;
         try {
-            encoded = checkpointScheduler.encode(request).toCompletableFuture().join();
+            capture = checkpointScheduler.capture(request).toCompletableFuture().join();
         } catch (CompletionException exception) {
             throw new AdapterCheckpointException(unwrap(exception));
         } catch (RuntimeException exception) {
             throw new AdapterCheckpointException(exception);
         }
-        if (encoded == null || encoded.elapsedNanos() != request.elapsedNanos()) {
+        if (capture == null) {
             throw new CorruptWriterException(
-                    new IllegalArgumentException("checkpoint encoder returned an invalid time"));
+                    new IllegalArgumentException("checkpoint encoder returned null capture"));
         }
-        for (RawPacketFrame frame : encoded.initializationFrames()) {
-            if (frame.elapsedNanos() != request.elapsedNanos()
-                    || frame.serverTick() != request.serverTick()) {
+        long captureElapsedNanos;
+        try {
+            captureElapsedNanos = Math.subtractExact(
+                    capture.point().captureTimeNanos(), recordingStartCaptureTimeNanos);
+        } catch (ArithmeticException overflow) {
+            throw new CorruptWriterException(
+                    new IllegalArgumentException("checkpoint capture time cannot be rebased", overflow));
+        }
+        if (captureElapsedNanos < request.elapsedNanos()) {
+            throw new CorruptWriterException(
+                    new IllegalArgumentException("checkpoint capture precedes its request"));
+        }
+        drainPacketsThrough(capture.point());
+        discardDimensionSignalsThrough(capture.point());
+        for (RawPacketFrame frame : capture.initializationFrames()) {
+            if (frame.elapsedNanos() != captureElapsedNanos
+                    || frame.serverTick() != capture.point().serverTick()) {
                 throw new CorruptWriterException(
                         new IllegalArgumentException(
-                                "checkpoint frame does not match its request point"));
+                                "checkpoint frame does not match its actual capture point"));
             }
         }
         int ordinal = checkpointScheduler.nextOrdinal();
         ReplayCheckpoint canonical;
         try {
             canonical = new ReplayCheckpoint(
-                    ordinal, request.elapsedNanos(), encoded.initializationFrames());
+                    ordinal, captureElapsedNanos, capture.initializationFrames());
         } catch (IllegalArgumentException formatFailure) {
             throw new CorruptWriterException(formatFailure);
         }
@@ -368,11 +395,55 @@ final class RecordingSegmentAppender implements AutoCloseable {
         seekPoints.add(new SeekPoint(
                 canonical.elapsedNanos(), canonical.ordinal(), seekSegment, offset));
         try {
-            checkpointScheduler.markWritten(canonical);
+            checkpointScheduler.markWritten(canonical, capture.point().serverTick());
         } catch (IllegalArgumentException invariantFailure) {
             throw new CorruptWriterException(invariantFailure);
         }
         activeCheckpointOrdinal = canonical.ordinal();
+    }
+
+    /**
+     * Advances the delta writer to the exclusive adapter capture barrier.
+     * The Paper adapters publish all pre-barrier packets before allocating the
+     * barrier, so no wait or reordering is required here.
+     */
+    private void drainPacketsThrough(CheckpointEncoder.CapturePoint point) throws IOException {
+        while (deferredPacket == null) {
+            Optional<CapturedPacket> next = queue.pollNext();
+            if (next.isEmpty()) {
+                return;
+            }
+            CapturedPacket packet = next.orElseThrow();
+            if (isAfter(packet, point)) {
+                deferredPacket = packet;
+                return;
+            }
+            appendPacket(packet);
+        }
+    }
+
+    private void discardDimensionSignalsThrough(CheckpointEncoder.CapturePoint point) {
+        List<DimensionSignal> later = new ArrayList<>();
+        DimensionSignal signal;
+        while ((signal = dimensionSignals.poll()) != null) {
+            if (signal.captureTimeNanos() > point.captureTimeNanos()
+                    || (signal.captureTimeNanos() == point.captureTimeNanos()
+                    && signal.serverTick() > point.serverTick())) {
+                later.add(signal);
+            }
+        }
+        dimensionSignals.addAll(later);
+    }
+
+    private static boolean isAfter(
+            CapturedPacket packet,
+            CheckpointEncoder.CapturePoint point) {
+        return packet.captureTimeNanos() > point.captureTimeNanos()
+                || (packet.captureTimeNanos() == point.captureTimeNanos()
+                && packet.serverTick() > point.serverTick())
+                || (packet.captureTimeNanos() == point.captureTimeNanos()
+                && packet.serverTick() == point.serverTick()
+                && packet.sequence() > point.sequence());
     }
 
     private void writeCheckpoint(Path target, ReplayCheckpoint checkpoint) throws IOException {
