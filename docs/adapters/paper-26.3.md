@@ -22,6 +22,8 @@ Player movement is captured from `PlayerMoveEvent`; living non-player movement i
 
 Recorded player, system, disguised, and action-bar chat packets remain capture-policy data and are never presented to a neutral playback observer. Explosions keep scene particles and sound but lose viewer knockback. Replay player profiles use mapped UUIDs while preserving their recorded profile names and properties. They do not enter the live tab list and never reuse a recorded chat session.
 
+During seek reconstruction, the 26.3 bridge accepts only registry descriptors whose `Checkpoint` column is `yes`. Durable chunk, block, entity, profile, movement, metadata, equipment, effect, passenger, border, time, and registry-tag changes therefore converge on the target state. Ordered effects with `Checkpoint` set to `no`, including 26.3 transient blocks and swing animations as well as damage effects, particles, and sounds, remain available during normal timeline playback but are skipped during reconstruction. Frames are enqueued as batches while the channel drain retains its limit of 128 packet operations and one flush per event-loop turn.
+
 Three PLAY packets distinguish this registry from 26.2. `swing_animation` is rewritten with a session-local entity ID while retaining hand and animation data. `add_transient_block` is replayed in order and is intentionally excluded from checkpoints; seek/reset unloads the replay chunks and therefore clears its client-side lifetime. `post_effects` belongs to the recorded viewer and is dropped.
 
 ## Tests
@@ -29,7 +31,8 @@ Three PLAY packets distinguish this registry from 26.2. `swing_animation` is rew
 - `PacketCoverageTest` loads the real 26.3 NMS registry and fails for an unreviewed PLAY packet or missing essential family.
 - Registry, native codec, checkpoint, snapshot, observer isolation, and outbound-gate tests cover their respective version-bound behavior.
 - Snapshot tests verify that the 26.3 capture barrier is allocated only after asynchronous scope preloading completes; generic core tests verify the exclusive delta boundary stored with it.
-- `NeutralObserverTest` includes entity effects, minecart motion, sound, leashes, recorded chat isolation, explosion knockback, block-breaking overlays, transient blocks, 26.3 swing animation, and idempotent reset.
+- `NeutralObserverTest` includes entity effects, minecart motion, sound, leashes, filtered chat, explosion knockback, block-breaking overlays, transient blocks, 26.3 swing animation, and idempotent reset.
+- `Paper26_3PlaybackBridgeTest` verifies that reconstruction retains 26.3 checkpoint state while suppressing transient frames.
 
 `R` means registry/classification coverage. `R+N` additionally identifies a focused native behavior test. Registry coverage does not claim every possible payload or custom datapack renders correctly.
 

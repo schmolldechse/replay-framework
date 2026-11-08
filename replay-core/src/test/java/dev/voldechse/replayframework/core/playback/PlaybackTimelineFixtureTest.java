@@ -4,6 +4,7 @@ import dev.voldechse.replayframework.api.playback.PlaybackSpeed;
 import dev.voldechse.replayframework.api.playback.PlaybackBufferOptions;
 import dev.voldechse.replayframework.api.playback.PlaybackStatus;
 import dev.voldechse.replayframework.adapter.PlaybackBridge;
+import dev.voldechse.replayframework.adapter.PlaybackEmissionMode;
 import dev.voldechse.replayframework.format.PacketPhase;
 import dev.voldechse.replayframework.format.RawPacketFrame;
 import dev.voldechse.replayframework.format.ReplayIndex;
@@ -18,6 +19,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 final class PlaybackTimelineFixtureTest {
@@ -88,6 +90,104 @@ final class PlaybackTimelineFixtureTest {
         assertEquals(List.of("reset", checkpointFrame, deltaFrame), bridge.calls);
         assertEquals(new SeekPoint(5_000_000_000L, 1, 1, 16L), data.requestedBoundary);
         assertTrue(result.paused());
+        assertTrue(result.fullRebuild());
+        assertEquals(
+                List.of(
+                        PlaybackEmissionMode.RECONSTRUCTION,
+                        PlaybackEmissionMode.RECONSTRUCTION),
+                bridge.batchModes);
+    }
+
+    @Test
+    void forwardSeekWithinCheckpointLineageUsesOnlyFramesAfterCursor() {
+        Duration duration = Duration.ofSeconds(20L);
+        SeekPoint checkpoint = new SeekPoint(0L, 0, 0, 0L);
+        ReplayIndex index = ReplayIndex.of(List.of(
+                checkpoint,
+                new SeekPoint(10_000_000_000L, 1, 1, 16L)));
+        RawPacketFrame alreadyApplied = frame(2_000_000_000L, 2L, 1);
+        RawPacketFrame required = frame(4_000_000_000L, 3L, 2);
+        FakePlaybackData data = new FakePlaybackData(
+                List.of(frame(0L, 0L, 0)),
+                List.of(alreadyApplied, required));
+        RecordingBridge bridge = new RecordingBridge();
+        SeekEngine engine = new SeekEngine(
+                index,
+                duration,
+                data,
+                bridge,
+                Runnable::run);
+
+        SeekEngine.SeekResult result = engine.seekTo(
+                        Duration.ofSeconds(6L),
+                        PlaybackSpeed.NORMAL,
+                        false,
+                        Duration.ofSeconds(2L),
+                        new PacketScheduler.Cursor(2_000_000_000L, 2L, 1),
+                        true,
+                        () -> true)
+                .toCompletableFuture()
+                .join();
+
+        assertFalse(result.fullRebuild());
+        assertEquals(List.of(required), result.emittedDeltaFrames());
+        assertEquals(List.of(required), bridge.calls);
+        assertEquals(List.of(PlaybackEmissionMode.RECONSTRUCTION), bridge.batchModes);
+    }
+
+    @Test
+    void forwardSeekAcrossCheckpointLineageFallsBackToFullRebuild() {
+        Duration duration = Duration.ofSeconds(20L);
+        ReplayIndex index = ReplayIndex.of(List.of(
+                new SeekPoint(0L, 0, 0, 0L),
+                new SeekPoint(5_000_000_000L, 1, 1, 16L)));
+        RawPacketFrame checkpointFrame = frame(5_000_000_000L, 5L, 0);
+        FakePlaybackData data = new FakePlaybackData(
+                List.of(checkpointFrame),
+                List.of());
+        RecordingBridge bridge = new RecordingBridge();
+        SeekEngine engine = new SeekEngine(
+                index,
+                duration,
+                data,
+                bridge,
+                Runnable::run);
+
+        SeekEngine.SeekResult result = engine.seekTo(
+                        Duration.ofSeconds(6L),
+                        PlaybackSpeed.NORMAL,
+                        false,
+                        Duration.ofSeconds(2L),
+                        new PacketScheduler.Cursor(2_000_000_000L, 2L, 1),
+                        true,
+                        () -> true)
+                .toCompletableFuture()
+                .join();
+
+        assertTrue(result.fullRebuild());
+        assertEquals(List.of("reset", checkpointFrame), bridge.calls);
+    }
+
+    @Test
+    void reconstructionSplitsLargeFrameSetsIntoBoundedBatches() {
+        List<RawPacketFrame> checkpointFrames = new ArrayList<>();
+        for (int sequence = 0; sequence < 2_050; sequence++) {
+            checkpointFrames.add(frame(0L, 0L, sequence));
+        }
+        FakePlaybackData data = new FakePlaybackData(checkpointFrames, List.of());
+        RecordingBridge bridge = new RecordingBridge();
+        SeekEngine engine = new SeekEngine(
+                ReplayIndex.of(List.of(new SeekPoint(0L, 0, 0, 0L))),
+                Duration.ofSeconds(1L),
+                data,
+                bridge,
+                Runnable::run);
+
+        engine.seekTo(Duration.ZERO, PlaybackSpeed.NORMAL, false, () -> true)
+                .toCompletableFuture()
+                .join();
+
+        assertEquals(List.of(1_024, 1_024, 2), bridge.batchSizes);
     }
 
     @Test
@@ -217,6 +317,60 @@ final class PlaybackTimelineFixtureTest {
     }
 
     @Test
+    void preparedTimelineUsesIncrementalForwardSeekWithoutSecondReset() {
+        AtomicLong nowNanos = new AtomicLong();
+        Duration duration = Duration.ofSeconds(20L);
+        FakePlaybackData data = new FakePlaybackData(
+                List.of(frame(0L, 0L, 0)),
+                List.of(frame(3_000_000_000L, 3L, 1)));
+        RecordingBridge bridge = new RecordingBridge();
+        PlaybackTimeline timeline = new PlaybackTimeline(
+                duration,
+                ReplayIndex.of(List.of(new SeekPoint(0L, 0, 0, 0L))),
+                data,
+                bridge,
+                PlaybackBufferOptions.builder().build(),
+                Runnable::run,
+                nowNanos::get);
+
+        timeline.prepare().toCompletableFuture().join();
+        timeline.seekTo(Duration.ofSeconds(5L)).toCompletableFuture().join();
+
+        assertEquals(1L, bridge.calls.stream().filter("reset"::equals).count());
+        assertEquals(Duration.ofSeconds(5L), timeline.snapshot().position());
+        timeline.closeAsync().toCompletableFuture().join();
+    }
+
+    @Test
+    void supersedingSeekInvalidatesIncrementalSceneAndForcesFullRebuild() {
+        AtomicLong nowNanos = new AtomicLong();
+        Duration duration = Duration.ofSeconds(20L);
+        FakePlaybackData data = new FakePlaybackData(
+                List.of(frame(0L, 0L, 0)),
+                List.of(frame(3_000_000_000L, 3L, 1)));
+        RecordingBridge bridge = new RecordingBridge();
+        PlaybackTimeline timeline = new PlaybackTimeline(
+                duration,
+                ReplayIndex.of(List.of(new SeekPoint(0L, 0, 0, 0L))),
+                data,
+                bridge,
+                PlaybackBufferOptions.builder().build(),
+                Runnable::run,
+                nowNanos::get);
+
+        timeline.prepare().toCompletableFuture().join();
+        bridge.holdNextIdle();
+        CompletionStage<?> superseded = timeline.seekTo(Duration.ofSeconds(4L));
+        CompletionStage<?> replacement = timeline.seekTo(Duration.ofSeconds(5L));
+
+        replacement.toCompletableFuture().join();
+        superseded.toCompletableFuture().join();
+        assertEquals(1, bridge.discardCount);
+        assertEquals(2L, bridge.calls.stream().filter("reset"::equals).count());
+        timeline.closeAsync().toCompletableFuture().join();
+    }
+
+    @Test
     void bufferingFreezesPositionUntilDataIsReady() {
         AtomicLong nowNanos = new AtomicLong();
         Duration duration = Duration.ofSeconds(20L);
@@ -270,6 +424,11 @@ final class PlaybackTimelineFixtureTest {
 
     private static final class RecordingBridge implements PlaybackBridge {
         private final List<Object> calls = new ArrayList<>();
+        private final List<PlaybackEmissionMode> batchModes = new ArrayList<>();
+        private final List<Integer> batchSizes = new ArrayList<>();
+        private CompletableFuture<Void> heldIdle;
+        private CompletableFuture<Void> activeIdle;
+        private int discardCount;
 
         @Override
 
@@ -288,8 +447,37 @@ final class PlaybackTimelineFixtureTest {
         }
 
         @Override
+        public void sendBatch(
+                List<RawPacketFrame> frames,
+                PlaybackEmissionMode mode) {
+            batchModes.add(mode);
+            batchSizes.add(frames.size());
+            frames.forEach(this::send);
+        }
+
+        @Override
         public void resetView() {
             calls.add("reset");
+        }
+
+        @Override
+        public CompletionStage<Void> awaitOutboundIdle() {
+            if (heldIdle == null) {
+                return CompletableFuture.completedFuture(null);
+            }
+            activeIdle = heldIdle;
+            heldIdle = null;
+            return activeIdle;
+        }
+
+        @Override
+        public void discardQueuedReplayPackets() {
+            discardCount++;
+            if (activeIdle != null) {
+                activeIdle.completeExceptionally(new java.util.concurrent.CancellationException(
+                        "superseded by test seek"));
+                activeIdle = null;
+            }
         }
 
         @Override
@@ -302,6 +490,10 @@ final class PlaybackTimelineFixtureTest {
                     .filter(RawPacketFrame.class::isInstance)
                     .map(RawPacketFrame.class::cast)
                     .toList();
+        }
+
+        private void holdNextIdle() {
+            heldIdle = new CompletableFuture<>();
         }
     }
 
@@ -375,8 +567,13 @@ final class PlaybackTimelineFixtureTest {
         @Override
         public CompletionStage<List<RawPacketFrame>> framesBetween(
                 Duration startInclusive,
-                Duration endInclusive) {
-            return availability.thenApply(ignored -> deltaFrames);
+                Duration endExclusive) {
+            long startNanos = startInclusive.toNanos();
+            long endNanos = endExclusive.toNanos();
+            return availability.thenApply(ignored -> deltaFrames.stream()
+                    .filter(frame -> frame.elapsedNanos() >= startNanos)
+                    .filter(frame -> frame.elapsedNanos() < endNanos)
+                    .toList());
         }
 
         @Override

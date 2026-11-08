@@ -1,6 +1,7 @@
 package dev.voldechse.replayframework.core.playback;
 
 import dev.voldechse.replayframework.adapter.PlaybackBridge;
+import dev.voldechse.replayframework.adapter.PlaybackEmissionMode;
 import dev.voldechse.replayframework.api.playback.PlaybackSpeed;
 import dev.voldechse.replayframework.core.playback.buffer.PrefetchPlanner;
 import dev.voldechse.replayframework.format.RawPacketFrame;
@@ -19,6 +20,8 @@ import java.util.function.BooleanSupplier;
 
 /** Reconstructs one viewer view from a floor checkpoint and replay deltas. */
 final class SeekEngine {
+
+    private static final int MAX_EMISSION_BATCH_SIZE = 1024;
 
     private final ReplayIndex index;
     private final long durationNanos;
@@ -49,6 +52,41 @@ final class SeekEngine {
             PlaybackSpeed speed,
             boolean resumeAfterSeek,
             BooleanSupplier operationCurrent) {
+        return seekTo(
+                target,
+                speed,
+                resumeAfterSeek,
+                null,
+                operationCurrent);
+    }
+
+    CompletionStage<SeekResult> seekTo(
+            Duration target,
+            PlaybackSpeed speed,
+            boolean resumeAfterSeek,
+            Duration currentPosition,
+            PacketScheduler.Cursor cursor,
+            boolean allowIncremental,
+            BooleanSupplier operationCurrent) {
+        Objects.requireNonNull(currentPosition, "currentPosition");
+        Objects.requireNonNull(cursor, "cursor");
+        long currentNanos = toNanos(currentPosition, "currentPosition");
+        if (currentNanos < 0L || currentNanos > durationNanos) {
+            return CompletableFuture.failedFuture(
+                    new IllegalArgumentException("currentPosition is outside replay duration"));
+        }
+        IncrementalContext context = allowIncremental
+                ? new IncrementalContext(currentNanos, cursor)
+                : null;
+        return seekTo(target, speed, resumeAfterSeek, context, operationCurrent);
+    }
+
+    private CompletionStage<SeekResult> seekTo(
+            Duration target,
+            PlaybackSpeed speed,
+            boolean resumeAfterSeek,
+            IncrementalContext incrementalContext,
+            BooleanSupplier operationCurrent) {
         Objects.requireNonNull(target, "target");
         Objects.requireNonNull(speed, "speed");
         Objects.requireNonNull(operationCurrent, "operationCurrent");
@@ -68,6 +106,8 @@ final class SeekEngine {
             return CompletableFuture.failedFuture(
                     new IllegalStateException("replay index has no floor checkpoint"));
         }
+        boolean incremental = canSeekIncrementally(
+                point, targetNanos, incrementalContext);
 
         CompletionStage<PlaybackTimeline.BufferProgress> availability;
         try {
@@ -83,7 +123,11 @@ final class SeekEngine {
 
         return availability.thenCompose(ignored -> {
                     requireCurrent(operationCurrent);
-                    return loadFrames(point, targetNanos);
+                    return incremental
+                            ? loadIncrementalFrames(
+                                    targetNanos,
+                                    incrementalContext.cursor())
+                            : loadFrames(point, targetNanos);
                 })
                 .thenComposeAsync(
                         frames -> apply(
@@ -113,10 +157,30 @@ final class SeekEngine {
                     result.addAll(checkpoint);
                     result.addAll(deltas);
                     return new LoadedFrames(
+                            List.copyOf(checkpoint),
+                            List.copyOf(deltas),
                             List.copyOf(result),
-                            List.copyOf(deltas));
+                            true);
                 },
                 continuationExecutor);
+    }
+
+    private CompletionStage<LoadedFrames> loadIncrementalFrames(
+            long targetNanos,
+            PacketScheduler.Cursor cursor) {
+        Duration start = Duration.ofNanos(Math.max(0L, cursor.elapsedNanos()));
+        Duration targetEnd = Duration.ofNanos(inclusiveEnd(targetNanos));
+        CompletionStage<List<RawPacketFrame>> deltaFrames = Objects.requireNonNull(
+                data.framesBetween(start, targetEnd),
+                "framesBetween result");
+        return deltaFrames.thenApplyAsync(frames -> {
+            List<RawPacketFrame> deltas = frames.stream()
+                    .map(frame -> Objects.requireNonNull(frame, "frames contains null"))
+                    .filter(cursor::isBefore)
+                    .filter(frame -> frame.elapsedNanos() <= targetNanos)
+                    .toList();
+            return new LoadedFrames(List.of(), deltas, deltas, false);
+        }, continuationExecutor);
     }
 
     private CompletionStage<SeekResult> apply(
@@ -126,11 +190,11 @@ final class SeekEngine {
             boolean resumeAfterSeek,
             BooleanSupplier operationCurrent) {
         requireCurrent(operationCurrent);
-        bridge.resetView();
-        for (RawPacketFrame frame : loadedFrames.frames()) {
-            requireCurrent(operationCurrent);
-            bridge.send(frame);
+        if (loadedFrames.fullRebuild()) {
+            bridge.resetView();
         }
+        emitBatches(loadedFrames.checkpointFrames(), operationCurrent);
+        emitBatches(loadedFrames.deltaFrames(), operationCurrent);
         return bridge.awaitOutboundIdle().thenApply(ignored -> {
             requireCurrent(operationCurrent);
             boolean atEnd = targetNanos >= durationNanos;
@@ -139,8 +203,37 @@ final class SeekEngine {
                     atEnd || !resumeAfterSeek,
                     loadedFrames.frames(),
                     loadedFrames.deltaFrames(),
-                    point);
+                    point,
+                    loadedFrames.fullRebuild());
         });
+    }
+
+    private void emitBatches(
+            List<RawPacketFrame> frames,
+            BooleanSupplier operationCurrent) {
+        for (int start = 0; start < frames.size(); start += MAX_EMISSION_BATCH_SIZE) {
+            requireCurrent(operationCurrent);
+            int end = Math.min(frames.size(), start + MAX_EMISSION_BATCH_SIZE);
+            bridge.sendBatch(
+                    frames.subList(start, end),
+                    PlaybackEmissionMode.RECONSTRUCTION);
+        }
+    }
+
+    private boolean canSeekIncrementally(
+            SeekPoint targetCheckpoint,
+            long targetNanos,
+            IncrementalContext context) {
+        if (context == null
+                || targetNanos <= context.positionNanos()
+                || context.cursor().elapsedNanos() < 0L
+                || context.cursor().elapsedNanos() > context.positionNanos()) {
+            return false;
+        }
+        SeekPoint currentCheckpoint = index.seekCheckpointFloor(
+                        Duration.ofNanos(context.positionNanos()))
+                .orElse(null);
+        return targetCheckpoint.equals(currentCheckpoint);
     }
 
     private long clamp(long value) {
@@ -165,7 +258,8 @@ final class SeekEngine {
             boolean paused,
             List<RawPacketFrame> emittedFrames,
             List<RawPacketFrame> emittedDeltaFrames,
-            SeekPoint checkpoint) {
+            SeekPoint checkpoint,
+            boolean fullRebuild) {
 
         SeekResult {
             if (positionNanos < 0L) {
@@ -191,12 +285,27 @@ final class SeekEngine {
     }
 
     private record LoadedFrames(
+            List<RawPacketFrame> checkpointFrames,
+            List<RawPacketFrame> deltaFrames,
             List<RawPacketFrame> frames,
-            List<RawPacketFrame> deltaFrames) {
+            boolean fullRebuild) {
 
         private LoadedFrames {
-            Objects.requireNonNull(frames, "frames");
+            Objects.requireNonNull(checkpointFrames, "checkpointFrames");
             Objects.requireNonNull(deltaFrames, "deltaFrames");
+            Objects.requireNonNull(frames, "frames");
+        }
+    }
+
+    private record IncrementalContext(
+            long positionNanos,
+            PacketScheduler.Cursor cursor) {
+
+        private IncrementalContext {
+            if (positionNanos < 0L) {
+                throw new IllegalArgumentException("positionNanos must not be negative");
+            }
+            Objects.requireNonNull(cursor, "cursor");
         }
     }
 }

@@ -5,6 +5,7 @@ import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.PacketRegistry;
 import dev.voldechse.replayframework.adapter.PlaybackBridge;
+import dev.voldechse.replayframework.adapter.PlaybackEmissionMode;
 import dev.voldechse.replayframework.adapter.codec.PacketCodec;
 import dev.voldechse.replayframework.adapter.playback.PlaybackIdentityContext;
 import dev.voldechse.replayframework.adapter.playback.ObserverAnchor;
@@ -169,13 +170,18 @@ public final class Paper26PlaybackBridge implements PlaybackBridge {
 
     @Override
     public void send(RawPacketFrame frame) {
-        Objects.requireNonNull(frame, "frame");
-        requireUsable("send");
-        if (!shouldReplay(frame)) {
-            return;
-        }
+        sendBatch(List.of(Objects.requireNonNull(frame, "frame")), PlaybackEmissionMode.LIVE);
+    }
 
-        enqueueOutbound(() -> processFrame(frame));
+    @Override
+    public void sendBatch(List<RawPacketFrame> frames, PlaybackEmissionMode mode) {
+        Objects.requireNonNull(frames, "frames");
+        Objects.requireNonNull(mode, "mode");
+        requireUsable("sendBatch");
+        List<RawPacketFrame> accepted = List.copyOf(frames).stream()
+                .filter(frame -> shouldReplay(frame, mode, registry))
+                .toList();
+        enqueueOutboundFrames(accepted);
     }
 
     @Override
@@ -246,12 +252,28 @@ public final class Paper26PlaybackBridge implements PlaybackBridge {
     }
 
     private void enqueueOutbound(Runnable operation) {
+        enqueueOutboundOperations(List.of(Objects.requireNonNull(operation, "operation")));
+    }
+
+    private void enqueueOutboundFrames(List<RawPacketFrame> frames) {
+        List<Runnable> operations = new ArrayList<>(frames.size());
+        for (RawPacketFrame frame : frames) {
+            operations.add(() -> processFrame(frame));
+        }
+        enqueueOutboundOperations(operations);
+    }
+
+    private void enqueueOutboundOperations(List<Runnable> operations) {
+        List<Runnable> accepted = List.copyOf(operations);
+        if (accepted.isEmpty()) {
+            return;
+        }
         boolean scheduleDrain;
         synchronized (outboundLock) {
             if (isTerminal()) {
                 return;
             }
-            outboundOperations.addLast(operation);
+            outboundOperations.addAll(accepted);
             scheduleDrain = !outboundDrainScheduled;
             if (scheduleDrain) {
                 outboundDrainScheduled = true;
@@ -429,7 +451,13 @@ public final class Paper26PlaybackBridge implements PlaybackBridge {
     }
 
     /** Drops every recorded packet that has no explicit safe replay contract. */
-    private boolean shouldReplay(RawPacketFrame frame) {
+    static boolean shouldReplay(
+            RawPacketFrame frame,
+            PlaybackEmissionMode mode,
+            PacketRegistry registry) {
+        Objects.requireNonNull(frame, "frame");
+        Objects.requireNonNull(mode, "mode");
+        Objects.requireNonNull(registry, "registry");
         if (frame.phase() != PacketPhase.PLAY) {
             return false;
         }
@@ -438,6 +466,7 @@ public final class Paper26PlaybackBridge implements PlaybackBridge {
                 .orElse(null);
         return descriptor != null
                 && descriptor.replayable()
+                && (mode == PlaybackEmissionMode.LIVE || descriptor.checkpointRelevant())
                 && registry.replayAllowed(
                         frame.phase(), PacketDescriptor.Direction.CLIENTBOUND, frame.packetId());
     }

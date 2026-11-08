@@ -111,6 +111,8 @@ final class PlaybackTimeline implements AutoCloseable {
     private boolean closed;
     private boolean completionNotified;
     private boolean resourcesClosed;
+    private boolean sceneValid;
+    private boolean operationActive;
     private long operationGeneration;
     private BufferProgress lastProgress = new BufferProgress(Duration.ZERO, Duration.ZERO, false);
 
@@ -294,6 +296,7 @@ final class PlaybackTimeline implements AutoCloseable {
     CompletionStage<PlaybackSnapshot> prepare() {
         return enqueueAsync(() -> {
             StatusTransition preparing;
+            OperationStart operation;
             synchronized (stateLock) {
                 if (closed || status == PlaybackStatus.FAILED) {
                     return failedTerminal();
@@ -302,9 +305,13 @@ final class PlaybackTimeline implements AutoCloseable {
                     return CompletableFuture.completedFuture(snapshotLocked());
                 }
                 preparing = setStatusLocked(PlaybackStatus.BUFFERING);
+                operation = startOperation(false);
             }
             notifyStatus(preparing);
-            long generation = nextOperation();
+            long generation = operation.generation();
+            if (operation.superseded()) {
+                bridge.discardQueuedReplayPackets();
+            }
             return seekEngine.seekTo(
                             Duration.ZERO,
                             clock.speed(),
@@ -321,6 +328,7 @@ final class PlaybackTimeline implements AutoCloseable {
                             }
                             previousProgress = applySeekResult(result);
                             prepared = true;
+                            completeOperationLocked(generation, true);
                             if (desiredPlaying && result.positionNanos() < durationNanos) {
                                 clock.play(nowNanos.getAsLong());
                                 preparedTransition = setStatusLocked(PlaybackStatus.PLAYING);
@@ -352,9 +360,9 @@ final class PlaybackTimeline implements AutoCloseable {
 
     CompletionStage<PlaybackSnapshot> seekBy(Duration delta) {
         Objects.requireNonNull(delta, "delta");
-        long generation = nextOperation();
+        OperationStart operation = startOperation(true);
         scheduler.suspendEmission();
-        bridge.discardQueuedReplayPackets();
+        discardSupersededOperation(operation);
         return enqueueAsync(() -> {
             long current = clock.positionNanos(nowNanos.getAsLong());
             long deltaNanos;
@@ -369,7 +377,7 @@ final class PlaybackTimeline implements AutoCloseable {
             } catch (ArithmeticException exception) {
                 target = deltaNanos < 0L ? Long.MIN_VALUE : Long.MAX_VALUE;
             }
-            return beginSeek(Duration.ofNanos(target), generation);
+            return beginSeek(Duration.ofNanos(target), operation);
         });
     }
 
@@ -384,6 +392,8 @@ final class PlaybackTimeline implements AutoCloseable {
                 desiredPlaying = false;
                 closedTransition = setStatusLocked(PlaybackStatus.CLOSED);
                 operationGeneration++;
+                operationActive = false;
+                sceneValid = false;
             }
             notifyStatus(closedTransition);
             CompletionStage<Void> stopped = scheduler.stop();
@@ -436,14 +446,18 @@ final class PlaybackTimeline implements AutoCloseable {
     }
 
     private CompletionStage<PlaybackSnapshot> seek(Duration target) {
-        long generation = nextOperation();
+        OperationStart operation = startOperation(true);
         scheduler.suspendEmission();
-        bridge.discardQueuedReplayPackets();
-        return enqueueAsync(() -> beginSeek(target, generation));
+        discardSupersededOperation(operation);
+        return enqueueAsync(() -> beginSeek(target, operation));
     }
 
-    private CompletionStage<PlaybackSnapshot> beginSeek(Duration target, long generation) {
+    private CompletionStage<PlaybackSnapshot> beginSeek(
+            Duration target,
+            OperationStart operation) {
+        long generation = operation.generation();
         final boolean resume;
+        final long currentPositionNanos;
         final Duration requestedPosition = normalizeRequestedPosition(target);
         StatusTransition bufferingTransition;
         synchronized (stateLock) {
@@ -456,15 +470,30 @@ final class PlaybackTimeline implements AutoCloseable {
                 return failedTerminal();
             }
             resume = desiredPlaying;
-            clock.pause(nowNanos.getAsLong());
+            long now = nowNanos.getAsLong();
+            currentPositionNanos = clock.positionNanos(now);
+            clock.pause(now);
             bufferingTransition = setStatusLocked(PlaybackStatus.BUFFERING);
         }
         notifyStatus(bufferingTransition);
-        return seekEngine.seekTo(
-                        target,
-                        clock.speed(),
-                        resume,
-                        () -> isCurrentOperation(generation))
+        CompletionStage<Void> outboundIdle;
+        try {
+            outboundIdle = Objects.requireNonNull(
+                    bridge.awaitOutboundIdle(),
+                    "awaitOutboundIdle result");
+        } catch (RuntimeException exception) {
+            outboundIdle = CompletableFuture.failedFuture(exception);
+        }
+        return outboundIdle
+                .thenComposeAsync(ignored -> seekEngine.seekTo(
+                                target,
+                                clock.speed(),
+                                resume,
+                                Duration.ofNanos(currentPositionNanos),
+                                scheduler.cursor(),
+                                operation.incrementalEligible(),
+                                () -> isCurrentOperation(generation)),
+                        commandExecutor)
                 .thenApplyAsync(result -> {
                     StatusTransition finalTransition;
                     BufferProgress previousProgress;
@@ -474,6 +503,7 @@ final class PlaybackTimeline implements AutoCloseable {
                             throw new IllegalStateException("seek is no longer current");
                         }
                         previousProgress = applySeekResult(result);
+                        completeOperationLocked(generation, true);
                         scheduler.resumeEmission();
                         if (result.positionNanos() >= durationNanos) {
                             desiredPlaying = false;
@@ -534,6 +564,8 @@ final class PlaybackTimeline implements AutoCloseable {
             return null;
         }
         desiredPlaying = false;
+        operationActive = false;
+        sceneValid = false;
         StatusTransition statusTransition = setStatusLocked(PlaybackStatus.FAILED);
         operationGeneration++;
         return new FailureTransition(statusTransition, unwrap(failure));
@@ -662,9 +694,44 @@ final class PlaybackTimeline implements AutoCloseable {
     private record FailureTransition(StatusTransition statusTransition, Throwable failure) {
     }
 
-    private long nextOperation() {
+    private record OperationStart(
+            long generation,
+            boolean incrementalEligible,
+            boolean superseded) {
+    }
+
+    private OperationStart startOperation(boolean considerIncremental) {
         synchronized (stateLock) {
-            return ++operationGeneration;
+            boolean superseded = operationActive;
+            long generation = ++operationGeneration;
+            boolean incrementalEligible = considerIncremental
+                    && !superseded
+                    && prepared
+                    && sceneValid
+                    && (status == PlaybackStatus.PLAYING
+                            || status == PlaybackStatus.PAUSED);
+            operationActive = true;
+            if (superseded) {
+                sceneValid = false;
+            }
+            return new OperationStart(
+                    generation,
+                    incrementalEligible,
+                    superseded);
+        }
+    }
+
+    private void completeOperationLocked(long generation, boolean validScene) {
+        if (generation != operationGeneration) {
+            return;
+        }
+        operationActive = false;
+        sceneValid = validScene;
+    }
+
+    private void discardSupersededOperation(OperationStart operation) {
+        if (operation.superseded()) {
+            bridge.discardQueuedReplayPackets();
         }
     }
 
