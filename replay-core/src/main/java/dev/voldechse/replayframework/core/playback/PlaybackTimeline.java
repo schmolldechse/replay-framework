@@ -41,6 +41,13 @@ final class PlaybackTimeline implements AutoCloseable {
                 Duration startInclusive,
                 Duration endInclusive);
 
+        default CompletionStage<List<RawPacketFrame>> framesAfter(
+                SeekPoint checkpoint,
+                Duration endExclusive) {
+            return framesBetween(
+                    Duration.ofNanos(checkpoint.elapsedNanos()), endExclusive);
+        }
+
         BufferProgress progress(Duration position);
 
         void close();
@@ -191,6 +198,13 @@ final class PlaybackTimeline implements AutoCloseable {
                     Duration startInclusive,
                     Duration endInclusive) {
                 return buffer.framesBetween(startInclusive, endInclusive);
+            }
+
+            @Override
+            public CompletionStage<List<RawPacketFrame>> framesAfter(
+                    SeekPoint checkpoint,
+                    Duration endExclusive) {
+                return buffer.framesAfter(checkpoint, endExclusive);
             }
 
             @Override

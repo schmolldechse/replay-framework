@@ -10,7 +10,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.*;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -45,13 +44,12 @@ class NeutralObserverTest {
     }
 
     @Test
-    void actionBarAndGameModeCannotBeReplacedByRecordedPresentationPackets() {
+    void recordedChatAndGameModeCannotBeReplacedByRecordedPresentationPackets() {
         var rewriter = rewriter();
-        assertEquals(Paper26_3ReplayPacketRewriter.RewriteResult.Decision.DROP_LOCAL,
-                rewriter.rewrite(new ClientboundSystemChatPacket(Component.literal("old HUD"), true),
-                        descriptor("system_chat")).decision());
-        var chat = new ClientboundSystemChatPacket(Component.literal("recorded chat"), false);
-        assertSame(chat, rewriter.rewrite(chat, descriptor("system_chat")).packet());
+        for (String chat : List.of("player_chat", "system_chat", "disguised_chat")) {
+            assertEquals(Paper26_3ReplayPacketRewriter.RewriteResult.Decision.DROP_LOCAL,
+                    rewriter.rewrite(new Object(), descriptor(chat)).decision(), chat);
+        }
         assertEquals(Paper26_3ReplayPacketRewriter.RewriteResult.Decision.DROP_LOCAL,
                 rewriter.rewrite(new ClientboundGameEventPacket(ClientboundGameEventPacket.CHANGE_GAME_MODE, 0),
                         descriptor("game_event")).decision());
@@ -74,6 +72,36 @@ class NeutralObserverTest {
         var remove = (ClientboundRemoveEntitiesPacket) first.rewrite(
                 new ClientboundRemoveEntitiesPacket(42), descriptor("remove_entities")).packet();
         assertEquals(mapped, remove.entityIds().getInt(0));
+    }
+
+    @Test
+    void playerInfoPreservesTheRecordedProfileNameWhileIsolatingItsIdentity() {
+        var profile = new com.mojang.authlib.GameProfile(
+                observer, "PlayerA", new com.mojang.authlib.properties.PropertyMap());
+        var entry = new ClientboundPlayerInfoUpdatePacket.Entry(
+                observer,
+                profile,
+                true,
+                42,
+                net.minecraft.world.level.GameType.SURVIVAL,
+                null,
+                true,
+                0,
+                null);
+        var packet = new ClientboundPlayerInfoUpdatePacket(
+                java.util.EnumSet.of(ClientboundPlayerInfoUpdatePacket.Action.ADD_PLAYER),
+                List.of(entry));
+
+        var rewritten = (ClientboundPlayerInfoUpdatePacket) rewriter()
+                .rewrite(packet, descriptor("player_info_update"))
+                .packet();
+        var rewrittenEntry = rewritten.entries().getFirst();
+
+        assertNotEquals(observer, rewrittenEntry.profileId());
+        assertEquals(rewrittenEntry.profileId(), rewrittenEntry.profile().id());
+        assertEquals("PlayerA", rewrittenEntry.profile().name());
+        assertEquals(profile.properties(), rewrittenEntry.profile().properties());
+        assertFalse(rewrittenEntry.listed());
     }
 
     @Test
@@ -131,32 +159,6 @@ class NeutralObserverTest {
         assertEquals(original.explosionParticle(), result.explosionParticle());
         assertEquals(original.explosionSound(), result.explosionSound());
         assertTrue(original.playerKnockback().isPresent());
-    }
-
-    @Test
-    void recordedChatBecomesUnsignedPresentationAndRespectsTheOriginalFilter() {
-        var chatType = new net.minecraft.network.chat.ChatType(
-                net.minecraft.network.chat.ChatType.DEFAULT_CHAT_DECORATION,
-                net.minecraft.network.chat.ChatType.DEFAULT_CHAT_DECORATION);
-        var bound = new net.minecraft.network.chat.ChatType.Bound(net.minecraft.core.Holder.direct(chatType),
-                Component.literal("RecordedPlayer"), java.util.Optional.empty());
-        var body = new net.minecraft.network.chat.SignedMessageBody.Packed("secret", java.time.Instant.EPOCH,
-                0, net.minecraft.network.chat.LastSeenMessages.Packed.EMPTY);
-        var partial = new net.minecraft.network.chat.FilterMask(6);
-        for (int i = 0; i < 6; i++) partial.setFiltered(i);
-        for (var mask : List.of(net.minecraft.network.chat.FilterMask.PASS_THROUGH, partial,
-                net.minecraft.network.chat.FilterMask.FULLY_FILTERED)) {
-            var packet = new ClientboundPlayerChatPacket(0, observer, 0, java.util.Optional.empty(), body,
-                    java.util.Optional.of(Component.literal("secret")), mask, bound);
-            var result = rewriter().rewrite(packet, descriptor("player_chat"));
-            if (mask.isFullyFiltered()) {
-                assertEquals(Paper26_3ReplayPacketRewriter.RewriteResult.Decision.DROP_LOCAL, result.decision());
-            } else {
-                var chat = assertInstanceOf(ClientboundSystemChatPacket.class, result.packet());
-                assertFalse(chat.overlay());
-                assertEquals(mask.isEmpty(), chat.content().getString().contains("secret"));
-            }
-        }
     }
 
     @Test

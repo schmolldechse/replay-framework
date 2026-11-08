@@ -55,22 +55,42 @@ public final class Paper26SnapshotProvider
 
     private final MainThreadScheduler scheduler;
     private final Paper26WorldAccess worldAccess;
+    private final Supplier<CheckpointEncoder.CapturePoint> capturePointSource;
     private boolean closed;
 
     /** Creates a production provider bound to the owning Paper plugin. */
     public Paper26SnapshotProvider(JavaPlugin owner) {
+        this(owner, null);
+    }
+
+    /** Creates a production provider with the bridge's ordered capture clock. */
+    public Paper26SnapshotProvider(
+            JavaPlugin owner,
+            Supplier<CheckpointEncoder.CapturePoint> capturePointSource) {
         Objects.requireNonNull(owner, "owner");
         Server server = Objects.requireNonNull(owner.getServer(), "owner.server");
         this.scheduler = new BukkitMainThreadScheduler(owner, server);
         this.worldAccess = new LivePaper26WorldAccess(server);
+        this.capturePointSource = capturePointSource == null
+                ? () -> new CheckpointEncoder.CapturePoint(
+                        System.nanoTime(), server.getCurrentTick(), Integer.MAX_VALUE)
+                : capturePointSource;
     }
 
     /** Creates an adapter-local provider with explicit thread and world seams. */
     Paper26SnapshotProvider(
             MainThreadScheduler scheduler,
             Paper26WorldAccess worldAccess) {
+        this(scheduler, worldAccess, null);
+    }
+
+    Paper26SnapshotProvider(
+            MainThreadScheduler scheduler,
+            Paper26WorldAccess worldAccess,
+            Supplier<CheckpointEncoder.CapturePoint> capturePointSource) {
         this.scheduler = Objects.requireNonNull(scheduler, "scheduler");
         this.worldAccess = Objects.requireNonNull(worldAccess, "worldAccess");
+        this.capturePointSource = capturePointSource;
     }
 
     @Override
@@ -128,8 +148,7 @@ public final class Paper26SnapshotProvider
             }
             selectedChunks.sort(ScopedChunk.ORDER);
             return CompletableFuture.completedFuture(
-                    worldAccess.snapshot(
-                            scope, List.copyOf(deduplicate(selectedChunks))));
+                    detachSnapshot(scope, List.copyOf(deduplicate(selectedChunks))));
         }
 
         if (scope.regions().isEmpty()) {
@@ -172,7 +191,21 @@ public final class Paper26SnapshotProvider
 
         return allPreloads.thenCompose(ignored -> scheduler.submit(
                 () -> CompletableFuture.completedFuture(
-                        worldAccess.snapshot(scope, detachedChunks)))).thenCompose(stage -> stage);
+                        detachSnapshot(scope, detachedChunks)))).thenCompose(stage -> stage);
+    }
+
+    private Paper26CheckpointEncoder.CheckpointSnapshot detachSnapshot(
+            RecordingScope scope,
+            List<ScopedChunk> chunks) {
+        CheckpointEncoder.CapturePoint point = capturePointSource == null
+                ? null
+                : Objects.requireNonNull(
+                        capturePointSource.get(), "capturePointSource returned null");
+        Paper26CheckpointEncoder.CheckpointSnapshot snapshot = Objects.requireNonNull(
+                worldAccess.snapshot(scope, chunks), "worldAccess returned null snapshot");
+        return point == null
+                ? snapshot
+                : new Paper26CheckpointEncoder.CheckpointSnapshot(point, snapshot.packets());
     }
 
     private static CompletionStage<Void> allOf(List<CompletionStage<Void>> stages) {

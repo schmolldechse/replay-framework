@@ -88,6 +88,7 @@ final class PlaybackTimelineFixtureTest {
 
         assertEquals(6_000_000_000L, result.positionNanos());
         assertEquals(List.of("reset", checkpointFrame, deltaFrame), bridge.calls);
+        assertEquals(new SeekPoint(5_000_000_000L, 1, 1, 16L), data.requestedBoundary);
         assertTrue(result.paused());
         assertTrue(result.fullRebuild());
         assertEquals(
@@ -524,6 +525,7 @@ final class PlaybackTimelineFixtureTest {
         private final List<RawPacketFrame> checkpointFrames;
         private final List<RawPacketFrame> deltaFrames;
         private volatile CompletableFuture<PlaybackTimeline.BufferProgress> availability;
+        private volatile SeekPoint requestedBoundary;
 
         private FakePlaybackData(
                 List<RawPacketFrame> checkpointFrames,
@@ -572,6 +574,14 @@ final class PlaybackTimelineFixtureTest {
                     .filter(frame -> frame.elapsedNanos() >= startNanos)
                     .filter(frame -> frame.elapsedNanos() < endNanos)
                     .toList());
+        }
+
+        @Override
+        public CompletionStage<List<RawPacketFrame>> framesAfter(
+                SeekPoint checkpoint,
+                Duration endExclusive) {
+            requestedBoundary = checkpoint;
+            return availability.thenApply(ignored -> deltaFrames);
         }
 
         @Override

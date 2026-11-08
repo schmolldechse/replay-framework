@@ -7,12 +7,14 @@ import com.github.retrooper.packetevents.event.PacketListenerPriority;
 import com.github.retrooper.packetevents.event.PacketSendEvent;
 import dev.voldechse.replayframework.adapter.CaptureBridge;
 import dev.voldechse.replayframework.adapter.CaptureContext;
+import dev.voldechse.replayframework.adapter.CheckpointEncoder;
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.PacketRegistry;
 import dev.voldechse.replayframework.adapter.paper.v26_2.Paper26PacketRegistry;
 import dev.voldechse.replayframework.adapter.paper.v26_2.capture.Paper26SyntheticStateCollector.SyntheticStatePacket;
 import dev.voldechse.replayframework.adapter.paper.v26_2.checkpoint.Paper26CheckpointEncoder;
+import dev.voldechse.replayframework.adapter.paper.v26_2.checkpoint.Paper26NativePacketCodec;
 import dev.voldechse.replayframework.api.recording.BlockPosition;
 import dev.voldechse.replayframework.api.recording.RecordingScope;
 import dev.voldechse.replayframework.format.PacketPhase;
@@ -29,6 +31,7 @@ import java.util.Optional;
 import java.util.function.Function;
 import net.kyori.adventure.key.Key;
 import org.bukkit.entity.Player;
+import org.bukkit.plugin.java.JavaPlugin;
 
 /**
  * Global Paper 26.2 capture installation shared by all active recording
@@ -38,12 +41,13 @@ public final class Paper26CaptureBridge implements CaptureBridge {
 
     private final PaperConnectionAccessor accessor;
     private final PacketRegistry registry;
+    private final Paper26EntityStateCapture entityStateCapture;
     private final AtomicReference<State> state = new AtomicReference<>(State.NEW);
     private final AtomicBoolean failureReported = new AtomicBoolean();
     private final Set<Paper26SyntheticStateCollector> syntheticCollectors =
             ConcurrentHashMap.newKeySet();
     private final Object handlerStateLock = new Object();
-    private final Object sequenceLock = new Object();
+    private final Object captureOrderLock = new Object();
     private final PacketListener packetListener = new PacketListener() {
         @Override
         public void onPacketSend(PacketSendEvent event) {
@@ -71,6 +75,24 @@ public final class Paper26CaptureBridge implements CaptureBridge {
     public Paper26CaptureBridge(PaperConnectionAccessor accessor, PacketRegistry registry) {
         this.accessor = Objects.requireNonNull(accessor, "accessor");
         this.registry = verifyRegistry(registry);
+        this.entityStateCapture = null;
+    }
+
+    /** Creates the production bridge with recipient-independent entity movement capture. */
+    public Paper26CaptureBridge(
+            JavaPlugin owner,
+            PaperConnectionAccessor accessor,
+            PacketRegistry registry,
+            Paper26NativePacketCodec codec) {
+        this.accessor = Objects.requireNonNull(accessor, "accessor");
+        this.registry = verifyRegistry(registry);
+        this.entityStateCapture = new Paper26EntityStateCapture(
+                Objects.requireNonNull(owner, "owner"),
+                Objects.requireNonNull(codec, "codec"),
+                this::hasActiveRecording,
+                accessor::currentServerTick,
+                this::captureSyntheticMovement,
+                this::fail);
     }
 
     @Override
@@ -97,6 +119,9 @@ public final class Paper26CaptureBridge implements CaptureBridge {
         try {
             installedListener = PacketEvents.getAPI().getEventManager().registerListener(
                     packetListener, PacketListenerPriority.MONITOR);
+            if (entityStateCapture != null) {
+                entityStateCapture.install();
+            }
         } catch (Throwable failure) {
             fail(failure);
         }
@@ -114,6 +139,7 @@ public final class Paper26CaptureBridge implements CaptureBridge {
 
         // UNINSTALLED is an expected lifecycle end, not an integrity failure.
         unregisterPacketListener();
+        closeEntityStateCapture();
         closeSyntheticCollectors();
     }
 
@@ -153,20 +179,49 @@ public final class Paper26CaptureBridge implements CaptureBridge {
             throw new IllegalStateException("Paper capture bridge has no packet sink");
         }
         Key world = Key.key(packet.worldKey());
-        CaptureBridge.CapturePacket captured = new CaptureBridge.CapturePacket(
-                packet.captureTimeNanos(),
-                packet.serverTick(),
-                allocateSequence(packet.serverTick()),
-                packet.phase(),
-                packet.packetId(),
-                packet.payload(),
-                new CaptureContext(
-                        descriptor.disposition(),
-                        Optional.of(world),
-                        Optional.ofNullable(packet.position()),
-                        Optional.empty(),
-                        Optional.empty()));
-        currentSink.accept(captured);
+        synchronized (captureOrderLock) {
+            CaptureBridge.CapturePacket captured = new CaptureBridge.CapturePacket(
+                    packet.captureTimeNanos(),
+                    packet.serverTick(),
+                    allocateSequence(packet.serverTick()),
+                    packet.phase(),
+                    packet.packetId(),
+                    packet.payload(),
+                    new CaptureContext(
+                            descriptor.disposition(),
+                            Optional.of(world),
+                            Optional.ofNullable(packet.position()),
+                            Optional.empty(),
+                            Optional.empty()));
+            currentSink.accept(captured);
+        }
+    }
+
+    private void captureSyntheticMovement(
+            Paper26EntityStateCapture.SyntheticMovement movement) {
+        if (state.get() != State.INSTALLED) {
+            return;
+        }
+        CaptureBridge.PacketSink currentSink = sink;
+        if (currentSink == null || !currentSink.hasActiveSinks()) {
+            return;
+        }
+        var packet = movement.packet();
+        synchronized (captureOrderLock) {
+            currentSink.accept(new CaptureBridge.CapturePacket(
+                    movement.captureTimeNanos(),
+                    movement.serverTick(),
+                    allocateSequence(movement.serverTick()),
+                    PacketPhase.PLAY,
+                    packet.packetId(),
+                    packet.payload(),
+                    new CaptureContext(
+                            packet.descriptor().disposition(),
+                            Optional.of(movement.world()),
+                            Optional.of(movement.position()),
+                            Optional.empty(),
+                            Optional.empty())));
+        }
     }
 
     /**
@@ -223,21 +278,28 @@ public final class Paper26CaptureBridge implements CaptureBridge {
             }
 
             byte[] payload = copyPayload(event);
-            long serverTick = accessor.currentServerTick();
-            CaptureBridge.CapturePacket packet = new CaptureBridge.CapturePacket(
-                    System.nanoTime(),
-                    serverTick,
-                    allocateSequence(serverTick),
-                    phase,
-                    packetId,
-                    payload,
-                    captureContext(event, descriptor, phase, packetId, payload, serverTick));
-            for (Paper26SyntheticStateCollector collector : syntheticCollectors) {
-                collector.observe(packet);
+            if (entityStateCapture != null
+                    && entityStateCapture.suppressesRecipientMovement(
+                            descriptor.typeName(), payload)) {
+                return;
             }
-            CaptureBridge.PacketSink currentSink = sink;
-            if (currentSink != null) {
-                currentSink.accept(packet);
+            synchronized (captureOrderLock) {
+                long serverTick = accessor.currentServerTick();
+                CaptureBridge.CapturePacket packet = new CaptureBridge.CapturePacket(
+                        System.nanoTime(),
+                        serverTick,
+                        allocateSequence(serverTick),
+                        phase,
+                        packetId,
+                        payload,
+                        captureContext(event, descriptor, phase, packetId, payload, serverTick));
+                CaptureBridge.PacketSink currentSink = sink;
+                if (currentSink != null) {
+                    currentSink.accept(packet);
+                }
+                for (Paper26SyntheticStateCollector collector : syntheticCollectors) {
+                    collector.observe(packet);
+                }
             }
         } catch (Throwable failure) {
             fail(failure);
@@ -314,6 +376,7 @@ public final class Paper26CaptureBridge implements CaptureBridge {
         }
 
         unregisterPacketListener();
+        closeEntityStateCapture();
 
         if (failureReported.compareAndSet(false, true)) {
             CaptureBridge.FailureHandler currentFailureHandler = failureHandler;
@@ -340,23 +403,33 @@ public final class Paper26CaptureBridge implements CaptureBridge {
         }
     }
 
+    /** Allocates an exclusive checkpoint boundary in capture publication order. */
+    public CheckpointEncoder.CapturePoint checkpointCapturePoint() {
+        synchronized (captureOrderLock) {
+            long serverTick = accessor.currentServerTick();
+            return new CheckpointEncoder.CapturePoint(
+                    System.nanoTime(), serverTick, allocateSequence(serverTick));
+        }
+    }
+
     private int allocateSequence(long serverTick) {
         if (serverTick < 0L) {
             throw incompatible("Paper server tick is negative", null);
         }
-        synchronized (sequenceLock) {
-            if (serverTick < sequenceTick) {
-                throw incompatible("Paper server tick moved backwards", null);
-            }
-            if (serverTick != sequenceTick) {
-                sequenceTick = serverTick;
-                nextSequence = 0;
-            }
-            if (nextSequence == Integer.MAX_VALUE) {
-                throw incompatible("Paper capture sequence overflow", null);
-            }
-            return nextSequence++;
+        if (!Thread.holdsLock(captureOrderLock)) {
+            throw new IllegalStateException("capture order lock is not held");
         }
+        if (serverTick < sequenceTick) {
+            throw incompatible("Paper server tick moved backwards", null);
+        }
+        if (serverTick != sequenceTick) {
+            sequenceTick = serverTick;
+            nextSequence = 0;
+        }
+        if (nextSequence == Integer.MAX_VALUE) {
+            throw incompatible("Paper capture sequence overflow", null);
+        }
+        return nextSequence++;
     }
 
     private void closeSyntheticCollectors() {
@@ -369,6 +442,19 @@ public final class Paper26CaptureBridge implements CaptureBridge {
             } catch (Throwable ignored) {
                 // Capture shutdown remains best effort after the hook is gone.
             }
+        }
+    }
+
+    private boolean hasActiveRecording() {
+        CaptureBridge.PacketSink currentSink = sink;
+        return state.get() == State.INSTALLED
+                && currentSink != null
+                && currentSink.hasActiveSinks();
+    }
+
+    private void closeEntityStateCapture() {
+        if (entityStateCapture != null) {
+            entityStateCapture.close();
         }
     }
 

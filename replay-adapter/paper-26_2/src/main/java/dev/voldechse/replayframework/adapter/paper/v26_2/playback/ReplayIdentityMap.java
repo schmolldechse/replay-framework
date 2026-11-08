@@ -17,9 +17,6 @@ final class ReplayIdentityMap {
     private final Set<UUID> usedUuids = new HashSet<>();
     private final Map<Integer, Integer> entityIds = new HashMap<>();
     private final Set<Integer> usedEntityIds = new HashSet<>();
-    private final Set<String> reservedNames = new HashSet<>();
-    private final Map<String, String> names = new HashMap<>();
-    private final Set<String> usedNames = new HashSet<>();
     private final Map<String, String> objectiveNames = new HashMap<>();
     private final Set<String> usedObjectiveNames = new HashSet<>();
     private final Map<String, String> teamNames = new HashMap<>();
@@ -33,18 +30,9 @@ final class ReplayIdentityMap {
             PlaybackIdentityContext context,
             Set<UUID> reservedUuids,
             Set<Integer> reservedEntityIds) {
-        this(context, reservedUuids, reservedEntityIds, Set.of());
-    }
-
-    ReplayIdentityMap(
-            PlaybackIdentityContext context,
-            Set<UUID> reservedUuids,
-            Set<Integer> reservedEntityIds,
-            Set<String> reservedNames) {
         this.context = Objects.requireNonNull(context, "context");
         Objects.requireNonNull(reservedUuids, "reservedUuids");
         Objects.requireNonNull(reservedEntityIds, "reservedEntityIds");
-        Objects.requireNonNull(reservedNames, "reservedNames");
         for (UUID reservedUuid : reservedUuids) {
             usedUuids.add(Objects.requireNonNull(reservedUuid, "reservedUuids entry"));
         }
@@ -53,11 +41,6 @@ final class ReplayIdentityMap {
                 throw new NullPointerException("reservedEntityIds entry");
             }
             usedEntityIds.add(reservedEntityId);
-        }
-        for (String reservedName : reservedNames) {
-            String normalized = normalizeName(Objects.requireNonNull(reservedName, "reservedNames entry"));
-            this.reservedNames.add(normalized);
-            usedNames.add(normalized);
         }
     }
 
@@ -68,11 +51,6 @@ final class ReplayIdentityMap {
 
     int mapEntityId(int recordedId) {
         return entityIds.computeIfAbsent(recordedId, this::createEntityId);
-    }
-
-    String mapName(String recordedName) {
-        Objects.requireNonNull(recordedName, "recordedName");
-        return names.computeIfAbsent(normalizeName(recordedName), ignored -> createName(recordedName));
     }
 
     String mapObjectiveName(String recordedName) {
@@ -94,8 +72,6 @@ final class ReplayIdentityMap {
         usedUuids.clear();
         entityIds.clear();
         usedEntityIds.clear();
-        names.clear();
-        usedNames.clear();
         objectiveNames.clear();
         usedObjectiveNames.clear();
         teamNames.clear();
@@ -130,14 +106,6 @@ final class ReplayIdentityMap {
         return candidate;
     }
 
-    private String createName(String recordedName) {
-        String normalized = normalizeName(recordedName);
-        if (!reservedNames.contains(normalized) && usedNames.add(normalized)) {
-            return recordedName;
-        }
-        return createScopedName("name", recordedName, usedNames);
-    }
-
     private String createScopedName(String namespace, String recordedName, Set<String> used) {
         byte[] seed = (context.playbackSessionId() + ":" + namespace + ":" + recordedName)
                 .getBytes(StandardCharsets.UTF_8);
@@ -159,4 +127,5 @@ final class ReplayIdentityMap {
     private static String normalizeName(String name) {
         return name.toLowerCase(Locale.ROOT);
     }
+
 }

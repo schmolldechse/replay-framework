@@ -199,6 +199,14 @@ the requested reservation exceeds its configured limit, the runtime fails that
 recording with `QUEUE_OVERFLOW` rather than blocking the network thread or
 discarding an apparently accepted frame.
 
+Paper player and living-entity movement does not rely on outbound packets sent
+to tracking clients. Each version adapter observes the corresponding Paper move
+event on the main thread and contributes an absolute position/rotation state
+packet to the neutral stream. Recipient-derived movement copies for the same
+entity are suppressed, preventing both missing self-movement and duplicate
+relative deltas when several players track one entity. Region membership is
+evaluated from the moved entity's destination rather than a packet recipient.
+
 A single virtual writer thread owns the session's artifact state. It drains the
 queue in order, emits raw packet frames, rotates segments when structural
 limits are reached, and records seek points. The checkpoint scheduler requests
@@ -206,6 +214,23 @@ regular snapshots from the adapter; dimension-transition signals can also cause
 checkpoint work. Checkpoint frames and normal packet frames remain separate
 artifact inputs so the playback engine can reset to a stable snapshot and then
 apply only the required delta range.
+
+Periodic and dimension checkpoints use an adapter capture barrier rather than
+the earlier scheduler trigger as their artifact timestamp. Paper allocates that
+barrier on the main thread after any requested chunk preloading and through the
+same serialized tick/sequence allocator that publishes captured packets. The
+writer then drains every packet ordered at or before the barrier, writes the
+checkpoint with its actual monotonic time and Paper tick, and leaves only later
+packets as post-checkpoint deltas. Snapshot scheduling latency therefore cannot
+backdate world state or cause the same relative delta to straddle both sides of
+the checkpoint.
+
+Each checkpoint seek point records the ordinal of its segment and the exact
+uncompressed segment-body offset at the state boundary. Segment decoding keeps
+the start offset of every frame so playback can resume at that byte boundary,
+including when the first required delta has the same replay timestamp as the
+checkpoint. The offset is therefore part of seek correctness rather than only
+an optimization hint.
 
 Finalization stops new capture admission, unregisters the sink, and lets the
 writer drain every packet already reserved by a racing producer. The finalizer

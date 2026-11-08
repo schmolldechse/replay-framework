@@ -33,12 +33,15 @@ public final class Paper26AdapterProvider implements PaperAdapterProvider {
         Objects.requireNonNull(playbackFailureHandler, "playbackFailureHandler");
         PaperConnectionAccessor accessor = new PaperConnectionAccessor();
         Paper26PacketRegistry registry = Paper26PacketRegistry.discover();
-        Paper26CaptureBridge captureBridge = new Paper26CaptureBridge(accessor, registry);
-        Paper26SnapshotProvider snapshotProvider = new Paper26SnapshotProvider(plugin);
+        Paper26SnapshotProvider snapshotProvider = null;
         Paper26NativePacketCodec nativePacketCodec = null;
         ExecutorService checkpointExecutor = null;
         try {
             nativePacketCodec = Paper26NativePacketCodec.create(registry);
+            Paper26CaptureBridge captureBridge = new Paper26CaptureBridge(
+                    plugin, accessor, registry, nativePacketCodec);
+            snapshotProvider = new Paper26SnapshotProvider(
+                    plugin, captureBridge::checkpointCapturePoint);
             checkpointExecutor = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
                     new ArrayBlockingQueue<>(128),
                     Thread.ofPlatform().name("replay-checkpoint-", 0).factory(),
@@ -74,7 +77,9 @@ public final class Paper26AdapterProvider implements PaperAdapterProvider {
             Paper26NativePacketCodec nativePacketCodec,
             ExecutorService checkpointExecutor) {
         try {
-            snapshotProvider.close();
+            if (snapshotProvider != null) {
+                snapshotProvider.close();
+            }
         } finally {
             try {
                 if (nativePacketCodec != null) {

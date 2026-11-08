@@ -86,18 +86,9 @@ public final class Paper26_3ReplayPacketRewriter {
             PlaybackIdentityContext context,
             Set<UUID> reservedUuids,
             Set<Integer> reservedEntityIds) {
-        this(registry, context, reservedUuids, reservedEntityIds, Set.of());
-    }
-
-    Paper26_3ReplayPacketRewriter(
-            PacketRegistry registry,
-            PlaybackIdentityContext context,
-            Set<UUID> reservedUuids,
-            Set<Integer> reservedEntityIds,
-            Set<String> reservedNames) {
         this.registry = Objects.requireNonNull(registry, "registry");
         this.context = Objects.requireNonNull(context, "context");
-        this.identities = new ReplayIdentityMap(context, reservedUuids, reservedEntityIds, reservedNames);
+        this.identities = new ReplayIdentityMap(context, reservedUuids, reservedEntityIds);
     }
 
     /** Returns an empty result for packets that must not reach the observer. */
@@ -113,6 +104,11 @@ public final class Paper26_3ReplayPacketRewriter {
         String packetName = descriptor.typeName();
         if (packetName.startsWith("play.clientbound.")) {
             packetName = packetName.substring("play.clientbound.".length());
+        }
+        if (dev.voldechse.replayframework.adapter.playback.NeutralObserverPolicy
+                .isRecordedChatPresentation(packetName)) {
+            return RewriteResult.dropLocal(
+                    "recorded chat belongs to its original connection");
         }
         if (isViewerLocal(packetName)
                 && descriptor.playbackScope() != PacketDescriptor.PlaybackScope.VIEWER_LOCAL) {
@@ -166,25 +162,6 @@ public final class Paper26_3ReplayPacketRewriter {
                 return RewriteResult.dropLocal(
                         "game-event payload changes the current live observer's local state");
             }
-        }
-        if ("minecraft:system_chat".equals(packetName)) {
-            var value = require(packet, net.minecraft.network.protocol.game.ClientboundSystemChatPacket.class);
-            if (value.overlay()) {
-                return RewriteResult.dropLocal("recorded action bar belongs to its original viewer");
-            }
-        }
-        if ("minecraft:player_chat".equals(packetName)) {
-            var value = require(packet, net.minecraft.network.protocol.game.ClientboundPlayerChatPacket.class);
-            if (value.filterMask().isFullyFiltered()) {
-                return RewriteResult.dropLocal("recorded chat was fully filtered");
-            }
-            String filtered = value.filterMask().apply(value.body().content());
-            var content = value.filterMask().isEmpty()
-                    ? value.unsignedContent().orElseGet(() -> net.minecraft.network.chat.Component.literal(value.body().content()))
-                    : net.minecraft.network.chat.Component.literal(filtered);
-            // Recorded signatures authenticate another connection and cannot be reused.
-            return RewriteResult.send(new net.minecraft.network.protocol.game.ClientboundSystemChatPacket(
-                    value.chatType().decorate(content), false));
         }
         return null;
     }
@@ -433,7 +410,7 @@ public final class Paper26_3ReplayPacketRewriter {
                 net.minecraft.network.protocol.game.ClientboundSetScorePacket value =
                         require(packet, net.minecraft.network.protocol.game.ClientboundSetScorePacket.class);
                 yield new net.minecraft.network.protocol.game.ClientboundSetScorePacket(
-                        identities.mapName(value.owner()),
+                        value.owner(),
                         identities.mapObjectiveName(value.objectiveName()),
                         value.score(),
                         value.display(),
@@ -443,7 +420,7 @@ public final class Paper26_3ReplayPacketRewriter {
                 net.minecraft.network.protocol.game.ClientboundResetScorePacket value =
                         require(packet, net.minecraft.network.protocol.game.ClientboundResetScorePacket.class);
                 yield new net.minecraft.network.protocol.game.ClientboundResetScorePacket(
-                        identities.mapName(value.owner()),
+                        value.owner(),
                         value.objectiveName() == null
                                 ? null
                                 : identities.mapObjectiveName(value.objectiveName()));
@@ -527,7 +504,7 @@ public final class Paper26_3ReplayPacketRewriter {
                             ? null
                             : new GameProfile(
                                     mappedId,
-                                    identities.mapName(entry.profile().name()),
+                                    entry.profile().name(),
                                     entry.profile().properties());
                     return new ClientboundPlayerInfoUpdatePacket.Entry(
                             mappedId,

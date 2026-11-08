@@ -1,6 +1,7 @@
 package dev.voldechse.replayframework.core.playback.cache;
 
 import dev.voldechse.replayframework.format.RawPacketFrame;
+import dev.voldechse.replayframework.format.SeekPoint;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -19,7 +20,7 @@ public final class MemoryPacketBuffer {
 
     private final long maxBytes;
     private final Object lock = new Object();
-    private final TreeMap<FrameKey, RawPacketFrame> frames = new TreeMap<>(FrameKey.ORDER);
+    private final TreeMap<FrameKey, BufferedFrame> frames = new TreeMap<>(FrameKey.ORDER);
     private final AtomicLong nextTieBreaker = new AtomicLong();
     private long accountedBytes;
     private long positionNanos;
@@ -34,11 +35,39 @@ public final class MemoryPacketBuffer {
 
     /** Adds a batch atomically and evicts the farthest frames when necessary. */
     public void addAll(Collection<RawPacketFrame> newFrames) {
+        addBuffered(newFrames.stream()
+                .map(frame -> new BufferedFrame(frame, -1, -1L))
+                .toList());
+    }
+
+    /** Adds decoded frames together with their exact segment-body locations. */
+    public void addSegment(
+            int segmentOrdinal,
+            List<RawPacketFrame> newFrames,
+            List<Long> frameOffsets) {
+        if (segmentOrdinal < 0) {
+            throw new IllegalArgumentException("segmentOrdinal must not be negative");
+        }
         Objects.requireNonNull(newFrames, "newFrames");
-        List<RawPacketFrame> immutableInput = List.copyOf(newFrames);
+        Objects.requireNonNull(frameOffsets, "frameOffsets");
+        if (newFrames.size() != frameOffsets.size()) {
+            throw new IllegalArgumentException(
+                    "frameOffsets must contain one entry per frame");
+        }
+        List<BufferedFrame> located = new ArrayList<>(newFrames.size());
+        for (int index = 0; index < newFrames.size(); index++) {
+            located.add(new BufferedFrame(
+                    newFrames.get(index), segmentOrdinal, frameOffsets.get(index)));
+        }
+        addBuffered(located);
+    }
+
+    private void addBuffered(Collection<BufferedFrame> newFrames) {
+        Objects.requireNonNull(newFrames, "newFrames");
+        List<BufferedFrame> immutableInput = List.copyOf(newFrames);
         long batchBytes = 0L;
-        for (RawPacketFrame frame : immutableInput) {
-            long frameBytes = accountedBytes(frame);
+        for (BufferedFrame buffered : immutableInput) {
+            long frameBytes = accountedBytes(buffered.frame());
             if (frameBytes > maxBytes) {
                 throw new MemoryBufferCapacityException(maxBytes, frameBytes);
             }
@@ -50,13 +79,14 @@ public final class MemoryPacketBuffer {
             if (resultingBytes < 0L) {
                 throw new MemoryBufferCapacityException(maxBytes, resultingBytes);
             }
-            for (RawPacketFrame frame : immutableInput) {
+            for (BufferedFrame buffered : immutableInput) {
+                RawPacketFrame frame = buffered.frame();
                 FrameKey key = new FrameKey(
                         frame.elapsedNanos(),
                         frame.serverTick(),
                         frame.sequence(),
                         nextTieBreaker.getAndIncrement());
-                frames.put(key, frame);
+                frames.put(key, buffered);
             }
             accountedBytes = resultingBytes;
             evictToBudgetLocked();
@@ -77,8 +107,39 @@ public final class MemoryPacketBuffer {
             for (var entry : frames.entrySet()) {
                 long elapsedNanos = entry.getKey().elapsedNanos();
                 if (elapsedNanos >= startNanos && elapsedNanos < endNanos) {
-                    result.add(entry.getValue());
+                    result.add(entry.getValue().frame());
                 }
+            }
+            return List.copyOf(result);
+        }
+    }
+
+    /**
+     * Returns frames at or after an exclusive checkpoint body offset and
+     * before the requested end time.
+     */
+    public List<RawPacketFrame> framesAfter(
+            SeekPoint checkpoint,
+            Duration endExclusive) {
+        Objects.requireNonNull(checkpoint, "checkpoint");
+        long endNanos = toNanos(endExclusive, "endExclusive");
+        if (endNanos < checkpoint.elapsedNanos()) {
+            throw new IllegalArgumentException("endExclusive precedes checkpoint");
+        }
+        synchronized (lock) {
+            List<RawPacketFrame> result = new ArrayList<>();
+            for (var entry : frames.entrySet()) {
+                BufferedFrame buffered = entry.getValue();
+                RawPacketFrame frame = buffered.frame();
+                if (frame.elapsedNanos() >= endNanos
+                        || buffered.segmentOrdinal() < checkpoint.segmentOrdinal()) {
+                    continue;
+                }
+                if (buffered.segmentOrdinal() == checkpoint.segmentOrdinal()
+                        && buffered.frameOffset() < checkpoint.frameOffset()) {
+                    continue;
+                }
+                result.add(frame);
             }
             return List.copyOf(result);
         }
@@ -104,7 +165,7 @@ public final class MemoryPacketBuffer {
                 if (elapsedNanos < lowerBound || elapsedNanos > upperBound) {
                     accountedBytes = subtractExact(
                             accountedBytes,
-                            accountedBytes(entry.getValue()));
+                            accountedBytes(entry.getValue().frame()));
                     return true;
                 }
                 return false;
@@ -146,8 +207,9 @@ public final class MemoryPacketBuffer {
             FrameKey victim = frames.keySet().stream()
                     .max(this::compareEvictionPriority)
                     .orElseThrow();
-            RawPacketFrame removed = frames.remove(victim);
-            accountedBytes = subtractExact(accountedBytes, accountedBytes(removed));
+            BufferedFrame removed = frames.remove(victim);
+            accountedBytes = subtractExact(
+                    accountedBytes, accountedBytes(removed.frame()));
         }
     }
 
@@ -262,6 +324,20 @@ public final class MemoryPacketBuffer {
         private FrameKey {
             if (elapsedNanos < 0L || serverTick < 0L || sequence < 0 || tieBreaker < 0L) {
                 throw new IllegalArgumentException("frame key values must not be negative");
+            }
+        }
+    }
+
+    private record BufferedFrame(
+            RawPacketFrame frame,
+            int segmentOrdinal,
+            long frameOffset) {
+
+        private BufferedFrame {
+            Objects.requireNonNull(frame, "frame");
+            if ((segmentOrdinal < 0) != (frameOffset < 0L)) {
+                throw new IllegalArgumentException(
+                        "segment ordinal and frame offset must either both be known or unknown");
             }
         }
     }

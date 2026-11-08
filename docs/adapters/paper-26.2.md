@@ -9,16 +9,18 @@ Registry fingerprint: `d9d610afb1ff45fa2a97302337053d3f9643e6d09a685cf32652bc667
 The adapter entry point is `Paper26ReplayAdapter`, provided through `Paper26AdapterProvider`. Both follow the shared adapter design: NMS types remain inside `dev.voldechse.replayframework.adapter.paper.v26_2`, while `AbstractReplayAdapter` owns the common contracts.
 
 - `capture` attaches packet capture, resolves recording scope, and emits synthetic state changes.
-- `checkpoint` snapshots loaded Paper world state and encodes ordered native 26.2 packets.
+- `checkpoint` snapshots loaded Paper world state and encodes ordered native 26.2 packets. After optional scope preloading, it allocates an actual Paper tick/time/sequence barrier through the capture bridge; the core drains all earlier 26.2 deltas before persisting that checkpoint.
 - `playback` decodes 26.2 payloads, maps identities per viewer, filters connection-local state, and removes replay-owned objects during reset.
 
 ## Playback policy for 26.2
 
 Chunks, light, block entities, entity lifecycle, movement, metadata, equipment, passengers, leashes, active effects, and player profiles form the reconstructible scene. Animations, sounds, particles, chat, and damage effects are ordered deltas.
 
+Player movement is captured from `PlayerMoveEvent`; living non-player movement is captured from Paper's `EntityMoveEvent`. The adapter emits an absolute `entity_position_sync` packet, plus `rotate_head` when required, through the same neutral capture sequence used by outbound packets. Once an entity uses this authoritative path, recipient-derived relative movement, rotation, teleport, and position-sync copies for that entity are suppressed. Movement therefore does not depend on another player tracking the moving entity and is not duplicated for multiple recipients. Scope filtering uses the moved entity's destination world and block position.
+
 `SEND` is scene-safe. `REWRITE` rebuilds native packets with session-local identities. `DROP_LOCAL` covers state belonging to the recorded connection: health, experience, inventory, viewer movement, abilities, camera, menus, titles, scoreboard, teams, waypoints, commands, recipes, dialogs, and related UI. Equivalent live packets continue through the outbound gate. `BLOCKED` covers connection control and diagnostic traffic.
 
-Player chat becomes decorated unsigned system chat after applying the recorded filter mask. Action-bar chat is dropped. Explosions keep scene particles and sound but lose viewer knockback. Replay player profiles use mapped UUIDs and names, do not enter the live tab list, and never reuse a recorded chat session.
+Recorded player, system, disguised, and action-bar chat packets remain capture-policy data and are never presented to a neutral playback observer. Explosions keep scene particles and sound but lose viewer knockback. Replay player profiles use mapped UUIDs while preserving their recorded profile names and properties. They do not enter the live tab list and never reuse a recorded chat session.
 
 During seek reconstruction, the 26.2 bridge accepts only registry descriptors whose `Checkpoint` column is `yes`. Durable chunk, block, entity, profile, movement, metadata, equipment, effect, passenger, border, time, and registry-tag changes therefore converge on the target state. Ordered effects with `Checkpoint` set to `no`, including animations, block-breaking presentation, damage effects, explosions, particles, and sounds, remain available during normal timeline playback but are skipped during reconstruction. Frames are enqueued as batches while the channel drain retains its limit of 128 packet operations and one flush per event-loop turn.
 
@@ -26,10 +28,13 @@ During seek reconstruction, the 26.2 bridge accepts only registry descriptors wh
 
 - `PacketCoverageTest` loads the real 26.2 NMS registry and fails for an unreviewed PLAY packet or missing essential family.
 - Registry, native codec, checkpoint, snapshot, observer isolation, and outbound-gate tests cover their respective version-bound behavior.
-- `NeutralObserverTest` includes entity effects, minecart motion, sound, leashes, filtered chat, explosion knockback, block-breaking overlays, and idempotent reset.
+- Snapshot tests verify that the 26.2 capture barrier is allocated only after asynchronous scope preloading completes; generic core tests verify the exclusive delta boundary stored with it.
+- `NeutralObserverTest` includes entity effects, minecart motion, sound, leashes, filtered chat, explosion knockback, block-breaking overlays, and idempotent reset. 
 - `Paper26PlaybackBridgeTest` verifies that reconstruction retains 26.2 checkpoint state while suppressing transient frames.
 
 `R` means registry/classification coverage. `R+N` additionally identifies a focused native behavior test. Registry coverage does not claim every possible payload or custom datapack renders correctly.
+
+`DROP_LOCAL*` is an additional neutral-observer guard applied before payload decoding. The stored descriptor scope remains unchanged so revision-3 artifacts retain their existing registry fingerprint and remain readable.
 
 ## Known limits
 
@@ -115,7 +120,7 @@ Map IDs and integer entity references embedded in specialized metadata are not g
 | 30 | `debug_sample` | Diagnostic or special-purpose packet without a safe playback contract | BLOCKED | no | R |
 | 31 | `delete_chat` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no | R+N |
 | 32 | `disconnect` | Transport, connection, or server control; never replay into an established connection | BLOCKED | no | R |
-| 33 | `disguised_chat` | Ordered scene effect: decorated unsigned chat presentation | SEND | no | R |
+| 33 | `disguised_chat` | Recorded connection chat retained according to capture policy but suppressed for neutral playback | DROP_LOCAL* | no | R+N |
 | 34 | `entity_event` | Ordered scene effect: entity status or animation; rewrite entity ID | REWRITE | no | R+N |
 | 35 | `entity_position_sync` | Essential scene state: scene presentation with playback-session identity rewriting | REWRITE | yes | R |
 | 36 | `explode` | Ordered scene effect: explosion presentation; remove observer knockback | SEND | no | R+N |
@@ -147,12 +152,12 @@ Map IDs and integer entity references embedded in specialized metadata are not g
 | 62 | `pong_response` | Transport, connection, or server control; never replay into an established connection | BLOCKED | no | R |
 | 63 | `place_ghost_recipe` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no | R+N |
 | 64 | `player_abilities` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no | R+N |
-| 65 | `player_chat` | Ordered scene effect: apply the filter mask and convert to decorated system chat without a foreign signature | REWRITE | no | R+N |
+| 65 | `player_chat` | Recorded connection chat retained according to capture policy but suppressed for neutral playback | DROP_LOCAL* | no | R+N |
 | 66 | `player_combat_end` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no | R+N |
 | 67 | `player_combat_enter` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no | R+N |
 | 68 | `player_combat_kill` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no | R+N |
 | 69 | `player_info_remove` | Essential scene state: remove only replay-owned player profiles | REWRITE | yes | R |
-| 70 | `player_info_update` | Essential scene state: isolate player UUID/name, hide from tab list, and discard the recorded chat session | REWRITE | yes | R |
+| 70 | `player_info_update` | Essential scene state: isolate the player UUID, preserve the recorded profile name and properties, hide the replay profile from the tab list, and discard the recorded chat session | REWRITE | yes | R |
 | 71 | `player_look_at` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no | R+N |
 | 72 | `player_position` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no | R+N |
 | 73 | `player_rotation` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no | R+N |
@@ -203,7 +208,7 @@ Map IDs and integer entity references embedded in specialized metadata are not g
 | 118 | `start_configuration` | Transport, connection, or server control; never replay into an established connection | BLOCKED | no | R |
 | 119 | `stop_sound` | Ordered presentation or environment effect | SEND | no | R |
 | 120 | `store_cookie` | Transport, connection, or server control; never replay into an established connection | BLOCKED | no | R |
-| 121 | `system_chat` | Ordered scene effect: allow chat text and discard action-bar overlays | SEND | no | R+N |
+| 121 | `system_chat` | Recorded connection chat and action-bar presentation retained according to capture policy but suppressed for neutral playback | DROP_LOCAL* | no | R+N |
 | 122 | `tab_list` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no | R+N |
 | 123 | `tag_query` | Diagnostic or special-purpose packet without a safe playback contract | BLOCKED | no | R |
 | 124 | `take_item_entity` | Scene presentation with playback-session identity rewriting | REWRITE | no | R |

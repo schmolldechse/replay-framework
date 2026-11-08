@@ -40,7 +40,6 @@ public final class Paper26_3PlaybackBridge implements PlaybackBridge {
 
     private final PaperConnectionAccessor accessor;
     private final PaperConnectionAccessor.ConnectionHandle connection;
-    private final String observerName;
     private final int observerEntityId;
     private final PacketRegistry registry;
     private final PacketCodec<Object> codec;
@@ -68,7 +67,6 @@ public final class Paper26_3PlaybackBridge implements PlaybackBridge {
             Consumer<Throwable> failureHandler) {
         this.accessor = Objects.requireNonNull(accessor, "accessor");
         Objects.requireNonNull(player, "player");
-        this.observerName = player.getName();
         this.observerEntityId = player.getEntityId();
         this.registry = Objects.requireNonNull(registry, "registry");
         this.failureHandler = new AtomicReference<>(
@@ -110,8 +108,7 @@ public final class Paper26_3PlaybackBridge implements PlaybackBridge {
                         registry,
                         context,
                         Set.of(context.observerId()),
-                        Set.of(observerEntityId),
-                        Set.of(observerName)))) {
+                        Set.of(observerEntityId)))) {
             throw new IllegalStateException("Paper playback identity context was already bound");
         }
     }

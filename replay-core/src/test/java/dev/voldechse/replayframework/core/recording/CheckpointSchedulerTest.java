@@ -45,8 +45,21 @@ final class CheckpointSchedulerTest {
         scheduler.registerInitial(new ReplayCheckpoint(0, 0L, List.of()));
 
         ReplayCheckpoint first = new ReplayCheckpoint(1, 10L, List.of());
-        scheduler.markWritten(first);
+        scheduler.markWritten(first, 2L);
         assertEquals(2, scheduler.nextOrdinal());
+    }
+
+    @Test
+    void acceptsAnActualCapturePointAfterThePendingTrigger() {
+        CheckpointScheduler scheduler = scheduler(Duration.ofNanos(10));
+        scheduler.registerInitial(new ReplayCheckpoint(0, 0L, List.of()));
+        assertTrue(scheduler.dueForElapsed(10L, 2L).isPresent());
+
+        scheduler.markWritten(new ReplayCheckpoint(1, 15L, List.of()), 3L);
+
+        assertEquals(2, scheduler.nextOrdinal());
+        assertTrue(scheduler.dueForElapsed(19L, 3L).isEmpty());
+        assertTrue(scheduler.dueForElapsed(20L, 4L).isPresent());
     }
 
     private static CheckpointScheduler scheduler(Duration interval) {
