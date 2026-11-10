@@ -18,6 +18,10 @@ class PacketCoverageTest {
             if (descriptor.phase() == PacketPhase.PLAY) {
                 assertTrue(Paper26_3PacketRegistry.explicitlyClassifies(descriptor.typeName()),
                         "Unreviewed packet: " + descriptor.typeName());
+                assertTrue(dev.voldechse.replayframework.adapter.paper.v26_3.playback
+                                .Paper26_3PacketCatalog.catalog().require(descriptor.typeName())
+                                .getClass().getSimpleName().endsWith("PacketDefinition"),
+                        "Missing named implementation: " + descriptor.typeName());
             } else {
                 assertFalse(descriptor.replayable(), descriptor.typeName());
             }

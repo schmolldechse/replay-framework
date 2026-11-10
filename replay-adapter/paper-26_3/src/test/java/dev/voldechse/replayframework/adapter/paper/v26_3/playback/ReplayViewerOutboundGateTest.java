@@ -84,7 +84,7 @@ class ReplayViewerOutboundGateTest {
     }
 
     @Test
-    void forwardsControlPacketsAndWritesReplayThroughTheBypass() {
+    void forwardsControlPackets() {
         PacketRegistry registry = PacketRegistry.of(List.of(REPLAYABLE, CONTROL));
         AtomicReference<Throwable> failure = new AtomicReference<>();
         ReplayViewerOutboundGate gate = gateFor(registry, failure);
@@ -94,11 +94,6 @@ class ReplayViewerOutboundGateTest {
         assertTrue(channel.writeOutbound(controlPacket));
         assertSame(controlPacket, channel.readOutbound());
 
-        TestPacket replayPacket = new TestPacket(7);
-        gate.writeReplay(replayPacket);
-        channel.runPendingTasks();
-        channel.flushOutbound();
-        assertSame(replayPacket, channel.readOutbound());
         assertNull(failure.get());
     }
 

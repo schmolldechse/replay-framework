@@ -61,7 +61,7 @@ final class Paper26PacketRegistryTest {
     }
 
     @Test
-    void unknownPacketTypeIsCapturedButNeverReplayed() {
+    void unknownPlayPacketTypeFailsAdapterOpening() {
         Paper26ProtocolIntrospector.ProtocolSnapshot snapshot =
                 new Paper26ProtocolIntrospector().inspect();
         List<Paper26ProtocolIntrospector.PacketType> packets =
@@ -73,11 +73,9 @@ final class Paper26PacketRegistryTest {
                 Integer.MAX_VALUE,
                 "paper-26.2/play.clientbound.synthetic.unknown"));
 
-        Paper26PacketRegistry registry = Paper26PacketRegistry.fromSnapshot(
+        assertThrows(IncompatibleAdapterException.class, () -> Paper26PacketRegistry.fromSnapshot(
                 new Paper26ProtocolIntrospector.ProtocolSnapshot(
-                        snapshot.minecraftVersion(), snapshot.protocolVersion(), packets));
-        assertTrue(registry.captureAllowed(PacketPhase.PLAY, PacketDescriptor.Direction.CLIENTBOUND, Integer.MAX_VALUE));
-        assertFalse(registry.replayAllowed(PacketPhase.PLAY, PacketDescriptor.Direction.CLIENTBOUND, Integer.MAX_VALUE));
+                        snapshot.minecraftVersion(), snapshot.protocolVersion(), packets)));
     }
 
     @Test
@@ -136,7 +134,7 @@ final class Paper26PacketRegistryTest {
 
         assertEquals("paper-26.2", adapter.descriptor().adapterId());
         assertEquals(snapshot.protocolVersion(), adapter.descriptor().protocolVersion());
-        assertEquals(3, adapter.descriptor().adapterFormatRevision());
+        assertEquals(4, adapter.descriptor().adapterFormatRevision());
         assertEquals(registry.fingerprint(), adapter.descriptor().registryFingerprint());
         assertEquals(registry.fingerprint(), adapter.packetRegistry().fingerprint());
         adapter.verifyDescriptorAndRegistry();

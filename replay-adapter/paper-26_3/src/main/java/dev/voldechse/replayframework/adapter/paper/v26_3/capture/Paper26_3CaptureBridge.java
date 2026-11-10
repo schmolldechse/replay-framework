@@ -21,17 +21,18 @@ import dev.voldechse.replayframework.api.recording.RecordingScope;
 import dev.voldechse.replayframework.format.PacketPhase;
 import dev.voldechse.replayframework.format.RawPacketFrame;
 import io.netty.buffer.ByteBuf;
+import io.netty.channel.Channel;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.Optional;
 import java.util.function.Function;
 import net.kyori.adventure.key.Key;
-import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /**
@@ -43,6 +44,7 @@ public final class Paper26_3CaptureBridge implements CaptureBridge {
     private final PaperConnectionAccessor accessor;
     private final PacketRegistry registry;
     private final Paper26_3EntityStateCapture entityStateCapture;
+    private final Paper26_3PlayerSceneIndex playerScenes;
     private final AtomicReference<State> state = new AtomicReference<>(State.NEW);
     private final AtomicBoolean failureReported = new AtomicBoolean();
     private final Set<Paper26_3SyntheticStateCollector> syntheticCollectors =
@@ -52,7 +54,7 @@ public final class Paper26_3CaptureBridge implements CaptureBridge {
     private final PacketListener packetListener = new PacketListener() {
         @Override
         public void onPacketSend(PacketSendEvent event) {
-            capture(event);
+            scheduleCapture(event);
         }
 
         @Override
@@ -82,6 +84,7 @@ public final class Paper26_3CaptureBridge implements CaptureBridge {
         this.captureOrder = new Paper26_3CaptureOrder(
                 System::nanoTime, this.accessor::currentServerTick);
         this.entityStateCapture = null;
+        this.playerScenes = null;
     }
 
     /** Creates the production bridge with recipient-independent entity movement capture. */
@@ -94,6 +97,7 @@ public final class Paper26_3CaptureBridge implements CaptureBridge {
         this.registry = verifyRegistry(registry);
         this.captureOrder = new Paper26_3CaptureOrder(
                 System::nanoTime, this.accessor::currentServerTick);
+        this.playerScenes = new Paper26_3PlayerSceneIndex(owner);
         this.entityStateCapture = new Paper26_3EntityStateCapture(
                 Objects.requireNonNull(owner, "owner"),
                 Objects.requireNonNull(codec, "codec"),
@@ -125,6 +129,9 @@ public final class Paper26_3CaptureBridge implements CaptureBridge {
         }
 
         try {
+            if (playerScenes != null) {
+                playerScenes.install();
+            }
             installedListener = PacketEvents.getAPI().getEventManager().registerListener(
                     packetListener, PacketListenerPriority.MONITOR);
             if (entityStateCapture != null) {
@@ -148,6 +155,7 @@ public final class Paper26_3CaptureBridge implements CaptureBridge {
         // UNINSTALLED is an expected lifecycle end, not an integrity failure.
         unregisterPacketListener();
         closeEntityStateCapture();
+        closePlayerScenes();
         closeSyntheticCollectors();
     }
 
@@ -267,13 +275,22 @@ public final class Paper26_3CaptureBridge implements CaptureBridge {
         return collector;
     }
 
-    private void capture(PacketSendEvent event) {
+    private void scheduleCapture(PacketSendEvent event) {
+        if (state.get() != State.INSTALLED || event.isCancelled()) {
+            return;
+        }
+        event.getPostTasks().add(() -> captureAfterPacketEvents(event));
+    }
+
+    /** Captures the buffer after every PacketEvents listener and wrapper rewrite completed. */
+    private void captureAfterPacketEvents(PacketSendEvent event) {
         if (state.get() != State.INSTALLED || event.isCancelled()) {
             return;
         }
         try {
             PacketPhase phase = phaseOf(event);
-            int packetId = event.getPacketId();
+            ObservedWirePacket wirePacket = copyWirePacket(event.getByteBuf());
+            int packetId = wirePacket.packetId();
             PacketDescriptor descriptor = registry.find(
                             phase, PacketDescriptor.Direction.CLIENTBOUND, packetId)
                     .orElseThrow(() -> incompatible(
@@ -285,7 +302,7 @@ public final class Paper26_3CaptureBridge implements CaptureBridge {
                 return;
             }
 
-            byte[] payload = copyPayload(event);
+            byte[] payload = wirePacket.payload();
             if (entityStateCapture != null
                     && entityStateCapture.suppressesRecipientState(
                             descriptor.typeName(), payload, accessor.currentServerTick())) {
@@ -339,24 +356,27 @@ public final class Paper26_3CaptureBridge implements CaptureBridge {
             int packetId,
             byte[] payload,
             long serverTick) {
-        Object candidate = event.getPlayer();
-        if (candidate instanceof Player player) {
-            PaperConnectionAccessor.ConnectionHandle connection = accessor.connectionFor(player);
-            if (connection != null) {
-                if (phase == PacketPhase.PLAY) {
-                    Object decoded = accessor.decodeCapturedFrame(
-                            connection,
-                            new RawPacketFrame(0L, serverTick, 0, phase, packetId, payload),
-                            registry);
-                    return accessor.captureContext(connection, decoded, descriptor);
-                }
-                return new CaptureContext(
-                        descriptor.disposition(),
-                        connection.world(),
-                        Optional.empty(),
-                        Optional.empty(),
-                        Optional.empty());
+        Object rawChannel = event.getChannel();
+        UUID playerId = event.getUser().getUUID();
+        Optional<Key> world = playerScenes == null
+                ? Optional.empty()
+                : playerScenes.world(playerId);
+        if (rawChannel instanceof Channel channel) {
+            PaperConnectionAccessor.ConnectionHandle connection =
+                    new PaperConnectionAccessor.ConnectionHandle(playerId, channel);
+            if (phase == PacketPhase.PLAY) {
+                Object decoded = accessor.decodeCapturedFrame(
+                        connection,
+                        new RawPacketFrame(0L, serverTick, 0, phase, packetId, payload),
+                        registry);
+                return accessor.captureContext(decoded, descriptor, world);
             }
+            return new CaptureContext(
+                    descriptor.disposition(),
+                    world,
+                    Optional.empty(),
+                    Optional.empty(),
+                    Optional.empty());
         }
         return new CaptureContext(
                 descriptor.disposition(),
@@ -379,14 +399,45 @@ public final class Paper26_3CaptureBridge implements CaptureBridge {
         };
     }
 
-    private static byte[] copyPayload(PacketSendEvent event) {
-        Object raw = event.getByteBuf();
+    static ObservedWirePacket copyWirePacket(Object raw) {
         if (!(raw instanceof ByteBuf buffer)) {
             throw incompatible("PacketEvents did not expose a Netty byte buffer", null);
         }
-        byte[] payload = new byte[buffer.readableBytes()];
-        buffer.getBytes(buffer.readerIndex(), payload);
-        return payload;
+        int index = buffer.readerIndex();
+        int packetId = 0;
+        int shift = 0;
+        while (true) {
+            if (index >= buffer.writerIndex() || shift >= 35) {
+                throw incompatible("PacketEvents exposed an invalid packet VarInt", null);
+            }
+            int value = buffer.getUnsignedByte(index++);
+            packetId |= (value & 0x7F) << shift;
+            if ((value & 0x80) == 0) {
+                break;
+            }
+            shift += 7;
+        }
+        if (packetId < 0) {
+            throw incompatible("PacketEvents exposed a negative packet ID", null);
+        }
+        byte[] payload = new byte[buffer.writerIndex() - index];
+        buffer.getBytes(index, payload);
+        return new ObservedWirePacket(packetId, payload);
+    }
+
+    record ObservedWirePacket(int packetId, byte[] payload) {
+        ObservedWirePacket {
+            if (packetId < 0) {
+                throw new IllegalArgumentException("packetId must not be negative");
+            }
+            Objects.requireNonNull(payload, "payload");
+            payload = payload.clone();
+        }
+
+        @Override
+        public byte[] payload() {
+            return payload.clone();
+        }
     }
 
     private void fail(Throwable failure) {
@@ -426,6 +477,12 @@ public final class Paper26_3CaptureBridge implements CaptureBridge {
             PacketEvents.getAPI().getEventManager().unregisterListener(listener);
         } catch (Throwable ignored) {
             // PacketEvents may already have stopped while Paper disables plugins.
+        }
+    }
+
+    private void closePlayerScenes() {
+        if (playerScenes != null) {
+            playerScenes.close();
         }
     }
 

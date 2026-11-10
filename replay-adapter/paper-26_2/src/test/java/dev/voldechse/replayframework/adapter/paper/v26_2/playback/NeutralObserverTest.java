@@ -261,7 +261,7 @@ class NeutralObserverTest {
     }
 
     private Paper26ReplayPacketRewriter rewriter() {
-        return new Paper26ReplayPacketRewriter(registry,
+        return new Paper26ReplayPacketRewriter(
                 new PlaybackIdentityContext(observer, UUID.randomUUID()), Set.of(observer), Set.of(42));
     }
 

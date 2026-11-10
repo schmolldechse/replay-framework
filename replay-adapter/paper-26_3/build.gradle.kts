@@ -5,9 +5,11 @@ plugins {
 
 dependencies {
     implementation(project(":replay-adapter:api"))
+    implementation(project(":replay-adapter:paper-common"))
     compileOnly(libs.packetevents.spigot)
     paperweight.paperDevBundle(libs.versions.paper263.get())
     testImplementation(libs.junit.jupiter)
+    testImplementation(libs.packetevents.spigot)
     testRuntimeOnly(libs.junit.platform.launcher)
 }
 

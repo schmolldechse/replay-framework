@@ -19,9 +19,8 @@ import net.minecraft.network.protocol.Packet;
 
 /**
  * Channel-local outbound gate for one replay viewer. Live packets are
- * classified before they reach the capture observer; replay packets are
- * written from this handler's context and therefore travel only through the
- * preceding Paper transport stages.
+ * classified before they reach the capture observer. Encoded replay packets
+ * use {@link PacketEventsReplayWriter} and never traverse this handler.
  */
 final class ReplayViewerOutboundGate extends ChannelOutboundHandlerAdapter {
 
@@ -120,44 +119,6 @@ final class ReplayViewerOutboundGate extends ChannelOutboundHandlerAdapter {
         }
 
         context.write(message, promise);
-    }
-
-    /**
-     * Writes a decoded replay packet through the handlers before this gate.
-     * Calling {@code context.write} is intentional: it skips this gate and
-     * the later capture observer but still reaches the Paper encoder.
-     */
-    void writeReplay(Object decodedPacket) {
-        Objects.requireNonNull(decodedPacket, "decodedPacket");
-        ChannelHandlerContext current = context;
-        if (current == null || state.get() != State.ACTIVE) {
-            throw new IllegalStateException("replay viewer gate is not active");
-        }
-        if (!current.executor().inEventLoop()) {
-            current.executor().execute(() -> {
-                try {
-                    writeReplay(decodedPacket);
-                } catch (Throwable failure) {
-                    ReferenceCountUtil.release(decodedPacket);
-                    fail(failure);
-                }
-            });
-            return;
-        }
-        current.write(decodedPacket, current.newPromise());
-    }
-
-    /** Flushes the bounded replay batch after its packets were written. */
-    void flushReplay() {
-        ChannelHandlerContext current = context;
-        if (current == null || state.get() != State.ACTIVE) {
-            throw new IllegalStateException("replay viewer gate is not active");
-        }
-        if (!current.executor().inEventLoop()) {
-            current.executor().execute(this::flushReplay);
-            return;
-        }
-        current.flush();
     }
 
     /** Starts suppressing live replay-state packets after the safe teleport. */

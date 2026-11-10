@@ -2,8 +2,10 @@ package dev.voldechse.replayframework.adapter.paper.v26_2.playback;
 
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
-import dev.voldechse.replayframework.adapter.PacketRegistry;
+import dev.voldechse.replayframework.adapter.codec.PacketCodec;
+import dev.voldechse.replayframework.adapter.paper.packet.PacketRewriteResult;
 import dev.voldechse.replayframework.adapter.playback.PlaybackIdentityContext;
+import dev.voldechse.replayframework.format.RawPacketFrame;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -14,7 +16,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import com.mojang.authlib.GameProfile;
 import io.netty.buffer.Unpooled;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.network.protocol.game.ClientboundAddEntityPacket;
 import net.minecraft.network.protocol.game.ClientboundBossEventPacket;
 import net.minecraft.network.protocol.game.ClientboundDamageEventPacket;
 import net.minecraft.network.protocol.game.ClientboundEntityPositionSyncPacket;
@@ -34,7 +35,6 @@ import net.minecraft.network.protocol.game.ClientboundTeleportEntityPacket;
 import net.minecraft.network.protocol.game.ClientboundUpdateAttributesPacket;
 import net.minecraft.network.protocol.game.ClientboundUpdateMobEffectPacket;
 import net.minecraft.network.syncher.SynchedEntityData;
-import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 
 /**
@@ -43,96 +43,53 @@ import net.minecraft.world.entity.ai.attributes.AttributeInstance;
  * packets are handed to the version-bound identity transformer.
  */
 public final class Paper26ReplayPacketRewriter {
-    private static final Set<String> IDENTITY_BEARING = Set.of(
-            "minecraft:add_entity",
-            "minecraft:animate",
-            "minecraft:block_destruction",
-            "minecraft:boss_event",
-            "minecraft:damage_event",
-            "minecraft:entity_event",
-            "minecraft:entity_position_sync",
-            "minecraft:hurt_animation",
-            "minecraft:move_entity_pos",
-            "minecraft:move_entity_pos_rot",
-            "minecraft:move_entity_rot",
-            "minecraft:move_minecart_along_track",
-            "minecraft:remove_entities",
-            "minecraft:rotate_head",
-            "minecraft:set_entity_data",
-            "minecraft:set_entity_link",
-            "minecraft:set_entity_motion",
-            "minecraft:set_equipment",
-            "minecraft:set_passengers",
-            "minecraft:teleport_entity",
-            "minecraft:update_attributes",
-            "minecraft:update_mob_effect",
-            "minecraft:remove_mob_effect",
-            "minecraft:player_info_remove",
-            "minecraft:player_info_update",
-            "minecraft:player_chat",
-            "minecraft:projectile_power",
-            "minecraft:take_item_entity",
-            "minecraft:sound_entity");
-
-    private final PacketRegistry registry;
-    private final PlaybackIdentityContext context;
     private final ReplayIdentityMap identities;
     private final Set<UUID> activeBossBars = new java.util.HashSet<>();
 
     Paper26ReplayPacketRewriter(
-            PacketRegistry registry,
             PlaybackIdentityContext context,
             Set<UUID> reservedUuids,
             Set<Integer> reservedEntityIds) {
-        this.registry = Objects.requireNonNull(registry, "registry");
-        this.context = Objects.requireNonNull(context, "context");
-        this.identities = new ReplayIdentityMap(context, reservedUuids, reservedEntityIds);
+        this.identities = new ReplayIdentityMap(
+                Objects.requireNonNull(context, "context"), reservedUuids, reservedEntityIds);
     }
 
     /** Returns an empty result for packets that must not reach the observer. */
     RewriteResult rewrite(Object decodedPacket, PacketDescriptor descriptor) {
-        Objects.requireNonNull(decodedPacket, "decodedPacket");
-        Objects.requireNonNull(descriptor, "descriptor");
-        if (descriptor.direction() != PacketDescriptor.Direction.CLIENTBOUND
-                || !descriptor.replayable()
-                || !registry.replayAllowed(
-                        descriptor.phase(), descriptor.direction(), descriptor.packetId())) {
-            throw incompatible("replay packet is not permitted at the rewrite boundary");
-        }
-        String packetName = descriptor.typeName();
-        if (packetName.startsWith("play.clientbound.")) {
-            packetName = packetName.substring("play.clientbound.".length());
-        }
-        if (dev.voldechse.replayframework.adapter.playback.NeutralObserverPolicy
-                .isRecordedChatPresentation(packetName)) {
-            return RewriteResult.dropLocal(
-                    "recorded chat belongs to its original connection");
-        }
-        if (isViewerLocal(packetName)
-                && descriptor.playbackScope() != PacketDescriptor.PlaybackScope.VIEWER_LOCAL) {
-            throw incompatible("viewer-local Paper packet has an invalid playback scope");
-        }
-        if (isIdentityBearing(packetName)
-                && descriptor.playbackScope() != PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES) {
-            throw incompatible("identity-bearing Paper packet has an invalid playback scope");
-        }
-        if (descriptor.playbackScope() == PacketDescriptor.PlaybackScope.VIEWER_LOCAL) {
-            return RewriteResult.dropLocal("recorded connection state does not belong to the observer");
-        }
-        RewriteResult payloadResult = rewritePayloadSensitive(decodedPacket, packetName);
-        if (payloadResult != null) {
-            return payloadResult;
-        }
-        if ("minecraft:boss_event".equals(packetName)) {
-            return rewriteBossEvent(decodedPacket);
-        }
-        return switch (descriptor.playbackScope()) {
-            case VIEWER_LOCAL -> RewriteResult.dropLocal(
-                    "packet changes the current live observer's local state");
-            case UNSAFE -> RewriteResult.fail("unsafe replay packet reached the rewrite boundary");
-            case SAFE -> RewriteResult.send(decodedPacket);
-            case REWRITE_IDENTITIES -> RewriteResult.send(
-                    rewriteIdentityBearing(decodedPacket, packetName));
+        PacketRewriteResult result = Paper26PacketCatalog.catalog()
+                .require(Objects.requireNonNull(descriptor, "descriptor").typeName())
+                .rewrite(Objects.requireNonNull(decodedPacket, "decodedPacket"), descriptor, this);
+        return switch (result.decision()) {
+            case SEND -> RewriteResult.send(result.packet().orElseThrow());
+            case DROP_LOCAL -> RewriteResult.dropLocal(result.reason());
+            case FAIL -> RewriteResult.fail(result.reason());
+        };
+    }
+
+    RewriteResult rewrite(
+            RawPacketFrame frame,
+            PacketDescriptor descriptor,
+            PacketCodec<Object> codec) {
+        PacketRewriteResult result = Paper26PacketCatalog.catalog()
+                .require(Objects.requireNonNull(descriptor, "descriptor").typeName())
+                .handlePlayback(frame, descriptor, codec, this);
+        return toRewriteResult(result);
+    }
+
+    PacketCodec.EncodedPacket encode(
+            Object rebuiltPacket,
+            PacketDescriptor descriptor,
+            PacketCodec<Object> codec) {
+        return Paper26PacketCatalog.catalog()
+                .require(Objects.requireNonNull(descriptor, "descriptor").typeName())
+                .encode(rebuiltPacket, descriptor, codec);
+    }
+
+    private static RewriteResult toRewriteResult(PacketRewriteResult result) {
+        return switch (result.decision()) {
+            case SEND -> RewriteResult.send(result.packet().orElseThrow());
+            case DROP_LOCAL -> RewriteResult.dropLocal(result.reason());
+            case FAIL -> RewriteResult.fail(result.reason());
         };
     }
 
@@ -141,26 +98,22 @@ public final class Paper26ReplayPacketRewriter {
      * the current connection. The descriptor cannot express that distinction,
      * so it is made only after the version-specific payload was decoded.
      */
-    private RewriteResult rewritePayloadSensitive(Object packet, String packetName) {
-        if ("minecraft:explode".equals(packetName)) {
-            ClientboundExplodePacket value = require(packet, ClientboundExplodePacket.class);
-            return RewriteResult.send(new ClientboundExplodePacket(
-                    value.center(),
-                    value.radius(),
-                    value.blockCount(),
-                    Optional.empty(),
-                    value.explosionParticle(),
-                    value.explosionSound(),
-                    value.blockParticles()));
-        }
-        if ("minecraft:game_event".equals(packetName)) {
-            ClientboundGameEventPacket value = require(packet, ClientboundGameEventPacket.class);
-            if (isViewerLocalGameEvent(value.getEvent())) {
-                return RewriteResult.dropLocal(
-                        "game-event payload changes the current live observer's local state");
-            }
-        }
-        return null;
+    PacketRewriteResult rewriteExplosion(ClientboundExplodePacket value) {
+        return PacketRewriteResult.send(new ClientboundExplodePacket(
+                value.center(),
+                value.radius(),
+                value.blockCount(),
+                Optional.empty(),
+                value.explosionParticle(),
+                value.explosionSound(),
+                value.blockParticles()));
+    }
+
+    PacketRewriteResult rewriteGameEvent(ClientboundGameEventPacket value) {
+        return isViewerLocalGameEvent(value.getEvent())
+                ? PacketRewriteResult.drop(
+                        "game-event payload changes the current live observer's local state")
+                : PacketRewriteResult.send(value);
     }
 
     private static boolean isViewerLocalGameEvent(ClientboundGameEventPacket.Type event) {
@@ -189,10 +142,6 @@ public final class Paper26ReplayPacketRewriter {
         activeBossBars.clear();
     }
 
-    public static boolean isViewerLocal(String identifier) {
-        return dev.voldechse.replayframework.adapter.playback.NeutralObserverPolicy.isViewerLocal(identifier);
-    }
-
     public static boolean isViewerUi(String identifier) {
         if (identifier.startsWith("play.clientbound.")) {
             identifier = identifier.substring("play.clientbound.".length());
@@ -206,10 +155,6 @@ public final class Paper26ReplayPacketRewriter {
                 || identifier.equals("minecraft:set_held_slot");
     }
 
-    public static boolean isIdentityBearing(String identifier) {
-        return IDENTITY_BEARING.contains(identifier);
-    }
-
     private static IncompatibleAdapterException incompatible(String message) {
         return new IncompatibleAdapterException(message);
     }
@@ -218,31 +163,8 @@ public final class Paper26ReplayPacketRewriter {
         return new IncompatibleAdapterException(message, cause);
     }
 
-    private Object rewriteIdentityBearing(Object packet, String packetName) {
+    Object rewriteIdentityBearing(Object packet, String packetName) {
         return switch (packetName) {
-            case "minecraft:add_entity" -> {
-                ClientboundAddEntityPacket value = require(packet, ClientboundAddEntityPacket.class);
-                int data = value.getData();
-                // The fishing-bobber spawn packet stores its hook owner as an
-                // entity ID. For other entity types data is a type-specific
-                // value (for example a block-state ID), so it must remain
-                // untouched.
-                if ("fishing_hook".equals(EntityType.getKey(value.getType()).getPath()) && data > 0) {
-                    data = mapEntityId(data);
-                }
-                yield new ClientboundAddEntityPacket(
-                        mapEntityId(value.getId()),
-                        mapUuid(value.getUUID()),
-                        value.getX(),
-                        value.getY(),
-                        value.getZ(),
-                        value.getXRot(),
-                        value.getYRot(),
-                        value.getType(),
-                        data,
-                        value.getMovement(),
-                        value.getYHeadRot());
-            }
             case "minecraft:damage_event" -> {
                 ClientboundDamageEventPacket value = require(packet, ClientboundDamageEventPacket.class);
                 yield new ClientboundDamageEventPacket(
@@ -422,7 +344,7 @@ public final class Paper26ReplayPacketRewriter {
                                 : identities.mapObjectiveName(value.objectiveName()));
             }
             default -> throw incompatible(
-                    "no explicit Paper 26.2 identity rewrite exists for " + packetName);
+                    "no explicit Paper 26.3 identity rewrite exists for " + packetName);
         };
     }
 
@@ -519,8 +441,7 @@ public final class Paper26ReplayPacketRewriter {
         return new ClientboundPlayerInfoUpdatePacket(value.actions(), entries);
     }
 
-    private RewriteResult rewriteBossEvent(Object packet) {
-        ClientboundBossEventPacket value = require(packet, ClientboundBossEventPacket.class);
+    PacketRewriteResult rewriteBossEvent(ClientboundBossEventPacket value) {
         AtomicReference<ClientboundBossEventPacket> rewritten = new AtomicReference<>();
         AtomicReference<String> dropReason = new AtomicReference<>();
         value.dispatch(new ClientboundBossEventPacket.Handler() {
@@ -609,12 +530,12 @@ public final class Paper26ReplayPacketRewriter {
         });
         ClientboundBossEventPacket result = rewritten.get();
         if (dropReason.get() != null) {
-            return RewriteResult.dropLocal(dropReason.get());
+            return PacketRewriteResult.drop(dropReason.get());
         }
         if (result == null) {
             throw incompatible("Paper boss-event packet has an unknown operation", null);
         }
-        return RewriteResult.send(result);
+        return PacketRewriteResult.send(result);
     }
 
     private net.minecraft.world.BossEvent bossEvent(
@@ -768,3 +689,4 @@ public final class Paper26ReplayPacketRewriter {
         }
     }
 }
+

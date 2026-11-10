@@ -47,6 +47,7 @@ public final class Paper26PlaybackBridge implements PlaybackBridge {
     private final AtomicReference<State> state = new AtomicReference<>(State.NEW);
     private final AtomicBoolean failureReported = new AtomicBoolean();
     private final ReplayViewerOutboundGate gate;
+    private final PacketEventsReplayWriter replayWriter;
     private final Paper26ViewResetter resetter;
     private final AtomicReference<Paper26ReplayPacketRewriter> rewriter =
             new AtomicReference<>();
@@ -79,6 +80,7 @@ public final class Paper26PlaybackBridge implements PlaybackBridge {
         }
         this.connection = resolved;
         this.codec = new Paper26PacketCodec(accessor, connection, registry);
+        this.replayWriter = new PacketEventsReplayWriter(connection, this::fail);
         this.resetter = new Paper26ViewResetter(registry, this::writeResetPacket, this::fail);
         this.gate = new ReplayViewerOutboundGate(
                 accessor,
@@ -105,7 +107,6 @@ public final class Paper26PlaybackBridge implements PlaybackBridge {
         requireUsable("setIdentityContext");
         if (!rewriter.compareAndSet(
                 null, new Paper26ReplayPacketRewriter(
-                        registry,
                         context,
                         Set.of(context.observerId()),
                         Set.of(observerEntityId)))) {
@@ -366,7 +367,7 @@ public final class Paper26PlaybackBridge implements PlaybackBridge {
 
     private void flushOutboundBatch(int processed) {
         if (processed > 0) {
-            gate.flushReplay();
+            replayWriter.flush();
         }
     }
 
@@ -378,19 +379,18 @@ public final class Paper26PlaybackBridge implements PlaybackBridge {
         if (currentRewriter == null) {
             throw incompatible("Paper playback identity context is not bound", null);
         }
-        Object decoded = codec.decode(frame);
         PacketDescriptor descriptor = registry.find(
                         frame.phase(), PacketDescriptor.Direction.CLIENTBOUND, frame.packetId())
                 .orElseThrow(() -> incompatible(
                         "replay packet descriptor disappeared from the verified registry", null));
         Paper26ReplayPacketRewriter.RewriteResult result = currentRewriter.rewrite(
-                decoded, descriptor);
+                frame, descriptor, codec);
         if (result.decision() == Paper26ReplayPacketRewriter.RewriteResult.Decision.FAIL) {
             throw incompatible("replay packet could not be isolated: " + result.reason(), null);
         }
         if (result.decision() == Paper26ReplayPacketRewriter.RewriteResult.Decision.SEND) {
-            gate.writeReplay(result.packet());
             resetter.observe(result.packet());
+            replayWriter.write(currentRewriter.encode(result.packet(), descriptor, codec));
         }
     }
 
@@ -447,7 +447,7 @@ public final class Paper26PlaybackBridge implements PlaybackBridge {
                         wirePacket.phase(), wirePacket.direction(), wirePacket.packetId())) {
             throw incompatible("Paper reset packet is blocked by the verified registry", null);
         }
-        gate.writeReplay(packet);
+        replayWriter.write(wirePacket);
     }
 
     /** Drops every recorded packet that has no explicit safe replay contract. */

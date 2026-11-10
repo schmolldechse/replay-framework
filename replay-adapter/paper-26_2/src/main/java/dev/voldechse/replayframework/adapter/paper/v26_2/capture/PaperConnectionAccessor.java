@@ -298,19 +298,19 @@ public final class PaperConnectionAccessor {
      * the whole packet would silently violate a bounded recording region.</p>
      */
     public CaptureContext captureContext(
-            ConnectionHandle connection,
             Object outboundPacket,
-            PacketDescriptor descriptor) {
-        Objects.requireNonNull(connection, "connection");
+            PacketDescriptor descriptor,
+            Optional<net.kyori.adventure.key.Key> world) {
         Objects.requireNonNull(outboundPacket, "outboundPacket");
         Objects.requireNonNull(descriptor, "descriptor");
+        Objects.requireNonNull(world, "world");
 
         Optional<String> chat = normalizedChat(outboundPacket);
         Optional<net.kyori.adventure.key.Key> customChannel = customPayloadChannel(outboundPacket);
         Optional<BlockPosition> position = packetPosition(outboundPacket);
         return new CaptureContext(
                 Optional.of(descriptor.disposition()),
-                connection.world(),
+                world,
                 position,
                 chat,
                 customChannel);
@@ -342,11 +342,7 @@ public final class PaperConnectionAccessor {
         if (channel == null || !channel.isOpen()) {
             return null;
         }
-        Optional<net.kyori.adventure.key.Key> world = Optional.ofNullable(player.getWorld().getKey());
-        Optional<BlockPosition> position = Optional.ofNullable(player.getLocation())
-                .map(location -> new BlockPosition(
-                        location.getBlockX(), location.getBlockY(), location.getBlockZ()));
-        return new ConnectionHandle(player.getUniqueId(), channel, world, position);
+        return new ConnectionHandle(player.getUniqueId(), channel);
     }
 
     private static Optional<String> normalizedChat(Object packet) {
@@ -511,18 +507,10 @@ public final class PaperConnectionAccessor {
     /** Immutable connection identity used by the adapter-internal capture path. */
     public record ConnectionHandle(
             UUID connectionId,
-            Channel channel,
-            Optional<net.kyori.adventure.key.Key> world,
-            Optional<BlockPosition> position) {
-        public ConnectionHandle(UUID connectionId, Channel channel) {
-            this(connectionId, channel, Optional.empty(), Optional.empty());
-        }
-
+            Channel channel) {
         public ConnectionHandle {
             Objects.requireNonNull(connectionId, "connectionId");
             Objects.requireNonNull(channel, "channel");
-            world = Objects.requireNonNull(world, "world");
-            position = Objects.requireNonNull(position, "position");
         }
     }
 
