@@ -3,10 +3,20 @@
 This reference describes the exact clientbound protocol surface reviewed for Paper 26.2 build 135. The adapter uses Java 26, PacketEvents 2.14.0, and the `26.2.build.135-stable` Paper development bundle. The inspected registry contains 169 clientbound packet types, including 141 PLAY packets.
 
 Registry fingerprint: `d9d610afb1ff45fa2a97302337053d3f9643e6d09a685cf32652bc6678ffd744`.
+Adapter format revision: `4`. Revision-3 recordings are intentionally not
+migrated or accepted by this implementation.
 
 ## Adapter structure
 
 The adapter entry point is `Paper26ReplayAdapter`, provided through `Paper26AdapterProvider`. Both follow the shared adapter design: NMS types remain inside `dev.voldechse.replayframework.adapter.paper.v26_2`, while `AbstractReplayAdapter` owns the common contracts.
+
+`replay-adapter:paper-common` supplies the NMS-free packet-definition template.
+The 26.2 catalog is the single source for registry policy and playback behavior;
+all 141 PLAY entries bind to a named version-local definition class and unknown
+PLAY packets fail adapter opening. Definitions apply local/unsafe policy
+before decode and validate decode, rewrite/rebuild, and encode against the same
+descriptor. `add_entity` is the concrete read/value/rewrite/rebuild reference
+implementation for identity-bearing packets.
 
 - `capture` attaches packet capture, resolves recording scope, and emits synthetic state changes.
 - `checkpoint` snapshots loaded Paper world state and encodes ordered native 26.2 packets. After optional scope preloading, it allocates an actual Paper tick/time/sequence barrier through the capture bridge; the core drains all earlier 26.2 deltas before persisting that checkpoint.
@@ -37,7 +47,9 @@ During seek reconstruction, the 26.2 bridge accepts only registry descriptors wh
 
 `R` means registry/classification coverage. `R+N` additionally identifies a focused native behavior test. Registry coverage does not claim every possible payload or custom datapack renders correctly.
 
-`DROP_LOCAL*` is an additional neutral-observer guard applied before payload decoding. The stored descriptor scope remains unchanged so revision-3 artifacts retain their existing registry fingerprint and remain readable.
+`DROP_LOCAL*` is a neutral-observer guard applied before payload decoding.
+The registry fingerprint remains the protocol-policy guard; format revision 4
+deliberately does not retain revision-3 artifact compatibility.
 
 ## Known limits
 

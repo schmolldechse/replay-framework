@@ -13,8 +13,9 @@ flowchart TD
 
     runtime --> core["replay-core<br/>Recording, playback, metadata, catalog"]
     runtime --> adapterApi["replay-adapter:api<br/>Shared adapter contract"]
-    adapterApi --> adapter262["paper-26_2<br/>Capture, checkpoints, playback"]
-    adapterApi --> adapter263["paper-26_3<br/>Capture, checkpoints, playback"]
+    adapterApi --> paperCommon["paper-common<br/>Packet definitions and policy flow"]
+    paperCommon --> adapter262["paper-26_2<br/>Capture, checkpoints, playback"]
+    paperCommon --> adapter263["paper-26_3<br/>Capture, checkpoints, playback"]
     runtime --> format["replay-format<br/>Segments, indexes, checkpoints, manifests"]
     runtime --> storage["replay-storage:*<br/>Local, S3, SFTP artifacts"]
     runtime --> database["replay-database:postgresql<br/>Catalog, leases, metadata revisions"]
@@ -58,7 +59,10 @@ flowchart TD
     finalizing -->|validation, storage, or database failure| failed
 ```
 
-The adapter classifies and serializes supported raw network packets. The core
+The adapter classifies and serializes supported raw network packets. PacketEvents
+capture is deferred to its post-task, after all listeners and optional wrapper
+re-encoding, so the stored packet ID and body are the final uncompressed bytes.
+The core
 routes captured packets to each matching recording session, so overlapping
 scopes remain isolated. A bounded queue prevents capture pressure from becoming
 unbounded memory use. Segment rotation, checkpoints, and finalization are
@@ -117,7 +121,13 @@ nearest checkpoint at or before the target, then replays deltas through that
 position. A virtual playback worker schedules due frames according to the
 session's own clock and speed.
 
-The Paper adapter owns packet-level viewer isolation. Application UX remains
+The Paper adapter owns packet-level viewer isolation. A version catalog binds
+every supported PLAY packet to exactly one definition. The definition applies
+DROP/BLOCK policy before decode and otherwise owns the validated
+decode/read/rewrite/rebuild/encode flow. Rebuilt bytes are written from the
+PacketEvents encoder context, which deliberately skips the replay gate, Paper
+encoder, and PacketEvents listener path while retaining earlier transport
+handlers such as compression and encryption. Application UX remains
 outside the framework: integrations decide where a viewer stands, what controls
 exist, and when normal player state is restored.
 

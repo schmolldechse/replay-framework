@@ -61,7 +61,10 @@ compares them with its previous snapshot, and emits only changed state plus any
 queued ephemeral actions. No Bukkit entity or live connection reference is
 stored in a replay frame.
 
-Clientbound packet bytes are copied before leaving the PacketEvents callback.
+Clientbound packet bytes are copied by a PacketEvents post-task before leaving
+the callback. The post-task runs after all listeners and any wrapper
+re-encoding, so capture parses the final VarInt packet ID and copies the final
+uncompressed body without changing the live buffer's reader index.
 Channel-handler work remains on the channel event loop. Cross-thread publication
 uses the adapter's capture-order allocator so timestamps, server ticks, sequence
 numbers, checkpoint barriers, and recording-scope filtering retain one ordering
@@ -115,12 +118,21 @@ Packet-driven capture is divided into small version-bound responsibilities:
 
 - the capture bridge owns PacketEvents registration, packet byte copying,
   capture ordering, and failure propagation;
+- a main-thread player-scene index publishes immutable world keys for Netty
+  capture callbacks; callbacks never query Bukkit player/world state;
 - the player-state sampler owns receive-signal coalescing and main-thread state
   comparison;
 - the entity-state coordinator owns non-player fallbacks and lifecycle cleanup;
 - the native packet factory owns version-specific packet construction;
 - the authoritative-state index owns duplicate suppression; and
 - the playback rewriter owns session-local entity and UUID references.
+
+Replay injection is not an event fallback. The version bridge first encodes a
+rebuilt native packet with the live Paper codec, then writes the packet ID and
+body from the current PacketEvents encoder context. PacketEvents therefore
+cannot observe or recapture replay traffic. The live outbound gate remains a
+channel handler whose sole responsibility is suppressing conflicting live
+scene packets for that viewer.
 
 The version-neutral core does not depend on Paper, CraftBukkit, NMS, or
 PacketEvents types. A new adapter may use different native packet classes, but
