@@ -38,12 +38,7 @@ public final class Paper26_3PacketRegistry implements PacketRegistry {
         List<PacketDescriptor> descriptors = new ArrayList<>(snapshot.clientboundPackets().size());
         for (Paper26_3ProtocolIntrospector.PacketType packet : snapshot.clientboundPackets()) {
             validatePacket(packet);
-            PacketClassification classification = packet.phase() == PacketPhase.PLAY
-                    ? Paper26_3PacketCatalog.catalog()
-                            .find(packet.typeName())
-                            .map(definition -> definition.classification())
-                            .orElseGet(PacketClassification::unsupported)
-                    : PacketClassification.control();
+            PacketClassification classification = classificationFor(packet);
             String expectedCodecKey = CODEC_PREFIX + packet.typeName();
             if (!expectedCodecKey.equals(packet.codecKey())) {
                 throw incompatible("Paper packet codec key mismatch for " + packet.typeName(), null);
@@ -74,6 +69,26 @@ public final class Paper26_3PacketRegistry implements PacketRegistry {
 
     static boolean explicitlyClassifies(String typeName) {
         return Paper26_3PacketCatalog.explicitlyClassifies(typeName);
+    }
+
+    private static PacketClassification classificationFor(
+            Paper26_3ProtocolIntrospector.PacketType packet) {
+        if (packet.phase() != PacketPhase.PLAY) {
+            return PacketClassification.control();
+        }
+        var definition = Paper26_3PacketCatalog.catalog().find(packet.typeName());
+        if (definition.isEmpty()) {
+            return PacketClassification.unsupported();
+        }
+        var explicitDefinition = definition.orElseThrow();
+        if (explicitDefinition.packetId() != packet.packetId()) {
+            throw incompatible(
+                    "Paper packet definition ID mismatch for " + packet.typeName()
+                            + ": expected " + explicitDefinition.packetId()
+                            + ", discovered " + packet.packetId(),
+                    null);
+        }
+        return explicitDefinition.classification();
     }
 
     @Override

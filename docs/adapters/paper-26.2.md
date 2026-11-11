@@ -15,11 +15,11 @@ migrated or accepted by this implementation.
 
 ## Adapter structure
 
-The adapter entry point is `Paper26ReplayAdapter`, provided through `Paper26AdapterProvider`. Both follow the shared adapter design: NMS types remain inside `dev.voldechse.replayframework.adapter.paper.v26_2`, while `AbstractReplayAdapter` owns the common contracts.
+The adapter entry point is `Paper26_2ReplayAdapter`, provided through `Paper26_2AdapterProvider`. Both follow the shared adapter design: NMS types remain inside `dev.voldechse.replayframework.adapter.paper.v26_2`, while `AbstractReplayAdapter` owns the common contracts.
 
 `replay-adapter:paper-common` supplies the NMS-free packet-definition template
 and the blocked-control base. The version-local catalog contains the connection-
-domain `BundleDelimiterPacketDefinition`; registry discovery uses the safe
+domain `Id000BundleDelimiterPacketDefinition`; registry discovery uses the safe
 `UNSUPPORTED` fallback for every other PLAY packet, including previously unknown
 types. No replayable version-local decode, rewrite, rebuild, or encode path is
 enabled.
@@ -45,11 +45,11 @@ During seek reconstruction, the 26.2 bridge accepts only registry descriptors wh
 ## Tests
 
 - `PacketCoverageTest` loads the real 26.2 NMS registry and verifies that only `bundle_delimiter` is explicit `CONTROL` traffic while every other PLAY packet remains capture-only `UNSUPPORTED` data.
-- `BundleDelimiterPacketDefinitionTest` verifies the native singleton codec, packet ID `0`, empty payload, capture policy, and rejection before playback decode.
+- `Id000BundleDelimiterPacketDefinitionTest` verifies the native singleton codec, packet ID `0`, empty payload, capture policy, and rejection before playback decode.
 - Registry, native codec, checkpoint, snapshot, observer isolation, and outbound-gate tests cover their respective version-bound behavior.
 - Snapshot tests verify that the 26.2 capture barrier is allocated only after asynchronous scope preloading completes; generic core tests verify the exclusive delta boundary stored with it.
-- `Paper26EntityStateCaptureTest` covers packet-driven movement/equipment authority, hand-swap and tick-scoped swing suppression, equipment deltas, cleared slots, and the 26.2 `animate` hand encoding.
-- `Paper26PlaybackBridgeTest` verifies that reconstruction retains 26.2 checkpoint state while suppressing transient frames.
+- `Paper26_2EntityStateCaptureTest` covers packet-driven movement/equipment authority, hand-swap and tick-scoped swing suppression, equipment deltas, cleared slots, and the 26.2 `animate` hand encoding.
+- `Paper26_2PlaybackBridgeTest` verifies that reconstruction retains 26.2 checkpoint state while suppressing transient frames.
 
 Except for the explicitly documented `bundle_delimiter`, `R` and `R+N` in the
 retained inventory describe the previously reviewed target policy. They do not

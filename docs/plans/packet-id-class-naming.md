@@ -1,4 +1,4 @@
-# Packet ID class naming proposal
+# Packet ID class naming
 
 ## Goal
 
@@ -6,8 +6,8 @@ Add the version-local numeric PLAY clientbound packet ID to every concrete
 packet-definition class without weakening the semantic protocol identifier or
 the existing domain layout.
 
-This document is a proposal only. It does not rename or otherwise modify the
-current packet implementations.
+This convention is implemented for the existing bundle-delimiter definitions
+and is the required naming scheme for further concrete packet definitions.
 
 ## Findings
 
@@ -26,7 +26,7 @@ The pinned registries already demonstrate this:
 Consequently, an ID may be part of a version-local class name, but must never
 replace `minecraft:<identifier>` as the catalog lookup key.
 
-## Recommended schema
+## Naming schema
 
 Concrete definitions use:
 
@@ -106,7 +106,7 @@ Only concrete wire-packet definitions receive the prefix. The following names
 do not represent one numeric packet and therefore remain unchanged:
 
 - `ConnectionPacketDefinitions` and the other domain aggregators;
-- `Paper26PacketCatalog` and `Paper26_3PacketCatalog`;
+- `Paper26_2PacketCatalog` and `Paper26_3PacketCatalog`;
 - shared bases such as `AbstractBlockedPacketDefinition`;
 - codecs, capture bridges, playback bridges and channel handlers.
 
@@ -120,16 +120,17 @@ domain, for example:
 This preserves the responsibility-based layout and avoids one package per
 packet or renaming a package when a later protocol version shifts an ID.
 
-## Changes after approval
+## Applied changes
 
-1. Update `docs/packet-definition-layout.md` with the new mechanical naming
-   rule and examples.
-2. Add the expected numeric ID to the shared definition contract and validate
-   it against both live Paper registries.
-3. Rename both current bundle-delimiter definitions and their tests to
+1. `docs/packet-definition-layout.md` defines the mechanical naming rule and
+   version-shift examples.
+2. The shared definition contract exposes the expected numeric ID and both
+   Paper registries validate it during discovery.
+3. Both bundle-delimiter definitions and their tests use
    `Id000BundleDelimiterPacketDefinition`.
-4. Update the two connection aggregators and adapter references.
-5. Run the shared and both version-specific adapter test suites.
+4. Both connection aggregators and adapter references use the aligned name.
+5. The shared and both version-specific adapter test suites cover the ID
+   invariant.
 
 No packet behavior, classification, capture policy, playback policy or package
 placement changes as part of this rename.

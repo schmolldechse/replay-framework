@@ -5,8 +5,8 @@ import java.util.List;
 /** Encodes dimension, spawn and global durable client-state groups. */
 final class GlobalStateCheckpointEncoder {
 
-    List<Paper26CheckpointEncoder.PacketBlueprint> encode(
-            Paper26CheckpointEncoder.CheckpointSnapshot snapshot) {
+    List<Paper26_2CheckpointEncoder.PacketBlueprint> encode(
+            Paper26_2CheckpointEncoder.CheckpointSnapshot snapshot) {
         return snapshot.packets().stream()
                 .filter(packet -> switch (packet.family()) {
                     case DIMENSION_SPAWN, GLOBAL_STATE -> true;

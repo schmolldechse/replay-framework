@@ -11,11 +11,12 @@ public final class TypedPacketDefinition<C, P> extends PacketDefinition<C> {
     private final BiFunction<P, C, PacketRewriteResult> rewriter;
 
     public TypedPacketDefinition(
+            int packetId,
             String identifier,
             PacketClassification classification,
             Class<P> nativeType,
             BiFunction<P, C, PacketRewriteResult> rewriter) {
-        super(identifier, classification);
+        super(packetId, identifier, classification);
         this.nativeType = Objects.requireNonNull(nativeType, "nativeType");
         this.rewriter = Objects.requireNonNull(rewriter, "rewriter");
         var scope = classification.playbackScope();

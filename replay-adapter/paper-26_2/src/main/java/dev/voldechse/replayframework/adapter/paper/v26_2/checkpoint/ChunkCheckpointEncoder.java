@@ -5,13 +5,13 @@ import java.util.List;
 /** Encodes detached chunk, light and block-entity blueprint groups. */
 final class ChunkCheckpointEncoder {
 
-    List<Paper26CheckpointEncoder.PacketBlueprint> encode(
-            Paper26CheckpointEncoder.CheckpointSnapshot snapshot) {
+    List<Paper26_2CheckpointEncoder.PacketBlueprint> encode(
+            Paper26_2CheckpointEncoder.CheckpointSnapshot snapshot) {
         return snapshot.packets().stream()
                 .filter(packet -> packet.family()
-                        == Paper26CheckpointEncoder.CheckpointPacketFamily.CHUNK_LIGHT
+                        == Paper26_2CheckpointEncoder.CheckpointPacketFamily.CHUNK_LIGHT
                         || packet.family()
-                        == Paper26CheckpointEncoder.CheckpointPacketFamily.BLOCK_ENTITY)
+                        == Paper26_2CheckpointEncoder.CheckpointPacketFamily.BLOCK_ENTITY)
                 .toList();
     }
 }

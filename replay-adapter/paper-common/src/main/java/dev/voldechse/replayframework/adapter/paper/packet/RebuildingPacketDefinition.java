@@ -12,10 +12,11 @@ public abstract class RebuildingPacketDefinition<C, P, V> extends PacketDefiniti
     private final Class<P> nativeType;
 
     protected RebuildingPacketDefinition(
+            int packetId,
             String identifier,
             PacketClassification classification,
             Class<P> nativeType) {
-        super(identifier, classification);
+        super(packetId, identifier, classification);
         this.nativeType = Objects.requireNonNull(nativeType, "nativeType");
         var scope = classification.playbackScope();
         if (scope != dev.voldechse.replayframework.adapter.PacketDescriptor.PlaybackScope.SAFE

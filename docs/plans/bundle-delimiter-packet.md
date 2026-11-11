@@ -60,7 +60,7 @@ bundle atomically; that is intentionally outside this packet-only change.
 1. Add the shared `AbstractBlockedPacketDefinition` policy base. It registers a
    concrete identifier as captured `CONTROL` data and structurally prevents the
    packet from entering the playback decode path.
-2. Add a package-private `BundleDelimiterPacketDefinition` and the public
+2. Add a package-private `Id000BundleDelimiterPacketDefinition` and the public
    `ConnectionPacketDefinitions` aggregator to each version adapter.
 3. Move each version catalog from `playback` to the neutral `packet` package
    defined by `docs/packet-definition-layout.md`, then register only the

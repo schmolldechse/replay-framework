@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.voldechse.replayframework.adapter.PacketDisposition;
-import dev.voldechse.replayframework.adapter.paper.v26_2.packet.Paper26PacketCatalog;
+import dev.voldechse.replayframework.adapter.paper.v26_2.packet.Paper26_2PacketCatalog;
 import dev.voldechse.replayframework.format.PacketPhase;
 import org.junit.jupiter.api.Test;
 
@@ -19,10 +19,10 @@ class PacketCoverageTest {
 
         assertEquals(
                 java.util.List.of("play.clientbound.minecraft:bundle_delimiter"),
-                Paper26PacketCatalog.catalog().definitions().stream()
+                Paper26_2PacketCatalog.catalog().definitions().stream()
                         .map(definition -> definition.typeName())
                         .toList());
-        var registry = Paper26PacketRegistry.discover();
+        var registry = Paper26_2PacketRegistry.discover();
         for (var descriptor : registry.descriptors()) {
             if (descriptor.phase() == PacketPhase.PLAY) {
                 boolean bundleDelimiter =
@@ -35,7 +35,7 @@ class PacketCoverageTest {
                 assertFalse(descriptor.checkpointRelevant());
                 assertEquals(
                         bundleDelimiter,
-                        Paper26PacketRegistry.explicitlyClassifies(descriptor.typeName()));
+                        Paper26_2PacketRegistry.explicitlyClassifies(descriptor.typeName()));
             }
         }
     }

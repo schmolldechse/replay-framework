@@ -5,8 +5,8 @@ import java.util.List;
 /** Encodes detached entity lifecycle, metadata and relationship groups. */
 final class EntityCheckpointEncoder {
 
-    List<Paper26CheckpointEncoder.PacketBlueprint> encode(
-            Paper26CheckpointEncoder.CheckpointSnapshot snapshot) {
+    List<Paper26_2CheckpointEncoder.PacketBlueprint> encode(
+            Paper26_2CheckpointEncoder.CheckpointSnapshot snapshot) {
         return snapshot.packets().stream()
                 .filter(packet -> switch (packet.family()) {
                     case ENTITY_SPAWN, ENTITY_METADATA, EQUIPMENT, PASSENGERS, RUNNING_EFFECT -> true;

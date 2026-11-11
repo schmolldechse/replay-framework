@@ -8,28 +8,33 @@ PLAY packet definitions.
 Every concrete packet class uses this form:
 
 ```text
-<ProtocolIdentifierInUpperCamelCase>PacketDefinition
+Id<DDD><ProtocolIdentifierInUpperCamelCase>PacketDefinition
 ```
 
 The name is derived mechanically:
 
-1. Remove `play.clientbound.` and the `minecraft:` namespace.
-2. Split the remaining identifier at `/`, `_` and `-`.
-3. Convert every segment to UpperCamelCase.
-4. Append `PacketDefinition`.
+1. Read the numeric ID from the pinned version's PLAY clientbound registry.
+2. Format it as a zero-padded three-digit decimal value and prepend `Id`.
+3. Remove `play.clientbound.` and the `minecraft:` namespace.
+4. Split the remaining identifier at `/`, `_` and `-`.
+5. Convert every segment to UpperCamelCase.
+6. Append `PacketDefinition`.
 
 Examples:
 
-| Identifier | Class |
-|---|---|
-| `minecraft:add_entity` | `AddEntityPacketDefinition` |
-| `minecraft:set_entity_data` | `SetEntityDataPacketDefinition` |
-| `minecraft:player_info_update` | `PlayerInfoUpdatePacketDefinition` |
-| `minecraft:debug/block_value` | `DebugBlockValuePacketDefinition` |
-| `minecraft:swing_animation` | `SwingAnimationPacketDefinition` |
+| Version | ID | Identifier | Class |
+|---|---:|---|---|
+| 26.2 / 26.3 | 0 | `minecraft:bundle_delimiter` | `Id000BundleDelimiterPacketDefinition` |
+| 26.2 / 26.3 | 1 | `minecraft:add_entity` | `Id001AddEntityPacketDefinition` |
+| 26.2 | 37 | `minecraft:forget_level_chunk` | `Id037ForgetLevelChunkPacketDefinition` |
+| 26.3 | 37 | `minecraft:add_transient_block` | `Id037AddTransientBlockPacketDefinition` |
+| 26.3 | 38 | `minecraft:forget_level_chunk` | `Id038ForgetLevelChunkPacketDefinition` |
 
-The class name does not contain a Paper version. The same identifier therefore
-has the same class name in the 26.2 and 26.3 modules.
+The class name does not contain a Paper version because the version package
+already owns that context. The numeric ID is version-local, so the same
+identifier may have a different class name when its ID moves between versions.
+Every definition also exposes the numeric ID; adapter discovery validates it
+against the live Paper registry instead of treating the name as documentation.
 
 Concrete definitions are `final` and package-private. Their filenames match
 their class names exactly. The suffixes `Handler`, `Impl`, `Processor` and
@@ -80,8 +85,8 @@ replay-adapter/paper-26_2/src/main/java/
     ├── capture/
     ├── checkpoint/
     ├── packet/
-    │   ├── Paper26PacketCatalog.java
-    │   ├── Paper26PacketCodec.java
+    │   ├── Paper26_2PacketCatalog.java
+    │   ├── Paper26_2PacketCodec.java
     │   └── definition/
     │       ├── connection/
     │       ├── diagnostic/
@@ -128,13 +133,9 @@ version catalog. No aggregator contains packet behavior.
 Example:
 
 ```text
-packet/definition/entity/
-├── EntityPacketDefinitions.java
-├── AddEntityPacketDefinition.java
-├── RemoveEntitiesPacketDefinition.java
-├── EntityPositionSyncPacketDefinition.java
-├── SetEntityDataPacketDefinition.java
-└── SetEquipmentPacketDefinition.java
+packet/definition/connection/
+├── ConnectionPacketDefinitions.java
+└── Id000BundleDelimiterPacketDefinition.java
 ```
 
 ## Ownership boundary
@@ -157,12 +158,12 @@ Tests mirror the production package and filename:
 
 ```text
 src/test/java/.../packet/definition/<domain>/
-└── <PacketDefinition>Test.java
+└── Id<DDD><ProtocolName>PacketDefinitionTest.java
 ```
 
 For example:
 
 ```text
-src/main/java/.../packet/definition/entity/AddEntityPacketDefinition.java
-src/test/java/.../packet/definition/entity/AddEntityPacketDefinitionTest.java
+src/main/java/.../packet/definition/connection/Id000BundleDelimiterPacketDefinition.java
+src/test/java/.../packet/definition/connection/Id000BundleDelimiterPacketDefinitionTest.java
 ```

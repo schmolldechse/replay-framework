@@ -17,16 +17,29 @@ public abstract class PacketDefinition<C> {
 
     private static final String TYPE_PREFIX = "play.clientbound.";
 
+    private final int packetId;
     private final String typeName;
     private final PacketClassification classification;
 
-    protected PacketDefinition(String identifier, PacketClassification classification) {
+    protected PacketDefinition(
+            int packetId,
+            String identifier,
+            PacketClassification classification) {
+        if (packetId < 0) {
+            throw new IllegalArgumentException("packetId must not be negative");
+        }
         Objects.requireNonNull(identifier, "identifier");
         if (!identifier.startsWith("minecraft:") || identifier.length() == "minecraft:".length()) {
             throw new IllegalArgumentException("identifier must be a Minecraft packet identifier");
         }
+        this.packetId = packetId;
         this.typeName = TYPE_PREFIX + identifier;
         this.classification = Objects.requireNonNull(classification, "classification");
+    }
+
+    /** Returns the expected numeric ID in this version's PLAY clientbound registry. */
+    public final int packetId() {
+        return packetId;
     }
 
     public final String typeName() {
@@ -125,6 +138,11 @@ public abstract class PacketDefinition<C> {
             throw new IncompatibleAdapterException(
                     "packet definition " + typeName
                             + " does not match descriptor " + descriptor.typeName());
+        }
+        if (packetId != descriptor.packetId()) {
+            throw new IncompatibleAdapterException(
+                    "packet definition " + typeName + " expects ID " + packetId
+                            + " but descriptor uses " + descriptor.packetId());
         }
         if (descriptor.phase() != PacketPhase.PLAY
                 || descriptor.direction() != PacketDescriptor.Direction.CLIENTBOUND

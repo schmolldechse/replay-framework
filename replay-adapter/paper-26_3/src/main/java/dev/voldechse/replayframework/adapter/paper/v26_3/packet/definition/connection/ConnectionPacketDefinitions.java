@@ -8,7 +8,7 @@ import java.util.List;
 public final class ConnectionPacketDefinitions {
 
     private static final List<PacketDefinition<Paper26_3ReplayPacketRewriter>> DEFINITIONS =
-            List.of(new BundleDelimiterPacketDefinition());
+            List.of(new Id000BundleDelimiterPacketDefinition());
 
     private ConnectionPacketDefinitions() {}
 

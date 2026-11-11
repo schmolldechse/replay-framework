@@ -16,18 +16,36 @@ class PacketDefinitionCatalogTest {
     @Test
     void keepsOneExplicitDefinitionPerType() {
         var definition = new SimplePacketDefinition<Object>(
+                7,
                 "minecraft:block_update",
                 PacketClassification.stateful(PacketDescriptor.PlaybackScope.SAFE));
         var catalog = new PacketDefinitionCatalog<>(java.util.List.of(definition));
 
         assertEquals(definition, catalog.require("play.clientbound.minecraft:block_update"));
+        assertEquals(definition, catalog.find(7).orElseThrow());
         assertThrows(IllegalArgumentException.class, () -> new PacketDefinitionCatalog<>(
                 java.util.List.of(definition, definition)));
     }
 
     @Test
+    void rejectsTwoDefinitionsForTheSamePacketId() {
+        var first = new SimplePacketDefinition<Object>(
+                7,
+                "minecraft:block_update",
+                PacketClassification.stateful(PacketDescriptor.PlaybackScope.SAFE));
+        var second = new SimplePacketDefinition<Object>(
+                7,
+                "minecraft:block_event",
+                PacketClassification.ephemeral(PacketDescriptor.PlaybackScope.SAFE));
+
+        assertThrows(IllegalArgumentException.class, () -> new PacketDefinitionCatalog<>(
+                java.util.List.of(first, second)));
+    }
+
+    @Test
     void refusesGenericIdentityRewriteDefinitions() {
         assertThrows(IllegalArgumentException.class, () -> new SimplePacketDefinition<>(
+                1,
                 "minecraft:add_entity",
                 PacketClassification.stateful(
                         PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES)));
@@ -36,6 +54,7 @@ class PacketDefinitionCatalogTest {
     @Test
     void viewerLocalPolicyDropsBeforeDecode() {
         var definition = new SimplePacketDefinition<Object>(
+                7,
                 "minecraft:set_health",
                 PacketClassification.stateful(PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
         PacketDescriptor descriptor = descriptor(
@@ -53,6 +72,7 @@ class PacketDefinitionCatalogTest {
     @Test
     void rebuildingDefinitionOwnsReadRewriteRebuildAndValidatedEncode() {
         var definition = new RebuildingPacketDefinition<Object, String, Integer>(
+                7,
                 "minecraft:block_update",
                 PacketClassification.stateful(PacketDescriptor.PlaybackScope.SAFE),
                 String.class) {

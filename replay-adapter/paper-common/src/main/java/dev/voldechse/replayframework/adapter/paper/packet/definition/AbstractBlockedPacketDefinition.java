@@ -15,7 +15,7 @@ import dev.voldechse.replayframework.adapter.paper.packet.PacketDefinition;
  */
 public abstract class AbstractBlockedPacketDefinition<C> extends PacketDefinition<C> {
 
-    protected AbstractBlockedPacketDefinition(String identifier) {
-        super(identifier, PacketClassification.control());
+    protected AbstractBlockedPacketDefinition(int packetId, String identifier) {
+        super(packetId, identifier, PacketClassification.control());
     }
 }

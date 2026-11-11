@@ -230,7 +230,7 @@ Vor der Planung wurden die vorhandenen Adaptertests ausgeführt:
 - `:replay-adapter:api:test` ist erfolgreich.
 - `:replay-adapter:paper-26_3:test` ist erfolgreich.
 - `:replay-adapter:paper-26_2:test` kompiliert aktuell nicht, weil
-  `Paper26EntityStateCaptureTest` `InteractionHand` aus PacketEvents direkt
+  `Paper26_2EntityStateCaptureTest` `InteractionHand` aus PacketEvents direkt
   importiert, PacketEvents aber nur als `compileOnly` vorliegt. Dies ist ein
   bestehender Baseline-Fehler. Für die in diesem Umbau zwingend erforderlichen
   26.2-Tests muss die Test-Classpath-Deklaration gezielt korrigiert werden.
@@ -336,7 +336,8 @@ einem `PacketRewriteContext` pro Playback-Session.
 
 ### 4.4 Paketkatalog als einzige Wahrheitsquelle
 
-Pro Version bindet ein expliziter `Paper26xPacketCatalog` die Implementierungen
+Pro Version bindet ein expliziter `Paper26_2PacketCatalog` beziehungsweise
+`Paper26_3PacketCatalog` die Implementierungen
 an den durch `ProtocolIntrospector` gefundenen Registry-Snapshot.
 
 Der Katalog liefert:
@@ -378,7 +379,8 @@ Geplant sind zwei Codec-Sessions hinter demselben internen Vertrag:
   Serialisierung.
 
 Damit werden die derzeit getrennten Encode-Implementierungen in
-`PaperConnectionAccessor` und `Paper26xNativePacketCodec` auf dieselben
+`PaperConnectionAccessor` und die versionsgebundenen
+`Paper26_2NativePacketCodec` / `Paper26_3NativePacketCodec` auf dieselben
 Validierungs- und VarInt-Hilfen zurückgeführt. Checkpoint-Snapshot-Erzeugung und
 deren Familienlogik bleiben unverändert; sie verwenden nur denselben
 paketbezogenen Encode-Pfad.
@@ -567,17 +569,18 @@ Integer-Felder werden weiterhin nicht geraten.
 
 ### 8.2 Zu ersetzende oder aufzuteilende Komponenten
 
-- `Paper26CaptureBridge` / `Paper26_3CaptureBridge` werden schmale
+- `Paper26_2CaptureBridge` / `Paper26_3CaptureBridge` werden schmale
   versionsgebundene Kompositionsklassen.
 - Beide `PaperConnectionAccessor` werden in Channel-Zugriff, Pipeline-Grenze,
   Codec und Capture-Kontext getrennt.
-- `Paper26ReplayPacketRewriter` / `Paper26_3ReplayPacketRewriter` entfallen nach
+- `Paper26_2ReplayPacketRewriter` / `Paper26_3ReplayPacketRewriter` entfallen nach
   vollständiger Paketmigration.
-- Die großen Klassifikationsmaps in `Paper26PacketRegistry` und
+- Die großen Klassifikationsmaps in `Paper26_2PacketRegistry` und
   `Paper26_3PacketRegistry` werden durch Katalogmetadaten ersetzt.
 - Beide `ReplayViewerOutboundGate`-Kopien werden durch die gemeinsame Gate-
   Implementierung ersetzt.
-- `Paper26xEntityPacketFactory` wird auf die paketbezogenen Rebuild-Hooks
+- `Paper26_2EntityPacketFactory` / `Paper26_3EntityPacketFactory` werden auf die
+  paketbezogenen Rebuild-Hooks
   verteilt oder nur noch als sehr kleine native Konstruktionshilfe verwendet,
   wenn mehrere Quellen exakt denselben Aufbau benötigen.
 

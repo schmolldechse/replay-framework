@@ -19,7 +19,7 @@ The adapter entry point is `Paper26_3ReplayAdapter`, provided through `Paper26_3
 
 `replay-adapter:paper-common` supplies the NMS-free packet-definition template
 and the blocked-control base. The version-local catalog contains the connection-
-domain `BundleDelimiterPacketDefinition`; registry discovery uses the safe
+domain `Id000BundleDelimiterPacketDefinition`; registry discovery uses the safe
 `UNSUPPORTED` fallback for every other PLAY packet, including previously unknown
 types. No replayable version-local decode, rewrite, rebuild, or encode path is
 enabled.
@@ -47,7 +47,7 @@ Three PLAY packets distinguish this registry from 26.2. `swing_animation` is rew
 ## Tests
 
 - `PacketCoverageTest` loads the real 26.3 NMS registry and verifies that only `bundle_delimiter` is explicit `CONTROL` traffic while every other PLAY packet remains capture-only `UNSUPPORTED` data.
-- `BundleDelimiterPacketDefinitionTest` verifies the native singleton codec, packet ID `0`, empty payload, capture policy, and rejection before playback decode.
+- `Id000BundleDelimiterPacketDefinitionTest` verifies the native singleton codec, packet ID `0`, empty payload, capture policy, and rejection before playback decode.
 - Registry, native codec, checkpoint, snapshot, observer isolation, and outbound-gate tests cover their respective version-bound behavior.
 - Snapshot tests verify that the 26.3 capture barrier is allocated only after asynchronous scope preloading completes; generic core tests verify the exclusive delta boundary stored with it.
 - `Paper26_3EntityStateCaptureTest` covers packet-driven movement/equipment authority, hand-swap and tick-scoped swing suppression, equipment deltas, and cleared slots.
