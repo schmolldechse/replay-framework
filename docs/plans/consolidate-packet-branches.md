@@ -1,6 +1,6 @@
 # Plan: Paket-Branches in den Capture-/Rewrite-Refactor übernehmen
 
-Status: **Freigegeben**
+Status: **Umgesetzt**
 
 ## 1. Ziel
 
