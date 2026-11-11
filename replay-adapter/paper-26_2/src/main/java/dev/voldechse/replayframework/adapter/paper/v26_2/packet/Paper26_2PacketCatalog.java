@@ -1,5 +1,6 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet;
 
+import dev.voldechse.replayframework.adapter.paper.packet.PacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.packet.PacketDefinitionCatalog;
 import dev.voldechse.replayframework.adapter.paper.v26_2.packet.definition.connection.ConnectionPacketDefinitions;
 import dev.voldechse.replayframework.adapter.paper.v26_2.packet.definition.effect.EffectPacketDefinitions;
@@ -7,6 +8,7 @@ import dev.voldechse.replayframework.adapter.paper.v26_2.packet.definition.entit
 import dev.voldechse.replayframework.adapter.paper.v26_2.packet.definition.player.PlayerPacketDefinitions;
 import dev.voldechse.replayframework.adapter.paper.v26_2.packet.definition.world.WorldPacketDefinitions;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
+import java.util.Comparator;
 import java.util.stream.Stream;
 
 /** Version-local catalog of explicit Paper 26.2 PLAY packet definitions. */
@@ -22,6 +24,7 @@ public final class Paper26_2PacketCatalog {
                                             EffectPacketDefinitions.definitions().stream(),
                                             PlayerPacketDefinitions.definitions().stream())),
                             WorldPacketDefinitions.definitions().stream())
+                    .sorted(Comparator.comparingInt(PacketDefinition::packetId))
                     .toList());
 
     private Paper26_2PacketCatalog() {}

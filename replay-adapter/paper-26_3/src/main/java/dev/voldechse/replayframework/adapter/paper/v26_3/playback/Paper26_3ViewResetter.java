@@ -7,11 +7,13 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.protocol.game.ClientboundAddEntityPacket;
@@ -43,7 +45,7 @@ final class Paper26_3ViewResetter {
     private final Consumer<Object> writer;
     private final Consumer<Throwable> failureHandler;
     private final ReplayViewState state = new ReplayViewState();
-    private final java.util.Map<Integer, net.minecraft.core.BlockPos> blockCracks = new java.util.HashMap<>();
+    private final Map<Integer, BlockPos> blockCracks = new LinkedHashMap<>();
 
     Paper26_3ViewResetter(
             PacketRegistry registry,
@@ -186,7 +188,7 @@ final class Paper26_3ViewResetter {
                 writer.accept(packet);
             }
             state.clear();
-        blockCracks.clear();
+            blockCracks.clear();
         } catch (Throwable failure) {
             reportFailure(failure);
             throw failure;

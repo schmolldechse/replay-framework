@@ -23,7 +23,8 @@ class PacketCoverageTest {
                         "play.clientbound.minecraft:add_entity",
                         "play.clientbound.minecraft:animate",
                         "play.clientbound.minecraft:award_stats",
-                        "play.clientbound.minecraft:block_changed_ack"),
+                        "play.clientbound.minecraft:block_changed_ack",
+                        "play.clientbound.minecraft:block_destruction"),
                 Paper26_2PacketCatalog.catalog().definitions().stream()
                         .map(definition -> definition.typeName())
                         .toList());
@@ -40,12 +41,14 @@ class PacketCoverageTest {
                         descriptor.typeName().equals("play.clientbound.minecraft:award_stats");
                 boolean blockChangedAck =
                         descriptor.typeName().equals("play.clientbound.minecraft:block_changed_ack");
+                boolean blockDestruction =
+                        descriptor.typeName().equals("play.clientbound.minecraft:block_destruction");
                 PacketDisposition expectedDisposition;
                 if (bundleDelimiter || blockChangedAck) {
                     expectedDisposition = PacketDisposition.CONTROL;
                 } else if (addEntity) {
                     expectedDisposition = PacketDisposition.STATEFUL;
-                } else if (animate) {
+                } else if (animate || blockDestruction) {
                     expectedDisposition = PacketDisposition.EPHEMERAL;
                 } else if (awardStats) {
                     expectedDisposition = PacketDisposition.STATEFUL;
@@ -54,9 +57,11 @@ class PacketCoverageTest {
                 }
                 assertEquals(expectedDisposition, descriptor.disposition());
                 assertTrue(descriptor.captureByDefault());
-                assertEquals(addEntity || animate || awardStats, descriptor.replayable());
+                assertEquals(
+                        addEntity || animate || awardStats || blockDestruction,
+                        descriptor.replayable());
                 assertEquals(addEntity, descriptor.checkpointRelevant());
-                if (addEntity || animate) {
+                if (addEntity || animate || blockDestruction) {
                     assertEquals(
                             dev.voldechse.replayframework.adapter.PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES,
                             descriptor.playbackScope());
@@ -72,7 +77,12 @@ class PacketCoverageTest {
                             descriptor.playbackScope());
                 }
                 assertEquals(
-                        bundleDelimiter || addEntity || animate || awardStats || blockChangedAck,
+                        bundleDelimiter
+                                || addEntity
+                                || animate
+                                || awardStats
+                                || blockChangedAck
+                                || blockDestruction,
                         Paper26_2PacketRegistry.explicitlyClassifies(descriptor.typeName()));
             }
         }

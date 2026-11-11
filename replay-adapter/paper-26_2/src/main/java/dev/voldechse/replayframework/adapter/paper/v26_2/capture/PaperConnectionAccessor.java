@@ -27,6 +27,7 @@ import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
 import net.minecraft.network.protocol.game.ClientboundAddEntityPacket;
+import net.minecraft.network.protocol.game.ClientboundBlockDestructionPacket;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket;
 import net.minecraft.network.protocol.game.ClientboundDisguisedChatPacket;
@@ -368,6 +369,9 @@ public final class PaperConnectionAccessor {
     }
 
     private static Optional<BlockPosition> packetPosition(Object packet) {
+        if (packet instanceof ClientboundBlockDestructionPacket blockDestruction) {
+            return Optional.of(toApiPosition(blockDestruction.getPos()));
+        }
         if (packet instanceof ClientboundBlockUpdatePacket blockUpdate) {
             return Optional.of(toApiPosition(blockUpdate.getPos()));
         }

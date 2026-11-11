@@ -8,7 +8,9 @@ import java.util.List;
 public final class EffectPacketDefinitions {
 
     private static final List<PacketDefinition<Paper26_3ReplayPacketRewriter>> DEFINITIONS =
-            List.of(new Id002AnimatePacketDefinition());
+            List.of(
+                    new Id002AnimatePacketDefinition(),
+                    new Id005BlockDestructionPacketDefinition());
 
     private EffectPacketDefinitions() {}
 

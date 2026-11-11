@@ -1,6 +1,6 @@
 # Implementierungsplan: `block_destruction` (`0x05`)
 
-Status: **Zur Freigabe**
+Status: **Umgesetzt**
 
 Zielbranch: `codex/refactor-packet-capture-rewrite`
 
