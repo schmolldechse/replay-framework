@@ -1,6 +1,6 @@
 # Implementierungsplan: `block_entity_data` (`0x06`)
 
-Status: **Zur Freigabe**
+Status: **Umgesetzt**
 
 Zielbranch: `codex/refactor-packet-capture-rewrite`
 
@@ -253,8 +253,6 @@ Die Dateien
 werden zu neutralen Adapterbeschreibungen überarbeitet. Entfernt werden:
 
 - Aussagen darüber, welche Paket-IDs bereits implementiert sind,
-- tabellarische Paket-Inventare und paketbezogene Policy-Angaben,
-- Beschreibungen der Funktionsweise einzelner Pakete,
 - Namen und Verhaltensbeschreibungen einzelner Pakettests,
 - Fortschrittsformulierungen wie „explicit“, „remaining“ oder Zielpolitiken
   für spätere Paketimplementierungen.
@@ -267,10 +265,15 @@ Erhalten beziehungsweise neutral formuliert werden nur:
 - allgemeine Isolation-, Kompatibilitäts- und Reset-Prinzipien,
 - allgemeine Qualitätssicherung ohne Bezug auf konkrete Pakete,
 - versionsweite Einschränkungen, sofern sie nicht die Implementierung eines
-  einzelnen Pakets erklären.
+  einzelnen Pakets erklären,
+- vollständige, neutrale Inventare aller clientbound Pakete je
+  Protokollphase mit numerischer ID, Identifier, Paketbeschreibung und
+  Relevanz sowie Playback- und Checkpoint-Policy.
 
-Die Dokumente werden damit keine laufende Paket-Checkliste mehr sein. Die
-Benennung und Ablage von Definitionen bleibt ausschließlich in
+Die Policy beschreibt den fachlichen Zielvertrag unabhängig vom aktuellen
+Implementierungsfortschritt. Die Inventare dokumentieren weder Implementierungs-
+noch Teststatus und sind damit keine laufende Paket-Checkliste. Die Benennung
+und Ablage von Definitionen bleibt ausschließlich in
 `docs/packet-definition-layout.md` dokumentiert.
 
 ## 7. Teststrategie

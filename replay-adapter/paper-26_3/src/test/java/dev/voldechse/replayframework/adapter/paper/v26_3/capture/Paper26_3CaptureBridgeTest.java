@@ -12,10 +12,39 @@ import io.netty.buffer.Unpooled;
 import java.util.Optional;
 import net.kyori.adventure.key.Key;
 import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.protocol.game.ClientboundBlockDestructionPacket;
+import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
+import net.minecraft.world.level.block.entity.BlockEntityTypes;
 import org.junit.jupiter.api.Test;
 
 class Paper26_3CaptureBridgeTest {
+
+    @Test
+    void extractsTheExactBlockEntityPositionForSpatialCapture() {
+        PacketDescriptor descriptor = new PacketDescriptor(
+                "minecraft:block_entity_data",
+                PacketPhase.PLAY,
+                PacketDescriptor.Direction.CLIENTBOUND,
+                6,
+                PacketDisposition.STATEFUL,
+                true,
+                true,
+                true,
+                "test/block_entity_data",
+                PacketDescriptor.PlaybackScope.SAFE);
+        BlockPos position = new BlockPos(33_554_431, 2_047, -33_554_432);
+
+        var context = new PaperConnectionAccessor().captureContext(
+                new ClientboundBlockEntityDataPacket(
+                        position, BlockEntityTypes.CHEST, new CompoundTag()),
+                descriptor,
+                Optional.of(Key.key("minecraft:overworld")));
+
+        assertEquals(
+                Optional.of(new BlockPosition(33_554_431, 2_047, -33_554_432)),
+                context.position());
+    }
 
     @Test
     void extractsTheExactBlockDestructionPositionForSpatialCapture() {
@@ -38,8 +67,7 @@ class Paper26_3CaptureBridgeTest {
                 Optional.of(Key.key("minecraft:overworld")));
 
         assertEquals(Optional.of(new BlockPosition(-33_554_432, -2_048, 33_554_431)), context.position());
-    }
-
+}
     @Test
     void copiesTheFinalPacketEventsBufferIncludingARewrittenPacketId() {
         ByteBuf buffer = Unpooled.buffer();
