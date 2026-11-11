@@ -16,6 +16,11 @@ Stand: 11. November 2026
 > `UNSUPPORTED` eingestuft und weder wiedergegeben noch in Checkpoints
 > übernommen. Die folgenden Abschnitte beschreiben weiterhin das Zielbild.
 
+> Das verbindliche Klassennamensschema und die vollständige Reihenfolge für
+> alle 144/141 PLAY-Pakete sind im ergänzenden Plan
+> [`packet-class-naming-and-implementation-order.md`](packet-class-naming-and-implementation-order.md)
+> festgelegt.
+
 ## 1. Zielbild
 
 Die Erfassung und Wiedergabe von Minecraft-Paketen soll nicht länger durch
