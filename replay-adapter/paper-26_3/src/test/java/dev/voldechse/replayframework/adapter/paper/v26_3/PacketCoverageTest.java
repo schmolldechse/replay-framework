@@ -21,7 +21,8 @@ class PacketCoverageTest {
                 java.util.List.of(
                         "play.clientbound.minecraft:bundle_delimiter",
                         "play.clientbound.minecraft:add_entity",
-                        "play.clientbound.minecraft:animate"),
+                        "play.clientbound.minecraft:animate",
+                        "play.clientbound.minecraft:award_stats"),
                 Paper26_3PacketCatalog.catalog().definitions().stream()
                         .map(definition -> definition.typeName())
                         .toList());
@@ -34,6 +35,8 @@ class PacketCoverageTest {
                         descriptor.typeName().equals("play.clientbound.minecraft:add_entity");
                 boolean animate =
                         descriptor.typeName().equals("play.clientbound.minecraft:animate");
+                boolean awardStats =
+                        descriptor.typeName().equals("play.clientbound.minecraft:award_stats");
                 PacketDisposition expectedDisposition;
                 if (bundleDelimiter) {
                     expectedDisposition = PacketDisposition.CONTROL;
@@ -41,23 +44,29 @@ class PacketCoverageTest {
                     expectedDisposition = PacketDisposition.STATEFUL;
                 } else if (animate) {
                     expectedDisposition = PacketDisposition.EPHEMERAL;
+                } else if (awardStats) {
+                    expectedDisposition = PacketDisposition.STATEFUL;
                 } else {
                     expectedDisposition = PacketDisposition.UNSUPPORTED;
                 }
                 assertEquals(expectedDisposition, descriptor.disposition());
                 assertTrue(descriptor.captureByDefault());
-                assertEquals(addEntity || animate, descriptor.replayable());
+                assertEquals(addEntity || animate || awardStats, descriptor.replayable());
                 assertEquals(addEntity, descriptor.checkpointRelevant());
                 if (addEntity || animate) {
                     assertEquals(
                             dev.voldechse.replayframework.adapter.PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES,
+                            descriptor.playbackScope());
+                } else if (awardStats) {
+                    assertEquals(
+                            dev.voldechse.replayframework.adapter.PacketDescriptor.PlaybackScope.VIEWER_LOCAL,
                             descriptor.playbackScope());
                 } else {
                     assertFalse(descriptor.replayable());
                     assertFalse(descriptor.checkpointRelevant());
                 }
                 assertEquals(
-                        bundleDelimiter || addEntity || animate,
+                        bundleDelimiter || addEntity || animate || awardStats,
                         Paper26_3PacketRegistry.explicitlyClassifies(descriptor.typeName()));
             }
         }

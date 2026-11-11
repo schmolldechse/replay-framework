@@ -3,6 +3,7 @@ package dev.voldechse.replayframework.adapter.paper.v26_3.playback;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.PacketDisposition;
@@ -13,6 +14,7 @@ import dev.voldechse.replayframework.format.RawPacketFrame;
 import io.netty.buffer.Unpooled;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.protocol.game.ClientboundAddEntityPacket;
@@ -83,6 +85,30 @@ final class Paper26_3ReplayPacketRewriterTest {
                         .packetId());
     }
 
+    @Test
+    void dropsAwardStatsBeforeCodecAtTheCatalogBoundary() {
+        Paper26_3ReplayPacketRewriter rewriter = new Paper26_3ReplayPacketRewriter(
+                new PlaybackIdentityContext(OBSERVER_ID, SESSION_ID),
+                Set.of(OBSERVER_ID),
+                Set.of(1000));
+        AtomicInteger decodes = new AtomicInteger();
+        PacketCodec<Object> codec = failingViewerLocalCodec(decodes);
+
+        Paper26_3ReplayPacketRewriter.RewriteResult result = rewriter.rewrite(
+                new RawPacketFrame(2L, 2L, 0, PacketPhase.PLAY, 3, new byte[0]),
+                awardStatsDescriptor(),
+                codec);
+
+        assertEquals(
+                Paper26_3ReplayPacketRewriter.RewriteResult.Decision.DROP_LOCAL,
+                result.decision());
+        assertNull(result.packet());
+        assertEquals(
+                "recorded connection state does not belong to the observer",
+                result.reason());
+        assertEquals(0, decodes.get());
+    }
+
     private static PacketDescriptor addEntityDescriptor() {
         return new PacketDescriptor(
                 "play.clientbound.minecraft:add_entity",
@@ -109,6 +135,20 @@ final class Paper26_3ReplayPacketRewriterTest {
                 false,
                 "paper-26.3/play.clientbound.minecraft:animate",
                 PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES);
+    }
+
+    private static PacketDescriptor awardStatsDescriptor() {
+        return new PacketDescriptor(
+                "play.clientbound.minecraft:award_stats",
+                PacketPhase.PLAY,
+                PacketDescriptor.Direction.CLIENTBOUND,
+                3,
+                PacketDisposition.STATEFUL,
+                true,
+                true,
+                false,
+                "paper-26.3/play.clientbound.minecraft:award_stats",
+                PacketDescriptor.PlaybackScope.VIEWER_LOCAL);
     }
 
     private static ClientboundAnimatePacket animation(int entityId, int action) {
@@ -156,6 +196,21 @@ final class Paper26_3ReplayPacketRewriterTest {
             @Override
             public Object decode(RawPacketFrame frame) {
                 return decoded;
+            }
+        };
+    }
+
+    private static PacketCodec<Object> failingViewerLocalCodec(AtomicInteger decodes) {
+        return new PacketCodec<>() {
+            @Override
+            public EncodedPacket encode(Object packet) {
+                throw new AssertionError("viewer-local award_stats must not encode");
+            }
+
+            @Override
+            public Object decode(RawPacketFrame frame) {
+                decodes.incrementAndGet();
+                throw new AssertionError("viewer-local award_stats must not decode");
             }
         };
     }

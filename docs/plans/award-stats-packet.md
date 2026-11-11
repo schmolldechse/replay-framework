@@ -1,6 +1,6 @@
 # Implementierungsplan: `award_stats` (`0x03`)
 
-Status: **Zur Freigabe**
+Status: **Umgesetzt**
 
 Zielversionen:
 
