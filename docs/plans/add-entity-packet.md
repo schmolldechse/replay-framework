@@ -41,8 +41,10 @@ internen Klassen:
 - [PaperMC: paperweight-userdev](https://docs.papermc.io/paper/dev/userdev/)
 - `ClientboundAddEntityPacket` aus `26.2.build.135-stable`
 - `ClientboundAddEntityPacket` aus `26.3.build.244-stable`
-- `Entity`, `Projectile`, `FishingHook`, `FallingBlockEntity` und `ItemFrame`
-  aus denselben Bundles
+- `Entity`, `Projectile`, `FishingHook`, `FallingBlockEntity`, `ItemFrame`,
+  `Painting` und `Warden` aus denselben Bundles
+- [Minecraft Wiki: Add Entity](https://minecraft.wiki/w/Java_Edition_protocol/Packets#Add_Entity)
+- [Minecraft Wiki: Object data](https://minecraft.wiki/w/Java_Edition_protocol/Object_data)
 
 Die Bytecode- und API-Prüfung ergibt in beiden Versionen dieselben öffentlichen
 Felder und denselben nativen Konstruktor. Der native Registry-Codec bleibt die
@@ -80,10 +82,12 @@ Die geprüften NMS-Quellen zeigen folgende Kategorien:
 
 | Kategorie | Bedeutung von `data` | Behandlung |
 |---|---|---|
-| `Projectile` und Unterklassen | Owner-/Shooter-Entity-ID; `0` bedeutet kein Owner | jeden Wert ungleich `0` über dieselbe Entity-ID-Map umschreiben |
-| `FishingHook` | Owner-ID; bei fehlendem Owner kann der Server die eigene ID einsetzen | wie jedes Projektil umschreiben, damit auch dieser Sonderfall konsistent bleibt |
+| `Projectile` und Unterklassen | Owner-Entity-ID; `0` bedeutet kein Owner | jeden Wert ungleich `0` über dieselbe Entity-ID-Map umschreiben |
+| `FishingHook` | Owner-ID; bei fehlendem Owner setzt Vanilla die eigene Entity-ID ein | wie jedes Projektil umschreiben; die Selbstreferenz muss erhalten bleiben |
 | `FallingBlockEntity` | laufzeitgebundene Block-State-ID | unverändert erhalten |
-| Item Frame / Glow Item Frame | 3D-Richtung | unverändert erhalten |
+| Item Frame / Glow Item Frame | 3D-Richtung `0..5` | unverändert erhalten |
+| Painting | horizontale 3D-Richtung `2..5` | unverändert erhalten |
+| Warden | `1` für `Pose.EMERGING`, sonst `0` beziehungsweise ohne Wirkung | unverändert erhalten |
 | andere Entity-Typen | `0` oder weiterer typspezifischer Wert | unverändert erhalten |
 
 Die geprüften `EntityTypes`-Deklarationen und die NMS-Klassenhierarchie legen

@@ -2,8 +2,8 @@
 
 ## Status und Ziel
 
-Dieser Plan wartet auf Freigabe. Vor der ausdrücklichen Genehmigung werden keine
-Produktiv- oder Testklassen geändert.
+Dieser Plan wurde freigegeben und ist auf dem zugehörigen Arbeitsbranch
+umgesetzt.
 
 Ziel ist, die Behandlung des `data`-Felds von `minecraft:add_entity` für die
 gebundenen Paper-Versionen 26.2 und 26.3 vollständig, nachvollziehbar und durch

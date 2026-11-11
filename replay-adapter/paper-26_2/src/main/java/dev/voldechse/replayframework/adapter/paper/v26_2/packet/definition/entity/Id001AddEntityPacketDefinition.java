@@ -22,7 +22,7 @@ final class Id001AddEntityPacketDefinition extends RebuildingPacketDefinition<
 
     static final int PACKET_ID = 0x01;
     static final String IDENTIFIER = "minecraft:add_entity";
-    private static final Set<EntityType<?>> ENTITY_REFERENCE_DATA_TYPES = Set.of(
+    private static final Set<EntityType<?>> OWNER_ENTITY_ID_DATA_TYPES = Set.of(
             EntityTypes.ARROW,
             EntityTypes.BREEZE_WIND_CHARGE,
             EntityTypes.DRAGON_FIREBALL,
@@ -72,16 +72,6 @@ final class Id001AddEntityPacketDefinition extends RebuildingPacketDefinition<
     protected ValueRewriteResult<Value> rewrite(
             Value value,
             Paper26_2ReplayPacketRewriter context) {
-        int data = value.data();
-        // `data` has no universal meaning: Projectile#getAddEntityPacket writes
-        // its owner/shooter entity ID, but falling blocks use the same integer
-        // for a block-state ID and item frames use it for their direction.
-        // Rewriting every non-zero value would corrupt those unrelated spawns.
-        // EntityType does not expose its concrete NMS class in these builds, so
-        // the source-reviewed projectile types are intentionally explicit.
-        if (data != 0 && carriesEntityReference(value.entityType())) {
-            data = context.mapEntityId(data);
-        }
         return ValueRewriteResult.send(new Value(
                 context.mapEntityId(value.entityId()),
                 context.mapUuid(value.entityUuid()),
@@ -93,7 +83,7 @@ final class Id001AddEntityPacketDefinition extends RebuildingPacketDefinition<
                 value.xRot(),
                 value.yRot(),
                 value.yHeadRot(),
-                data));
+                rewriteData(value, context)));
     }
 
     @Override
@@ -148,7 +138,23 @@ final class Id001AddEntityPacketDefinition extends RebuildingPacketDefinition<
         }
     }
 
-    private static boolean carriesEntityReference(EntityType<?> entityType) {
-        return ENTITY_REFERENCE_DATA_TYPES.contains(entityType);
+    private static int rewriteData(Value value, Paper26_2ReplayPacketRewriter context) {
+        // `data` is a type-discriminated union, not a universal entity ID.
+        // Item frames and paintings encode their direction, falling blocks a
+        // block-state ID, and wardens use 1 for the emerging pose. Projectiles
+        // encode an owner entity ID, with 0 meaning no owner; fishing hooks use
+        // their own entity ID when no owner exists. Only those non-zero owner
+        // references may enter the identity map, otherwise unrelated values or
+        // the projectile "no owner" sentinel would be corrupted.
+        if (value.data() == 0 || !carriesOwnerEntityId(value.entityType())) {
+            return value.data();
+        }
+        return context.mapEntityId(value.data());
+    }
+
+    private static boolean carriesOwnerEntityId(EntityType<?> entityType) {
+        // EntityType#getBaseClass() returns Entity.class in this build, so the
+        // source-reviewed projectile types must remain explicit.
+        return OWNER_ENTITY_ID_DATA_TYPES.contains(entityType);
     }
 }

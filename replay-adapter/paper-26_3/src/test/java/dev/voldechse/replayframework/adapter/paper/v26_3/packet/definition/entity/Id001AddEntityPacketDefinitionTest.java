@@ -31,6 +31,8 @@ import net.minecraft.network.protocol.game.ClientboundAddEntityPacket;
 import net.minecraft.network.protocol.game.GameProtocols;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -137,15 +139,24 @@ final class Id001AddEntityPacketDefinitionTest {
     }
 
     @Test
-    void preservesZeroAndNonProjectileTypeSpecificData() {
+    void preservesZeroAndEveryNonIdentityDataSemantic() {
         var definition = new Id001AddEntityPacketDefinition();
         var context = rewriter();
         context.mapEntityId(37);
 
         for (TestValue test : Set.of(
                 new TestValue("minecraft:snowball", 0),
-                new TestValue("minecraft:falling_block", 37),
-                new TestValue("minecraft:item_frame", 3),
+                new TestValue(
+                        "minecraft:falling_block",
+                        Block.getId(Blocks.SAND.defaultBlockState())),
+                new TestValue("minecraft:item_frame", 0),
+                new TestValue("minecraft:item_frame", 5),
+                new TestValue("minecraft:glow_item_frame", 1),
+                new TestValue("minecraft:painting", 2),
+                new TestValue("minecraft:painting", 5),
+                new TestValue("minecraft:warden", 0),
+                new TestValue("minecraft:warden", 1),
+                new TestValue("minecraft:warden", 7),
                 new TestValue("minecraft:armor_stand", 91))) {
             Id001AddEntityPacketDefinition.Value value = definition.read(packet(
                     51, RECORDED_ID, entityType(test.typeName()), test.data(), Vec3.ZERO));
@@ -156,6 +167,26 @@ final class Id001AddEntityPacketDefinitionTest {
 
             assertEquals(test.data(), rewritten.data(), test.typeName());
         }
+    }
+
+    @Test
+    void preservesFishingHookSelfReferenceAfterIdentityRewrite() {
+        var definition = new Id001AddEntityPacketDefinition();
+        var context = rewriter();
+        Id001AddEntityPacketDefinition.Value value = definition.read(packet(
+                52,
+                RECORDED_ID,
+                entityType("minecraft:fishing_bobber"),
+                52,
+                Vec3.ZERO));
+
+        Id001AddEntityPacketDefinition.Value rewritten = definition
+                .rewrite(value, context)
+                .value()
+                .orElseThrow();
+
+        assertEquals(context.mapEntityId(52), rewritten.entityId());
+        assertEquals(rewritten.entityId(), rewritten.data());
     }
 
     @Test
