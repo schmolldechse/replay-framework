@@ -1,6 +1,6 @@
 # Implementierungsplan: `block_changed_ack` (`0x04`)
 
-Status: **Zur Freigabe**
+Status: **Umgesetzt**
 
 Zielversionen:
 

@@ -5,6 +5,7 @@ import dev.voldechse.replayframework.adapter.paper.v26_3.packet.definition.conne
 import dev.voldechse.replayframework.adapter.paper.v26_3.packet.definition.effect.EffectPacketDefinitions;
 import dev.voldechse.replayframework.adapter.paper.v26_3.packet.definition.entity.EntityPacketDefinitions;
 import dev.voldechse.replayframework.adapter.paper.v26_3.packet.definition.player.PlayerPacketDefinitions;
+import dev.voldechse.replayframework.adapter.paper.v26_3.packet.definition.world.WorldPacketDefinitions;
 import dev.voldechse.replayframework.adapter.paper.v26_3.playback.Paper26_3ReplayPacketRewriter;
 import java.util.stream.Stream;
 
@@ -14,11 +15,13 @@ public final class Paper26_3PacketCatalog {
     private static final PacketDefinitionCatalog<Paper26_3ReplayPacketRewriter> CATALOG =
             new PacketDefinitionCatalog<>(Stream.concat(
                             Stream.concat(
-                                    ConnectionPacketDefinitions.definitions().stream(),
-                                    EntityPacketDefinitions.definitions().stream()),
-                            Stream.concat(
-                                    EffectPacketDefinitions.definitions().stream(),
-                                    PlayerPacketDefinitions.definitions().stream()))
+                                    Stream.concat(
+                                            ConnectionPacketDefinitions.definitions().stream(),
+                                            EntityPacketDefinitions.definitions().stream()),
+                                    Stream.concat(
+                                            EffectPacketDefinitions.definitions().stream(),
+                                            PlayerPacketDefinitions.definitions().stream())),
+                            WorldPacketDefinitions.definitions().stream())
                     .toList());
 
     private Paper26_3PacketCatalog() {}

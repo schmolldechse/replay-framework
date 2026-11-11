@@ -22,7 +22,8 @@ class PacketCoverageTest {
                         "play.clientbound.minecraft:bundle_delimiter",
                         "play.clientbound.minecraft:add_entity",
                         "play.clientbound.minecraft:animate",
-                        "play.clientbound.minecraft:award_stats"),
+                        "play.clientbound.minecraft:award_stats",
+                        "play.clientbound.minecraft:block_changed_ack"),
                 Paper26_3PacketCatalog.catalog().definitions().stream()
                         .map(definition -> definition.typeName())
                         .toList());
@@ -37,8 +38,10 @@ class PacketCoverageTest {
                         descriptor.typeName().equals("play.clientbound.minecraft:animate");
                 boolean awardStats =
                         descriptor.typeName().equals("play.clientbound.minecraft:award_stats");
+                boolean blockChangedAck =
+                        descriptor.typeName().equals("play.clientbound.minecraft:block_changed_ack");
                 PacketDisposition expectedDisposition;
-                if (bundleDelimiter) {
+                if (bundleDelimiter || blockChangedAck) {
                     expectedDisposition = PacketDisposition.CONTROL;
                 } else if (addEntity) {
                     expectedDisposition = PacketDisposition.STATEFUL;
@@ -64,9 +67,12 @@ class PacketCoverageTest {
                 } else {
                     assertFalse(descriptor.replayable());
                     assertFalse(descriptor.checkpointRelevant());
+                    assertEquals(
+                            dev.voldechse.replayframework.adapter.PacketDescriptor.PlaybackScope.UNSAFE,
+                            descriptor.playbackScope());
                 }
                 assertEquals(
-                        bundleDelimiter || addEntity || animate || awardStats,
+                        bundleDelimiter || addEntity || animate || awardStats || blockChangedAck,
                         Paper26_3PacketRegistry.explicitlyClassifies(descriptor.typeName()));
             }
         }

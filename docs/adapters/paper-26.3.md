@@ -7,25 +7,26 @@ catalog and the safe fallback classification.
 Adapter format revision: `4`. Revision-3 recordings are intentionally not
 migrated or accepted by this implementation.
 
-> Implementation status: `bundle_delimiter` is explicitly implemented as
-> captured, non-replayable `CONTROL` traffic. `add_entity` is explicit
-> checkpoint-relevant `STATEFUL` traffic whose entity ID, UUID and
-> projectile-owner reference are rebuilt in the playback session's isolated
-> identity space. Every other PLAY packet is captured as `UNSUPPORTED`. The
-> packet table below remains the reviewed protocol inventory and planned policy
-> for the remaining implementations.
+> Implementation status: PLAY IDs `0` through `4` are explicit.
+> `bundle_delimiter` and `block_changed_ack` are captured, non-replayable
+> `CONTROL` traffic; `add_entity` is checkpoint-relevant `STATEFUL` traffic;
+> `animate` is an `EPHEMERAL` identity-rewritten effect; and `award_stats` is
+> viewer-local `STATEFUL` data dropped before decoding. Every remaining PLAY
+> packet is captured as `UNSUPPORTED`. The table below retains the reviewed
+> target policy for later implementations.
 
 ## Adapter structure
 
 The adapter entry point is `Paper26_3ReplayAdapter`, provided through `Paper26_3AdapterProvider`. Both follow the shared adapter design: NMS types remain inside `dev.voldechse.replayframework.adapter.paper.v26_3`, while `AbstractReplayAdapter` owns the common contracts.
 
 `replay-adapter:paper-common` supplies the NMS-free packet-definition template
-and the blocked-control base. The version-local catalog contains the connection-
-domain `Id000BundleDelimiterPacketDefinition` and the entity-domain
-`Id001AddEntityPacketDefinition`. The registry uses the safe
-`UNSUPPORTED` fallback for every other PLAY packet, including previously unknown
-types. Only `add_entity` currently enables the version-local decode, identity
-rewrite, rebuild and validated encode path.
+and the blocked-control base. The version-local catalog contains explicit
+connection, entity, effect, player and world definitions for IDs `0` through
+`4`. The registry uses the safe `UNSUPPORTED` fallback for every other PLAY
+packet, including previously unknown types. `add_entity` and `animate` use the
+version-local decode, identity-rewrite, rebuild and validated-encode path;
+`award_stats` drops before decode, while both control packets remain
+non-replayable.
 
 - `capture` attaches packet capture, resolves recording scope, and emits synthetic state changes.
 - `checkpoint` snapshots loaded Paper world state and encodes ordered native 26.3 packets. After optional scope preloading, it allocates an actual Paper tick/time/sequence barrier through the capture bridge; the core drains all earlier 26.3 deltas before persisting that checkpoint.
@@ -49,16 +50,17 @@ Three PLAY packets distinguish this registry from 26.2. `swing_animation` is rew
 
 ## Tests
 
-- `PacketCoverageTest` loads the real 26.3 NMS registry and verifies the explicit `bundle_delimiter` and `add_entity` contracts while every other PLAY packet remains capture-only `UNSUPPORTED` data.
+- `PacketCoverageTest` loads the real 26.3 NMS registry and verifies the explicit contracts for PLAY IDs `0` through `4` while every other PLAY packet remains capture-only `UNSUPPORTED` data.
 - `Id000BundleDelimiterPacketDefinitionTest` verifies the native singleton codec, packet ID `0`, empty payload, capture policy, and rejection before playback decode.
+- `Id004BlockChangedAckPacketDefinitionTest` verifies packet ID `4`, the complete VarInt boundary matrix, malformed payloads, and rejection before playback decode.
 - Registry, native codec, checkpoint, snapshot, observer isolation, and outbound-gate tests cover their respective version-bound behavior.
 - Snapshot tests verify that the 26.3 capture barrier is allocated only after asynchronous scope preloading completes; generic core tests verify the exclusive delta boundary stored with it.
 - `Paper26_3EntityStateCaptureTest` covers packet-driven movement/equipment authority, hand-swap and tick-scoped swing suppression, equipment deltas, and cleared slots.
-- `Paper26_3PlaybackBridgeTest` verifies that reconstruction retains 26.3 checkpoint state while suppressing transient frames.
+- `Paper26_3PlaybackBridgeTest` verifies that reconstruction retains 26.3 checkpoint state while suppressing transient frames and that recorded block-change acknowledgements are rejected in every emission mode.
 
-Except for the explicitly documented `bundle_delimiter`, `R` and `R+N` in the
-retained inventory describe the previously reviewed target policy. They do not
-denote active packet implementations.
+Except for the explicitly implemented PLAY IDs `0` through `4`, `R` and `R+N`
+in the retained inventory describe the previously reviewed target policy. They
+do not denote active packet implementations.
 
 `DROP_LOCAL*` is a neutral-observer guard applied before payload decoding.
 The registry fingerprint remains the protocol-policy guard; format revision 4
@@ -120,7 +122,7 @@ Map IDs and unclassified integer fields are not generically rewritten. `OPTIONAL
 | 1 | `add_entity` | Essential scene state: spawn an entity with type, position, UUID, and type-specific data | REWRITE | yes | R |
 | 2 | `animate` | Ordered scene effect: entity animation such as wake-up or critical hit; rewrite entity ID | REWRITE | no | R+N |
 | 3 | `award_stats` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no | R+N |
-| 4 | `block_changed_ack` | Recorded-client acknowledgement; not scene state | BLOCKED | no | R |
+| 4 | `block_changed_ack` | Cumulative recorded-client prediction acknowledgement; no block state or result | BLOCKED | no | R |
 | 5 | `block_destruction` | Ordered scene effect: block-breaking progress; isolate its ID and clear the overlay during reset | REWRITE | no | R+N |
 | 6 | `block_entity_data` | Essential scene state: durable world or scene state | SEND | yes | R |
 | 7 | `block_event` | Ordered presentation or environment effect | SEND | no | R |

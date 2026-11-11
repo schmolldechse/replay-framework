@@ -6,6 +6,7 @@ import dev.voldechse.replayframework.adapter.PacketRegistry;
 import dev.voldechse.replayframework.adapter.PlaybackEmissionMode;
 import dev.voldechse.replayframework.adapter.codec.PacketCodec;
 import dev.voldechse.replayframework.adapter.playback.ObserverAnchor;
+import dev.voldechse.replayframework.adapter.paper.v26_3.Paper26_3PacketRegistry;
 import dev.voldechse.replayframework.format.PacketPhase;
 import dev.voldechse.replayframework.format.RawPacketFrame;
 import java.util.List;
@@ -22,6 +23,24 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class Paper26_3PlaybackBridgeTest {
+
+    @Test
+    void neverReplaysRecordedBlockChangedAcknowledgements() {
+        net.minecraft.SharedConstants.tryDetectVersion();
+        net.minecraft.server.Bootstrap.bootStrap();
+        PacketRegistry registry = Paper26_3PacketRegistry.discover();
+        PacketDescriptor descriptor = registry.find(
+                        PacketPhase.PLAY, PacketDescriptor.Direction.CLIENTBOUND, 4)
+                .orElseThrow();
+        RawPacketFrame acknowledgement = frame(4);
+
+        assertEquals("play.clientbound.minecraft:block_changed_ack", descriptor.typeName());
+        assertFalse(descriptor.replayable());
+        assertFalse(Paper26_3PlaybackBridge.shouldReplay(
+                acknowledgement, PlaybackEmissionMode.LIVE, registry));
+        assertFalse(Paper26_3PlaybackBridge.shouldReplay(
+                acknowledgement, PlaybackEmissionMode.RECONSTRUCTION, registry));
+    }
 
     @Test
     void reconstructionKeepsDurableStateAndSkipsTransientFrames() {
