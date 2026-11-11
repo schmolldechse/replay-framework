@@ -1,8 +1,10 @@
 package dev.voldechse.replayframework.adapter.paper.v26_3.playback;
 
-import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.codec.PacketCodec;
+import dev.voldechse.replayframework.adapter.paper.packet.PacketRewriteResult;
+import dev.voldechse.replayframework.adapter.paper.playback.ReplayIdentityMap;
+import dev.voldechse.replayframework.adapter.paper.v26_3.packet.Paper26_3PacketCatalog;
 import dev.voldechse.replayframework.adapter.playback.PlaybackIdentityContext;
 import dev.voldechse.replayframework.format.RawPacketFrame;
 import java.util.Objects;
@@ -15,37 +17,67 @@ import java.util.UUID;
  */
 public final class Paper26_3ReplayPacketRewriter {
 
-    Paper26_3ReplayPacketRewriter(
+    private final ReplayIdentityMap identities;
+
+    public Paper26_3ReplayPacketRewriter(
             PlaybackIdentityContext context,
             Set<UUID> reservedUuids,
             Set<Integer> reservedEntityIds) {
-        Objects.requireNonNull(context, "context");
-        Objects.requireNonNull(reservedUuids, "reservedUuids");
-        Objects.requireNonNull(reservedEntityIds, "reservedEntityIds");
+        this.identities = new ReplayIdentityMap(
+                Objects.requireNonNull(context, "context"),
+                Objects.requireNonNull(reservedUuids, "reservedUuids"),
+                Objects.requireNonNull(reservedEntityIds, "reservedEntityIds"));
     }
 
     RewriteResult rewrite(
             RawPacketFrame frame,
             PacketDescriptor descriptor,
             PacketCodec<Object> codec) {
-        Objects.requireNonNull(frame, "frame");
-        Objects.requireNonNull(codec, "codec");
-        String typeName = Objects.requireNonNull(descriptor, "descriptor").typeName();
-        return RewriteResult.fail(
-                "no replayable Paper 26.3 packet implementation is registered for " + typeName);
+        PacketRewriteResult result = Paper26_3PacketCatalog.catalog()
+                .require(Objects.requireNonNull(descriptor, "descriptor").typeName())
+                .handlePlayback(
+                        Objects.requireNonNull(frame, "frame"),
+                        descriptor,
+                        Objects.requireNonNull(codec, "codec"),
+                        this);
+        return toRewriteResult(result);
     }
 
     PacketCodec.EncodedPacket encode(
             Object rebuiltPacket,
             PacketDescriptor descriptor,
             PacketCodec<Object> codec) {
-        throw new IncompatibleAdapterException(
-                "Paper 26.3 packet encoding requires an explicit packet implementation");
+        return Paper26_3PacketCatalog.catalog()
+                .require(Objects.requireNonNull(descriptor, "descriptor").typeName())
+                .encode(
+                        Objects.requireNonNull(rebuiltPacket, "rebuiltPacket"),
+                        descriptor,
+                        Objects.requireNonNull(codec, "codec"));
     }
 
-    void clear() {}
+    /** Maps a recorded UUID into this playback session's isolated identity space. */
+    public UUID mapUuid(UUID recordedId) {
+        return identities.mapUuid(recordedId);
+    }
+
+    /** Maps a recorded entity ID into this playback session's isolated ID space. */
+    public int mapEntityId(int recordedId) {
+        return identities.mapEntityId(recordedId);
+    }
+
+    void clear() {
+        identities.clear();
+    }
 
     void resetView() {}
+
+    private static RewriteResult toRewriteResult(PacketRewriteResult result) {
+        return switch (result.decision()) {
+            case SEND -> RewriteResult.send(result.packet().orElseThrow());
+            case DROP_LOCAL -> RewriteResult.dropLocal(result.reason());
+            case FAIL -> RewriteResult.fail(result.reason());
+        };
+    }
 
     /** Result of the version-bound packet dispatch step. */
     record RewriteResult(Decision decision, Object packet, String reason) {
@@ -61,6 +93,14 @@ public final class Paper26_3ReplayPacketRewriter {
 
         static RewriteResult fail(String reason) {
             return new RewriteResult(Decision.FAIL, null, reason);
+        }
+
+        static RewriteResult send(Object packet) {
+            return new RewriteResult(Decision.SEND, packet, "send");
+        }
+
+        static RewriteResult dropLocal(String reason) {
+            return new RewriteResult(Decision.DROP_LOCAL, null, reason);
         }
 
         enum Decision {

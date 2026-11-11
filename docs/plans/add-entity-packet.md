@@ -3,8 +3,8 @@
 ## Status und Ziel
 
 Dieser Plan beschreibt die vollständige Implementierung des clientbound PLAY-
-Pakets `minecraft:add_entity` für Paper 26.2 und Paper 26.3. Die Implementierung
-beginnt erst nach ausdrücklicher Freigabe dieses Plans.
+Pakets `minecraft:add_entity` für Paper 26.2 und Paper 26.3. Der Plan wurde
+freigegeben und ist auf dem zugehörigen Arbeitsbranch umgesetzt.
 
 Das Paket erhält in beiden Versionen den Namen
 `Id001AddEntityPacketDefinition` und liegt im fachlichen Bereich `entity`. Es
@@ -86,18 +86,22 @@ Die geprüften NMS-Quellen zeigen folgende Kategorien:
 | Item Frame / Glow Item Frame | 3D-Richtung | unverändert erhalten |
 | andere Entity-Typen | `0` oder weiterer typspezifischer Wert | unverändert erhalten |
 
-Die Projektilerkennung erfolgt nicht über eine manuell gepflegte Liste von
-Minecraft-Identifiern. Beide gebundenen Versionen stellen
-`EntityType#getBaseClass()` bereit. Die Definition prüft deshalb:
+Die geprüften `EntityTypes`-Deklarationen und die NMS-Klassenhierarchie legen
+die Projektiltypen der beiden gebundenen Versionen fest. Diese Typen werden
+versionslokal explizit gebunden, weil das vorhandene
+`EntityType#getBaseClass()` in beiden Builds lediglich `Entity.class` liefert
+und daher keine sichere Laufzeitklassifikation erlaubt.
 
 ```text
-Projectile.class.isAssignableFrom(entityType.getBaseClass())
+entityType in SOURCE_REVIEWED_PROJECTILE_TYPES
 ```
 
-Damit werden auch sämtliche Projektil-Untertypen der jeweiligen Version
-abgedeckt, ohne versehentlich numerisch identische Block-State- oder
-Richtungswerte umzuschreiben. Ein unbekannter Nicht-Projektil-Typ wird
-verlustfrei behandelt; sein Zusatzwert bleibt erhalten.
+Damit werden sämtliche in den gebundenen Registries vorhandenen
+Projektil-Untertypen abgedeckt, ohne versehentlich numerisch identische
+Block-State- oder Richtungswerte umzuschreiben. Neue Entity-Typen einer anderen
+Paper-Version bleiben ohnehin durch Registry-Fingerprint und Adapterbindung
+ausgeschlossen. Ein Nicht-Projektil-Typ wird verlustfrei behandelt; sein
+Zusatzwert bleibt erhalten.
 
 ## Paketklassifikation
 

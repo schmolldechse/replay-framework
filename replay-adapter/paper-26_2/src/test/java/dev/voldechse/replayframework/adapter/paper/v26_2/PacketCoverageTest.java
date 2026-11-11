@@ -13,12 +13,14 @@ import org.junit.jupiter.api.Test;
 class PacketCoverageTest {
 
     @Test
-    void classifiesOnlyBundleDelimiterAsControl() {
+    void classifiesOnlyImplementedPacketsExplicitly() {
         net.minecraft.SharedConstants.tryDetectVersion();
         net.minecraft.server.Bootstrap.bootStrap();
 
         assertEquals(
-                java.util.List.of("play.clientbound.minecraft:bundle_delimiter"),
+                java.util.List.of(
+                        "play.clientbound.minecraft:bundle_delimiter",
+                        "play.clientbound.minecraft:add_entity"),
                 Paper26_2PacketCatalog.catalog().definitions().stream()
                         .map(definition -> definition.typeName())
                         .toList());
@@ -27,14 +29,25 @@ class PacketCoverageTest {
             if (descriptor.phase() == PacketPhase.PLAY) {
                 boolean bundleDelimiter =
                         descriptor.typeName().equals("play.clientbound.minecraft:bundle_delimiter");
-                assertEquals(
-                        bundleDelimiter ? PacketDisposition.CONTROL : PacketDisposition.UNSUPPORTED,
-                        descriptor.disposition());
+                boolean addEntity =
+                        descriptor.typeName().equals("play.clientbound.minecraft:add_entity");
+                PacketDisposition expectedDisposition = bundleDelimiter
+                        ? PacketDisposition.CONTROL
+                        : addEntity ? PacketDisposition.STATEFUL : PacketDisposition.UNSUPPORTED;
+                assertEquals(expectedDisposition, descriptor.disposition());
                 assertTrue(descriptor.captureByDefault());
-                assertFalse(descriptor.replayable());
-                assertFalse(descriptor.checkpointRelevant());
+                assertEquals(addEntity, descriptor.replayable());
+                assertEquals(addEntity, descriptor.checkpointRelevant());
+                if (addEntity) {
+                    assertEquals(
+                            dev.voldechse.replayframework.adapter.PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES,
+                            descriptor.playbackScope());
+                } else {
+                    assertFalse(descriptor.replayable());
+                    assertFalse(descriptor.checkpointRelevant());
+                }
                 assertEquals(
-                        bundleDelimiter,
+                        bundleDelimiter || addEntity,
                         Paper26_2PacketRegistry.explicitlyClassifies(descriptor.typeName()));
             }
         }

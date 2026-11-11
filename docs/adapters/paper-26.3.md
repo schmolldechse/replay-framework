@@ -8,10 +8,12 @@ Adapter format revision: `4`. Revision-3 recordings are intentionally not
 migrated or accepted by this implementation.
 
 > Implementation status: `bundle_delimiter` is explicitly implemented as
-> captured, non-replayable `CONTROL` traffic. Every other PLAY packet is
-> captured as `UNSUPPORTED`; none is replayed or checkpoint-relevant. The packet
-> table below remains the reviewed protocol inventory and planned policy for the
-> remaining implementations.
+> captured, non-replayable `CONTROL` traffic. `add_entity` is explicit
+> checkpoint-relevant `STATEFUL` traffic whose entity ID, UUID and
+> projectile-owner reference are rebuilt in the playback session's isolated
+> identity space. Every other PLAY packet is captured as `UNSUPPORTED`. The
+> packet table below remains the reviewed protocol inventory and planned policy
+> for the remaining implementations.
 
 ## Adapter structure
 
@@ -19,10 +21,11 @@ The adapter entry point is `Paper26_3ReplayAdapter`, provided through `Paper26_3
 
 `replay-adapter:paper-common` supplies the NMS-free packet-definition template
 and the blocked-control base. The version-local catalog contains the connection-
-domain `Id000BundleDelimiterPacketDefinition`; registry discovery uses the safe
+domain `Id000BundleDelimiterPacketDefinition` and the entity-domain
+`Id001AddEntityPacketDefinition`. The registry uses the safe
 `UNSUPPORTED` fallback for every other PLAY packet, including previously unknown
-types. No replayable version-local decode, rewrite, rebuild, or encode path is
-enabled.
+types. Only `add_entity` currently enables the version-local decode, identity
+rewrite, rebuild and validated encode path.
 
 - `capture` attaches packet capture, resolves recording scope, and emits synthetic state changes.
 - `checkpoint` snapshots loaded Paper world state and encodes ordered native 26.3 packets. After optional scope preloading, it allocates an actual Paper tick/time/sequence barrier through the capture bridge; the core drains all earlier 26.3 deltas before persisting that checkpoint.
@@ -46,7 +49,7 @@ Three PLAY packets distinguish this registry from 26.2. `swing_animation` is rew
 
 ## Tests
 
-- `PacketCoverageTest` loads the real 26.3 NMS registry and verifies that only `bundle_delimiter` is explicit `CONTROL` traffic while every other PLAY packet remains capture-only `UNSUPPORTED` data.
+- `PacketCoverageTest` loads the real 26.3 NMS registry and verifies the explicit `bundle_delimiter` and `add_entity` contracts while every other PLAY packet remains capture-only `UNSUPPORTED` data.
 - `Id000BundleDelimiterPacketDefinitionTest` verifies the native singleton codec, packet ID `0`, empty payload, capture policy, and rejection before playback decode.
 - Registry, native codec, checkpoint, snapshot, observer isolation, and outbound-gate tests cover their respective version-bound behavior.
 - Snapshot tests verify that the 26.3 capture barrier is allocated only after asynchronous scope preloading completes; generic core tests verify the exclusive delta boundary stored with it.

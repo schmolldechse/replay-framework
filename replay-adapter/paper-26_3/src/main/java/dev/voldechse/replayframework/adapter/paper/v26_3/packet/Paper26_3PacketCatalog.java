@@ -2,13 +2,18 @@ package dev.voldechse.replayframework.adapter.paper.v26_3.packet;
 
 import dev.voldechse.replayframework.adapter.paper.packet.PacketDefinitionCatalog;
 import dev.voldechse.replayframework.adapter.paper.v26_3.packet.definition.connection.ConnectionPacketDefinitions;
+import dev.voldechse.replayframework.adapter.paper.v26_3.packet.definition.entity.EntityPacketDefinitions;
 import dev.voldechse.replayframework.adapter.paper.v26_3.playback.Paper26_3ReplayPacketRewriter;
+import java.util.stream.Stream;
 
 /** Version-local catalog of explicit Paper 26.3 PLAY packet definitions. */
 public final class Paper26_3PacketCatalog {
 
     private static final PacketDefinitionCatalog<Paper26_3ReplayPacketRewriter> CATALOG =
-            new PacketDefinitionCatalog<>(ConnectionPacketDefinitions.definitions());
+            new PacketDefinitionCatalog<>(Stream.concat(
+                            ConnectionPacketDefinitions.definitions().stream(),
+                            EntityPacketDefinitions.definitions().stream())
+                    .toList());
 
     private Paper26_3PacketCatalog() {}
 
