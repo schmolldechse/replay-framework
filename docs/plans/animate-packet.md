@@ -1,6 +1,6 @@
 # Implementierungsplan: `animate` (`0x02`)
 
-Status: **Zur Freigabe**
+Status: **Umgesetzt**
 Zielversionen: **Paper 26.2 build 135-stable** und **Paper 26.3 build 244-stable**
 
 ## 1. Ziel und Abgrenzung

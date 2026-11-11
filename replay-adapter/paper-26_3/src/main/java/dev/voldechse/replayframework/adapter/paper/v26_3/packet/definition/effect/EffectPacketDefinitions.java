@@ -1,0 +1,18 @@
+package dev.voldechse.replayframework.adapter.paper.v26_3.packet.definition.effect;
+
+import dev.voldechse.replayframework.adapter.paper.packet.PacketDefinition;
+import dev.voldechse.replayframework.adapter.paper.v26_3.playback.Paper26_3ReplayPacketRewriter;
+import java.util.List;
+
+/** Immutable Paper 26.3 definitions owned by the scene-effect protocol domain. */
+public final class EffectPacketDefinitions {
+
+    private static final List<PacketDefinition<Paper26_3ReplayPacketRewriter>> DEFINITIONS =
+            List.of(new Id002AnimatePacketDefinition());
+
+    private EffectPacketDefinitions() {}
+
+    public static List<PacketDefinition<Paper26_3ReplayPacketRewriter>> definitions() {
+        return DEFINITIONS;
+    }
+}

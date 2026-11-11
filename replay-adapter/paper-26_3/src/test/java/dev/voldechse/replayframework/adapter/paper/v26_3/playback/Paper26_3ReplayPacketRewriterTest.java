@@ -10,10 +10,13 @@ import dev.voldechse.replayframework.adapter.codec.PacketCodec;
 import dev.voldechse.replayframework.adapter.playback.PlaybackIdentityContext;
 import dev.voldechse.replayframework.format.PacketPhase;
 import dev.voldechse.replayframework.format.RawPacketFrame;
+import io.netty.buffer.Unpooled;
 import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.protocol.game.ClientboundAddEntityPacket;
+import net.minecraft.network.protocol.game.ClientboundAnimatePacket;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.phys.Vec3;
@@ -43,7 +46,7 @@ final class Paper26_3ReplayPacketRewriterTest {
         ClientboundAddEntityPacket original = new ClientboundAddEntityPacket(
                 17, RECORDED_ID, 1.0D, 2.0D, 3.0D, 4.0F, 5.0F,
                 type, 0, Vec3.ZERO, 6.0D);
-        PacketDescriptor descriptor = descriptor();
+        PacketDescriptor descriptor = addEntityDescriptor();
         PacketCodec<Object> codec = codec(original);
 
         Paper26_3ReplayPacketRewriter.RewriteResult result = rewriter.rewrite(
@@ -59,9 +62,28 @@ final class Paper26_3ReplayPacketRewriterTest {
         assertNotEquals(original.getId(), rewritten.getId());
         assertNotEquals(original.getUUID(), rewritten.getUUID());
         assertEquals(1, rewriter.encode(rewritten, descriptor, codec).packetId());
+
+        ClientboundAnimatePacket animation = animation(
+                17, ClientboundAnimatePacket.MAGIC_CRITICAL_HIT);
+        PacketDescriptor animationDescriptor = animateDescriptor();
+        PacketCodec<Object> animationCodec = codec(animation);
+        Paper26_3ReplayPacketRewriter.RewriteResult animationResult = rewriter.rewrite(
+                new RawPacketFrame(1L, 1L, 0, PacketPhase.PLAY, 2, new byte[] {1}),
+                animationDescriptor,
+                animationCodec);
+        ClientboundAnimatePacket rewrittenAnimation = assertInstanceOf(
+                ClientboundAnimatePacket.class, animationResult.packet());
+
+        assertEquals(rewritten.getId(), rewrittenAnimation.getId());
+        assertEquals(animation.getAction(), rewrittenAnimation.getAction());
+        assertEquals(
+                2,
+                rewriter.encode(
+                                rewrittenAnimation, animationDescriptor, animationCodec)
+                        .packetId());
     }
 
-    private static PacketDescriptor descriptor() {
+    private static PacketDescriptor addEntityDescriptor() {
         return new PacketDescriptor(
                 "play.clientbound.minecraft:add_entity",
                 PacketPhase.PLAY,
@@ -75,6 +97,31 @@ final class Paper26_3ReplayPacketRewriterTest {
                 PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES);
     }
 
+    private static PacketDescriptor animateDescriptor() {
+        return new PacketDescriptor(
+                "play.clientbound.minecraft:animate",
+                PacketPhase.PLAY,
+                PacketDescriptor.Direction.CLIENTBOUND,
+                2,
+                PacketDisposition.EPHEMERAL,
+                true,
+                true,
+                false,
+                "paper-26.3/play.clientbound.minecraft:animate",
+                PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES);
+    }
+
+    private static ClientboundAnimatePacket animation(int entityId, int action) {
+        FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
+        try {
+            buffer.writeVarInt(entityId);
+            buffer.writeByte(action);
+            return ClientboundAnimatePacket.STREAM_CODEC.decode(buffer);
+        } finally {
+            buffer.release();
+        }
+    }
+
     private static PacketCodec<Object> codec(ClientboundAddEntityPacket decoded) {
         return new PacketCodec<>() {
             @Override
@@ -84,6 +131,25 @@ final class Paper26_3ReplayPacketRewriterTest {
                         PacketPhase.PLAY,
                         PacketDescriptor.Direction.CLIENTBOUND,
                         1,
+                        new byte[] {2});
+            }
+
+            @Override
+            public Object decode(RawPacketFrame frame) {
+                return decoded;
+            }
+        };
+    }
+
+    private static PacketCodec<Object> codec(ClientboundAnimatePacket decoded) {
+        return new PacketCodec<>() {
+            @Override
+            public EncodedPacket encode(Object packet) {
+                assertInstanceOf(ClientboundAnimatePacket.class, packet);
+                return new EncodedPacket(
+                        PacketPhase.PLAY,
+                        PacketDescriptor.Direction.CLIENTBOUND,
+                        2,
                         new byte[] {2});
             }
 

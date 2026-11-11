@@ -20,7 +20,8 @@ class PacketCoverageTest {
         assertEquals(
                 java.util.List.of(
                         "play.clientbound.minecraft:bundle_delimiter",
-                        "play.clientbound.minecraft:add_entity"),
+                        "play.clientbound.minecraft:add_entity",
+                        "play.clientbound.minecraft:animate"),
                 Paper26_3PacketCatalog.catalog().definitions().stream()
                         .map(definition -> definition.typeName())
                         .toList());
@@ -31,14 +32,23 @@ class PacketCoverageTest {
                         descriptor.typeName().equals("play.clientbound.minecraft:bundle_delimiter");
                 boolean addEntity =
                         descriptor.typeName().equals("play.clientbound.minecraft:add_entity");
-                PacketDisposition expectedDisposition = bundleDelimiter
-                        ? PacketDisposition.CONTROL
-                        : addEntity ? PacketDisposition.STATEFUL : PacketDisposition.UNSUPPORTED;
+                boolean animate =
+                        descriptor.typeName().equals("play.clientbound.minecraft:animate");
+                PacketDisposition expectedDisposition;
+                if (bundleDelimiter) {
+                    expectedDisposition = PacketDisposition.CONTROL;
+                } else if (addEntity) {
+                    expectedDisposition = PacketDisposition.STATEFUL;
+                } else if (animate) {
+                    expectedDisposition = PacketDisposition.EPHEMERAL;
+                } else {
+                    expectedDisposition = PacketDisposition.UNSUPPORTED;
+                }
                 assertEquals(expectedDisposition, descriptor.disposition());
                 assertTrue(descriptor.captureByDefault());
-                assertEquals(addEntity, descriptor.replayable());
+                assertEquals(addEntity || animate, descriptor.replayable());
                 assertEquals(addEntity, descriptor.checkpointRelevant());
-                if (addEntity) {
+                if (addEntity || animate) {
                     assertEquals(
                             dev.voldechse.replayframework.adapter.PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES,
                             descriptor.playbackScope());
@@ -47,7 +57,7 @@ class PacketCoverageTest {
                     assertFalse(descriptor.checkpointRelevant());
                 }
                 assertEquals(
-                        bundleDelimiter || addEntity,
+                        bundleDelimiter || addEntity || animate,
                         Paper26_3PacketRegistry.explicitlyClassifies(descriptor.typeName()));
             }
         }
