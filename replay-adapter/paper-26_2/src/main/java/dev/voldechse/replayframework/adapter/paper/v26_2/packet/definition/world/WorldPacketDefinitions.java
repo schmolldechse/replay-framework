@@ -10,7 +10,8 @@ public final class WorldPacketDefinitions {
     private static final List<PacketDefinition<Paper26_2ReplayPacketRewriter>> DEFINITIONS =
             List.of(
                     new Id004BlockChangedAckPacketDefinition(),
-                    new Id006BlockEntityDataPacketDefinition());
+                    new Id006BlockEntityDataPacketDefinition(),
+                    new Id007BlockEventPacketDefinition());
 
     private WorldPacketDefinitions() {}
 

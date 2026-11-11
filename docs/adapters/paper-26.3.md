@@ -156,7 +156,7 @@ test status.
 | 4 | `minecraft:block_changed_ack` | Cumulative recorded-client prediction acknowledgement; no block state or result | BLOCKED | no |
 | 5 | `minecraft:block_destruction` | Spatial, ordered block-breaking overlay; isolate its source/overlay ID, preserve all unsigned progress values, and clear active overlays during reset | REWRITE | no |
 | 6 | `minecraft:block_entity_data` | Essential scene state: durable world or scene state | SEND | yes |
-| 7 | `minecraft:block_event` | Ordered presentation or environment effect | SEND | no |
+| 7 | `minecraft:block_event` | Spatial, ordered block-local action; preserve the registered block and both unsigned action fields because their meaning depends on the block state at the position | SEND | no |
 | 8 | `minecraft:block_update` | Essential scene state: durable world or scene state | SEND | yes |
 | 9 | `minecraft:boss_event` | Scene presentation with playback-session identity rewriting | REWRITE | yes |
 | 10 | `minecraft:change_difficulty` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |

@@ -30,6 +30,7 @@ import net.minecraft.network.protocol.game.ClientboundAddEntityPacket;
 import net.minecraft.network.protocol.game.ClientboundAddTransientBlockPacket;
 import net.minecraft.network.protocol.game.ClientboundBlockDestructionPacket;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
+import net.minecraft.network.protocol.game.ClientboundBlockEventPacket;
 import net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket;
 import net.minecraft.network.protocol.game.ClientboundDisguisedChatPacket;
 import net.minecraft.network.protocol.game.ClientboundEntityPositionSyncPacket;
@@ -381,6 +382,9 @@ public final class PaperConnectionAccessor {
         }
         if (packet instanceof ClientboundBlockEntityDataPacket blockEntityData) {
             return Optional.of(toApiPosition(blockEntityData.getPos()));
+        }
+        if (packet instanceof ClientboundBlockEventPacket blockEvent) {
+            return Optional.of(toApiPosition(blockEvent.getPos()));
         }
         if (packet instanceof ClientboundAddTransientBlockPacket transientBlock) {
             return Optional.of(toApiPosition(transientBlock.getPos()));
