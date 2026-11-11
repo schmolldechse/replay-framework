@@ -1,12 +1,20 @@
 # Plan: paketbezogene Capture- und Rewrite-Architektur
 
-Status: **Freigegeben und umgesetzt**
-Stand: 10. November 2026
+Status: **Architektur freigegeben; konkrete Paketimplementierungen vorläufig entfernt**
+Stand: 11. November 2026
 
 > Ergänzung zur Freigabe: Eine Migration bestehender Recordings und ein
 > paralleler Erhalt des alten Systems sind ausdrücklich nicht erforderlich.
 > Die Umsetzung verwendet deshalb Adapter-Formatrevision 4 und ersetzt den
 > bisherigen Rewrite-Pfad direkt.
+
+> Aktueller Implementierungsstand: Das gemeinsame abstrakte Gerüst, die
+> Capture-Grenzen und die PacketEvents-Channel-Integration bleiben bestehen.
+> Die konkreten Paper-26.2- und Paper-26.3-Paketdefinitionen wurden auf Wunsch
+> vollständig entfernt. Beide Versionskataloge sind leer; PLAY-Pakete werden
+> weiterhin erfasst, aber bis zu einer expliziten Neuimplementierung als
+> `UNSUPPORTED` eingestuft und weder wiedergegeben noch in Checkpoints
+> übernommen. Die folgenden Abschnitte beschreiben weiterhin das Zielbild.
 
 ## 1. Zielbild
 

@@ -39,7 +39,10 @@ public final class Paper26_3PacketRegistry implements PacketRegistry {
         for (Paper26_3ProtocolIntrospector.PacketType packet : snapshot.clientboundPackets()) {
             validatePacket(packet);
             PacketClassification classification = packet.phase() == PacketPhase.PLAY
-                    ? Paper26_3PacketCatalog.catalog().require(packet.typeName()).classification()
+                    ? Paper26_3PacketCatalog.catalog()
+                            .find(packet.typeName())
+                            .map(definition -> definition.classification())
+                            .orElseGet(PacketClassification::unsupported)
                     : PacketClassification.control();
             String expectedCodecKey = CODEC_PREFIX + packet.typeName();
             if (!expectedCodecKey.equals(packet.codecKey())) {

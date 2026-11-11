@@ -1,11 +1,7 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.checkpoint;
 
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
-import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.paper.v26_2.Paper26PacketRegistry;
-import dev.voldechse.replayframework.format.PacketPhase;
-import io.netty.buffer.Unpooled;
-import java.util.Arrays;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.protocol.game.ClientboundChangeDifficultyPacket;
 import net.minecraft.network.protocol.game.GameProtocols;
@@ -14,8 +10,6 @@ import org.junit.jupiter.api.Test;
 import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.BeforeAll;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 final class Paper26NativePacketCodecTest {
@@ -27,7 +21,7 @@ final class Paper26NativePacketCodecTest {
     }
 
     @Test
-    void encodesARealClientboundPacketWithoutTransportFraming() {
+    void rejectsCheckpointEncodingWithoutAPacketImplementation() {
         Paper26PacketRegistry registry = Paper26PacketRegistry.discover();
         Paper26CheckpointEncoder.PacketBlueprint blueprint = new Paper26CheckpointEncoder.PacketBlueprint(
                 "play.clientbound.minecraft:set_border_center",
@@ -40,32 +34,11 @@ final class Paper26NativePacketCodecTest {
                 GameProtocols.CLIENTBOUND_TEMPLATE.bind(
                         net.minecraft.network.RegistryFriendlyByteBuf.decorator(RegistryAccess.EMPTY)));
 
-        Paper26CheckpointEncoder.EncodedPacket encoded = codec.encode(blueprint);
-
-        int expectedId = registry.find(
-                        PacketPhase.PLAY,
-                        PacketDescriptor.Direction.CLIENTBOUND,
-                        encoded.packetId())
-                .orElseThrow()
-                .packetId();
-        assertEquals(expectedId, encoded.packetId());
-        assertEquals(PacketPhase.PLAY, encoded.phase());
-        assertEquals(PacketDescriptor.Direction.CLIENTBOUND, encoded.direction());
-        byte[] payload = encoded.payload();
-        assertEquals(16, payload.length);
-        var buffer = new net.minecraft.network.FriendlyByteBuf(Unpooled.wrappedBuffer(payload));
-        try {
-            assertEquals(32.0, buffer.readDouble());
-            assertEquals(-16.0, buffer.readDouble());
-        } finally {
-            buffer.release();
-        }
-        assertArrayEquals(payload, encoded.payload());
-        assertTruePayloadIsDetached(encoded, payload);
+        assertThrows(IncompatibleAdapterException.class, () -> codec.encode(blueprint));
     }
 
     @Test
-    void encodesAuthoritativeEntityMovementForNeutralCapture() {
+    void rejectsSyntheticStateWithoutAPacketImplementation() {
         Paper26PacketRegistry registry = Paper26PacketRegistry.discover();
         Paper26NativePacketCodec codec = Paper26NativePacketCodec.forTesting(
                 registry,
@@ -77,15 +50,9 @@ final class Paper26NativePacketCodecTest {
                 90.0F,
                 15.0F);
 
-        var encoded = codec.encodeState(
+        assertThrows(IncompatibleAdapterException.class, () -> codec.encodeState(
                 new net.minecraft.network.protocol.game.ClientboundEntityPositionSyncPacket(
-                        42, values, true));
-
-        assertEquals("play.clientbound.minecraft:entity_position_sync",
-                encoded.descriptor().typeName());
-        assertEquals(dev.voldechse.replayframework.adapter.PacketDisposition.STATEFUL,
-                encoded.descriptor().disposition());
-        assertArrayEquals(encoded.payload(), encoded.payload());
+                        42, values, true)));
     }
 
     @Test
@@ -126,12 +93,4 @@ final class Paper26NativePacketCodecTest {
         return new net.minecraft.network.protocol.game.ClientboundSetBorderCenterPacket(border);
     }
 
-    private static void assertTruePayloadIsDetached(
-            Paper26CheckpointEncoder.EncodedPacket encoded,
-            byte[] original) {
-        original[0] = 99;
-        if (Arrays.equals(original, encoded.payload())) {
-            throw new AssertionError("encoded payload is not defensively copied");
-        }
-    }
 }

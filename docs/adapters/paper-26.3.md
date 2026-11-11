@@ -2,21 +2,25 @@
 
 This reference describes the exact clientbound protocol surface reviewed for Paper 26.3 build 244. The adapter uses Java 26, PacketEvents 2.14.0, and the `26.3.build.244-stable` Paper development bundle. The inspected registry contains 173 clientbound packet types, including 144 PLAY packets.
 
-Registry fingerprint: `dfb7e34c58fb9b0748f0d045c79d76c5706ff33fc1f4cbeded686642de6eb8ea`.
+The registry fingerprint is derived at runtime from the current empty-catalog
+classification.
 Adapter format revision: `4`. Revision-3 recordings are intentionally not
 migrated or accepted by this implementation.
+
+> Implementation status: the Paper 26.3 packet catalog is intentionally empty.
+> All PLAY packets are captured as `UNSUPPORTED`, but none is replayed or
+> checkpoint-relevant. The packet table below is retained as the reviewed
+> protocol inventory and planned policy, not as active playback support.
 
 ## Adapter structure
 
 The adapter entry point is `Paper26_3ReplayAdapter`, provided through `Paper26_3AdapterProvider`. Both follow the shared adapter design: NMS types remain inside `dev.voldechse.replayframework.adapter.paper.v26_3`, while `AbstractReplayAdapter` owns the common contracts.
 
 `replay-adapter:paper-common` supplies the NMS-free packet-definition template.
-The 26.3 catalog is the single source for registry policy and playback behavior;
-all 144 PLAY entries bind to a named version-local definition class and unknown
-PLAY packets fail adapter opening. Definitions apply local/unsafe policy
-before decode and validate decode, rewrite/rebuild, and encode against the same
-descriptor. `add_entity` is the concrete read/value/rewrite/rebuild reference
-implementation for identity-bearing packets.
+The version-local catalog currently contains no definitions. Registry discovery
+therefore uses the safe `UNSUPPORTED` fallback for every PLAY packet, including
+previously unknown packet types. No version-local decode, rewrite, rebuild, or
+encode implementation remains.
 
 - `capture` attaches packet capture, resolves recording scope, and emits synthetic state changes.
 - `checkpoint` snapshots loaded Paper world state and encodes ordered native 26.3 packets. After optional scope preloading, it allocates an actual Paper tick/time/sequence barrier through the capture bridge; the core drains all earlier 26.3 deltas before persisting that checkpoint.
@@ -40,14 +44,14 @@ Three PLAY packets distinguish this registry from 26.2. `swing_animation` is rew
 
 ## Tests
 
-- `PacketCoverageTest` loads the real 26.3 NMS registry and fails for an unreviewed PLAY packet or missing essential family.
+- `PacketCoverageTest` loads the real 26.3 NMS registry and verifies that the catalog is empty and every PLAY packet remains capture-only.
 - Registry, native codec, checkpoint, snapshot, observer isolation, and outbound-gate tests cover their respective version-bound behavior.
 - Snapshot tests verify that the 26.3 capture barrier is allocated only after asynchronous scope preloading completes; generic core tests verify the exclusive delta boundary stored with it.
 - `Paper26_3EntityStateCaptureTest` covers packet-driven movement/equipment authority, hand-swap and tick-scoped swing suppression, equipment deltas, and cleared slots.
-- `NeutralObserverTest` includes entity effects, minecart motion, sound, leashes, filtered chat, explosion knockback, block-breaking overlays, transient blocks, 26.3 swing animation, serializer-qualified entity-reference metadata, and idempotent reset.
 - `Paper26_3PlaybackBridgeTest` verifies that reconstruction retains 26.3 checkpoint state while suppressing transient frames.
 
-`R` means registry/classification coverage. `R+N` additionally identifies a focused native behavior test. Registry coverage does not claim every possible payload or custom datapack renders correctly.
+`R` and `R+N` in the retained inventory describe the previously reviewed
+target policy. They do not denote active packet implementations.
 
 `DROP_LOCAL*` is a neutral-observer guard applied before payload decoding.
 The registry fingerprint remains the protocol-policy guard; format revision 4

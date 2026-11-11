@@ -2,7 +2,6 @@ package dev.voldechse.replayframework.adapter.paper.v26_3;
 
 import dev.voldechse.replayframework.adapter.CaptureBridge;
 import dev.voldechse.replayframework.adapter.CheckpointEncoder;
-import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.PacketDisposition;
 import dev.voldechse.replayframework.adapter.PlaybackBridge;
@@ -21,7 +20,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 final class Paper26_3PacketRegistryTest {
 
@@ -61,7 +59,7 @@ final class Paper26_3PacketRegistryTest {
     }
 
     @Test
-    void unknownPlayPacketTypeFailsAdapterOpening() {
+    void unknownPlayPacketTypeRemainsCapturableButUnsupported() {
         Paper26_3ProtocolIntrospector.ProtocolSnapshot snapshot =
                 new Paper26_3ProtocolIntrospector().inspect();
         List<Paper26_3ProtocolIntrospector.PacketType> packets =
@@ -73,9 +71,17 @@ final class Paper26_3PacketRegistryTest {
                 Integer.MAX_VALUE,
                 "paper-26.3/play.clientbound.synthetic.unknown"));
 
-        assertThrows(IncompatibleAdapterException.class, () -> Paper26_3PacketRegistry.fromSnapshot(
+        Paper26_3PacketRegistry registry = Paper26_3PacketRegistry.fromSnapshot(
                 new Paper26_3ProtocolIntrospector.ProtocolSnapshot(
-                        snapshot.minecraftVersion(), snapshot.protocolVersion(), packets)));
+                        snapshot.minecraftVersion(), snapshot.protocolVersion(), packets));
+        PacketDescriptor descriptor = registry.descriptors().stream()
+                .filter(value -> value.packetId() == Integer.MAX_VALUE)
+                .findFirst()
+                .orElseThrow();
+
+        assertEquals(PacketDisposition.UNSUPPORTED, descriptor.disposition());
+        assertTrue(descriptor.captureByDefault());
+        assertFalse(descriptor.replayable());
     }
 
     @Test
