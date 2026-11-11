@@ -10,8 +10,8 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Version-local dispatch boundary retained while the packet catalog is empty.
- * It never decodes or encodes a packet without an explicit implementation.
+ * Version-local dispatch boundary retained while the catalog has no replayable
+ * packet definition. It never decodes or encodes blocked control packets.
  */
 public final class Paper26ReplayPacketRewriter {
 
@@ -31,7 +31,8 @@ public final class Paper26ReplayPacketRewriter {
         Objects.requireNonNull(frame, "frame");
         Objects.requireNonNull(codec, "codec");
         String typeName = Objects.requireNonNull(descriptor, "descriptor").typeName();
-        return RewriteResult.fail("no Paper 26.2 packet implementation is registered for " + typeName);
+        return RewriteResult.fail(
+                "no replayable Paper 26.2 packet implementation is registered for " + typeName);
     }
 
     PacketCodec.EncodedPacket encode(

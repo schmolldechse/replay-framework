@@ -1,19 +1,14 @@
-package dev.voldechse.replayframework.adapter.paper.v26_2.playback;
+package dev.voldechse.replayframework.adapter.paper.v26_2.packet;
 
 import dev.voldechse.replayframework.adapter.paper.packet.PacketDefinitionCatalog;
-import java.util.List;
+import dev.voldechse.replayframework.adapter.paper.v26_2.packet.definition.connection.ConnectionPacketDefinitions;
+import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26ReplayPacketRewriter;
 
-/**
- * Version-local packet catalog.
- *
- * <p>No Paper 26.2 packet implementation is currently registered. PLAY packets
- * remain capturable but are classified as unsupported until a definition is
- * added explicitly.
- */
+/** Version-local catalog of explicit Paper 26.2 PLAY packet definitions. */
 public final class Paper26PacketCatalog {
 
     private static final PacketDefinitionCatalog<Paper26ReplayPacketRewriter> CATALOG =
-            new PacketDefinitionCatalog<>(List.of());
+            new PacketDefinitionCatalog<>(ConnectionPacketDefinitions.definitions());
 
     private Paper26PacketCatalog() {}
 

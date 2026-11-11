@@ -2,25 +2,27 @@
 
 This reference describes the exact clientbound protocol surface reviewed for Paper 26.3 build 244. The adapter uses Java 26, PacketEvents 2.14.0, and the `26.3.build.244-stable` Paper development bundle. The inspected registry contains 173 clientbound packet types, including 144 PLAY packets.
 
-The registry fingerprint is derived at runtime from the current empty-catalog
-classification.
+The registry fingerprint is derived at runtime from the current explicit packet
+catalog and the safe fallback classification.
 Adapter format revision: `4`. Revision-3 recordings are intentionally not
 migrated or accepted by this implementation.
 
-> Implementation status: the Paper 26.3 packet catalog is intentionally empty.
-> All PLAY packets are captured as `UNSUPPORTED`, but none is replayed or
-> checkpoint-relevant. The packet table below is retained as the reviewed
-> protocol inventory and planned policy, not as active playback support.
+> Implementation status: `bundle_delimiter` is explicitly implemented as
+> captured, non-replayable `CONTROL` traffic. Every other PLAY packet is
+> captured as `UNSUPPORTED`; none is replayed or checkpoint-relevant. The packet
+> table below remains the reviewed protocol inventory and planned policy for the
+> remaining implementations.
 
 ## Adapter structure
 
 The adapter entry point is `Paper26_3ReplayAdapter`, provided through `Paper26_3AdapterProvider`. Both follow the shared adapter design: NMS types remain inside `dev.voldechse.replayframework.adapter.paper.v26_3`, while `AbstractReplayAdapter` owns the common contracts.
 
-`replay-adapter:paper-common` supplies the NMS-free packet-definition template.
-The version-local catalog currently contains no definitions. Registry discovery
-therefore uses the safe `UNSUPPORTED` fallback for every PLAY packet, including
-previously unknown packet types. No version-local decode, rewrite, rebuild, or
-encode implementation remains.
+`replay-adapter:paper-common` supplies the NMS-free packet-definition template
+and the blocked-control base. The version-local catalog contains the connection-
+domain `BundleDelimiterPacketDefinition`; registry discovery uses the safe
+`UNSUPPORTED` fallback for every other PLAY packet, including previously unknown
+types. No replayable version-local decode, rewrite, rebuild, or encode path is
+enabled.
 
 - `capture` attaches packet capture, resolves recording scope, and emits synthetic state changes.
 - `checkpoint` snapshots loaded Paper world state and encodes ordered native 26.3 packets. After optional scope preloading, it allocates an actual Paper tick/time/sequence barrier through the capture bridge; the core drains all earlier 26.3 deltas before persisting that checkpoint.
@@ -44,14 +46,16 @@ Three PLAY packets distinguish this registry from 26.2. `swing_animation` is rew
 
 ## Tests
 
-- `PacketCoverageTest` loads the real 26.3 NMS registry and verifies that the catalog is empty and every PLAY packet remains capture-only.
+- `PacketCoverageTest` loads the real 26.3 NMS registry and verifies that only `bundle_delimiter` is explicit `CONTROL` traffic while every other PLAY packet remains capture-only `UNSUPPORTED` data.
+- `BundleDelimiterPacketDefinitionTest` verifies the native singleton codec, packet ID `0`, empty payload, capture policy, and rejection before playback decode.
 - Registry, native codec, checkpoint, snapshot, observer isolation, and outbound-gate tests cover their respective version-bound behavior.
 - Snapshot tests verify that the 26.3 capture barrier is allocated only after asynchronous scope preloading completes; generic core tests verify the exclusive delta boundary stored with it.
 - `Paper26_3EntityStateCaptureTest` covers packet-driven movement/equipment authority, hand-swap and tick-scoped swing suppression, equipment deltas, and cleared slots.
 - `Paper26_3PlaybackBridgeTest` verifies that reconstruction retains 26.3 checkpoint state while suppressing transient frames.
 
-`R` and `R+N` in the retained inventory describe the previously reviewed
-target policy. They do not denote active packet implementations.
+Except for the explicitly documented `bundle_delimiter`, `R` and `R+N` in the
+retained inventory describe the previously reviewed target policy. They do not
+denote active packet implementations.
 
 `DROP_LOCAL*` is a neutral-observer guard applied before payload decoding.
 The registry fingerprint remains the protocol-policy guard; format revision 4
@@ -109,7 +113,7 @@ Map IDs and unclassified integer fields are not generically rewritten. `OPTIONAL
 
 | ID | Packet (`minecraft:`) | Meaning / relevance | Playback | Checkpoint | Test |
 |---:|---|---|---|---|---|
-| 0 | `bundle_delimiter` | Transport, connection, or server control; never replay into an established connection | BLOCKED | no | R |
+| 0 | `bundle_delimiter` | Payload-free, identity-sensitive bundle boundary; retain for stream analysis but never replay without channel-scoped bundle ownership | BLOCKED | no | R+N |
 | 1 | `add_entity` | Essential scene state: spawn an entity with type, position, UUID, and type-specific data | REWRITE | yes | R |
 | 2 | `animate` | Ordered scene effect: entity animation such as wake-up or critical hit; rewrite entity ID | REWRITE | no | R+N |
 | 3 | `award_stats` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no | R+N |

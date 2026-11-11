@@ -5,27 +5,37 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.voldechse.replayframework.adapter.PacketDisposition;
-import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26PacketCatalog;
+import dev.voldechse.replayframework.adapter.paper.v26_2.packet.Paper26PacketCatalog;
 import dev.voldechse.replayframework.format.PacketPhase;
 import org.junit.jupiter.api.Test;
 
-/** Verifies the deliberate empty-catalog state. */
+/** Verifies explicit coverage while packet implementations are added incrementally. */
 class PacketCoverageTest {
 
     @Test
-    void leavesEveryPlayPacketUnsupportedUntilImplementedExplicitly() {
+    void classifiesOnlyBundleDelimiterAsControl() {
         net.minecraft.SharedConstants.tryDetectVersion();
         net.minecraft.server.Bootstrap.bootStrap();
 
-        assertTrue(Paper26PacketCatalog.catalog().definitions().isEmpty());
+        assertEquals(
+                java.util.List.of("play.clientbound.minecraft:bundle_delimiter"),
+                Paper26PacketCatalog.catalog().definitions().stream()
+                        .map(definition -> definition.typeName())
+                        .toList());
         var registry = Paper26PacketRegistry.discover();
         for (var descriptor : registry.descriptors()) {
             if (descriptor.phase() == PacketPhase.PLAY) {
-                assertEquals(PacketDisposition.UNSUPPORTED, descriptor.disposition());
+                boolean bundleDelimiter =
+                        descriptor.typeName().equals("play.clientbound.minecraft:bundle_delimiter");
+                assertEquals(
+                        bundleDelimiter ? PacketDisposition.CONTROL : PacketDisposition.UNSUPPORTED,
+                        descriptor.disposition());
                 assertTrue(descriptor.captureByDefault());
                 assertFalse(descriptor.replayable());
                 assertFalse(descriptor.checkpointRelevant());
-                assertFalse(Paper26PacketRegistry.explicitlyClassifies(descriptor.typeName()));
+                assertEquals(
+                        bundleDelimiter,
+                        Paper26PacketRegistry.explicitlyClassifies(descriptor.typeName()));
             }
         }
     }
