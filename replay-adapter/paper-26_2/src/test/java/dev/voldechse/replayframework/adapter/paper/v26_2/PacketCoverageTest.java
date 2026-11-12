@@ -29,7 +29,9 @@ class PacketCoverageTest {
                         "play.clientbound.minecraft:block_event",
                         "play.clientbound.minecraft:block_update",
                         "play.clientbound.minecraft:boss_event",
-                        "play.clientbound.minecraft:change_difficulty"),
+                        "play.clientbound.minecraft:change_difficulty",
+                        "play.clientbound.minecraft:chunk_batch_finished",
+                        "play.clientbound.minecraft:chunk_batch_start"),
                 Paper26_2PacketCatalog.catalog().definitions().stream()
                         .map(definition -> definition.typeName())
                         .toList());
@@ -58,8 +60,12 @@ class PacketCoverageTest {
                         descriptor.typeName().equals("play.clientbound.minecraft:boss_event");
                 boolean changeDifficulty =
                         descriptor.typeName().equals("play.clientbound.minecraft:change_difficulty");
+                boolean chunkBatchFinished = descriptor.typeName()
+                        .equals("play.clientbound.minecraft:chunk_batch_finished");
+                boolean chunkBatchStart =
+                        descriptor.typeName().equals("play.clientbound.minecraft:chunk_batch_start");
                 PacketDisposition expectedDisposition;
-                if (bundleDelimiter || blockChangedAck) {
+                if (bundleDelimiter || blockChangedAck || chunkBatchFinished || chunkBatchStart) {
                     expectedDisposition = PacketDisposition.CONTROL;
                 } else if (addEntity
                         || blockEntityData
@@ -120,7 +126,9 @@ class PacketCoverageTest {
                                 || blockEvent
                                 || blockUpdate
                                 || bossEvent
-                                || changeDifficulty,
+                                || changeDifficulty
+                                || chunkBatchFinished
+                                || chunkBatchStart,
                         Paper26_2PacketRegistry.explicitlyClassifies(descriptor.typeName()));
             }
         }

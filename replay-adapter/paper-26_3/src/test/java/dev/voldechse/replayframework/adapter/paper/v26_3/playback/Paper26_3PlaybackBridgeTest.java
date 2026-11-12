@@ -25,6 +25,31 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class Paper26_3PlaybackBridgeTest {
 
     @Test
+    void neverReplaysRecordedChunkBatchFlowControl() {
+        net.minecraft.SharedConstants.tryDetectVersion();
+        net.minecraft.server.Bootstrap.bootStrap();
+        PacketRegistry registry = Paper26_3PacketRegistry.discover();
+
+        for (int packetId : new int[] {11, 12}) {
+            PacketDescriptor descriptor = registry.find(
+                            PacketPhase.PLAY,
+                            PacketDescriptor.Direction.CLIENTBOUND,
+                            packetId)
+                    .orElseThrow();
+            RawPacketFrame marker = frame(packetId);
+
+            assertEquals(PacketDisposition.CONTROL, descriptor.disposition());
+            assertFalse(descriptor.replayable());
+            assertFalse(descriptor.checkpointRelevant());
+            assertEquals(PacketDescriptor.PlaybackScope.UNSAFE, descriptor.playbackScope());
+            assertFalse(Paper26_3PlaybackBridge.shouldReplay(
+                    marker, PlaybackEmissionMode.LIVE, registry));
+            assertFalse(Paper26_3PlaybackBridge.shouldReplay(
+                    marker, PlaybackEmissionMode.RECONSTRUCTION, registry));
+        }
+    }
+
+    @Test
     void routesViewerLocalDifficultyOnlyThroughLivePolicyBoundary() {
         net.minecraft.SharedConstants.tryDetectVersion();
         net.minecraft.server.Bootstrap.bootStrap();

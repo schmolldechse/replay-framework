@@ -8,7 +8,10 @@ import java.util.List;
 public final class ConnectionPacketDefinitions {
 
     private static final List<PacketDefinition<Paper26_2ReplayPacketRewriter>> DEFINITIONS =
-            List.of(new Id000BundleDelimiterPacketDefinition());
+            List.of(
+                    new Id000BundleDelimiterPacketDefinition(),
+                    new Id011ChunkBatchFinishedPacketDefinition(),
+                    new Id012ChunkBatchStartPacketDefinition());
 
     private ConnectionPacketDefinitions() {}
 
