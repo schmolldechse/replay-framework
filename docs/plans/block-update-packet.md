@@ -201,8 +201,9 @@ Der Stream-Codec verwendet:
 ByteBufCodecs.idMapper(Block.BLOCK_STATE_REGISTRY)
 ```
 
-Beim Encode wird die ID des konkreten `BlockState`-Singletons geschrieben.
-Beim Decode wird die VarInt-ID über `IdMapper.byId(...)` aufgelöst.
+Beim Encode wird die ID des konkreten `BlockState`-Singletons über den
+strikten `getIdOrThrow(...)`-Vertrag geschrieben. Beim Decode löst der native
+Codec die VarInt-ID über `byIdOrThrow(...)` auf.
 
 Wichtige Konsequenzen:
 
@@ -210,9 +211,8 @@ Wichtige Konsequenzen:
 - `null` ist kein gültiger Zustand,
 - ein nicht registriertes `BlockState`-Objekt darf nicht als ID `-1`
   serialisiert werden und
-- eine unbekannte Wire-ID kann vom nativen `IdMapper` als `null` geliefert
-  werden; die Paketdefinition muss diesen semantisch ungültigen Wert beim
-  Read-/Value-Vertrag ablehnen.
+- eine unbekannte Wire-ID wird bereits vom nativen Codec abgewiesen und kann
+  den Read-/Value-Vertrag nicht als `null`-Zustand erreichen.
 
 Zusätzlich bleiben die bestehenden Codec-Grenzen maßgeblich: abgeschnittene
 Positionen, fehlende State-VarInts und überlange VarInts müssen scheitern.
@@ -424,7 +424,10 @@ Je Version entsteht ein
    neuer oder aus Properties rekonstruierter Zustand erzeugt.
 6. Positionen an allen gepackten Wire-Grenzen.
 7. Ablehnung von `null` für Position und Zustand.
-8. Ablehnung eines künstlich erzeugten, nicht registrierten `BlockState`.
+8. Ablehnung unbekannter State-IDs durch den nativen strikten Codec. Ein
+   unregistrierter Blockzustand kann nach dem erforderlichen Minecraft-
+   Bootstrap nicht künstlich erzeugt werden, weil die Registry eingefroren
+   ist.
 9. Ablehnung einer falschen decodierten Java-Klasse.
 10. Vollständiger `handlePlayback`- und validierter Encode-Pfad.
 
@@ -446,9 +449,8 @@ Negative und Grenzfälle umfassen:
 - abgeschnittene gepackte Position,
 - fehlende State-ID,
 - überlange VarInt-State-ID,
-- negative und außerhalb der Registry liegende IDs, die nativ zu `null`
-  aufgelöst und anschließend vom semantischen Value-Vertrag abgewiesen
-  werden, und
+- negative und außerhalb der Registry liegende IDs, die der native
+  `byIdOrThrow(...)`-Vertrag abweist, und
 - nachlaufende Bytes über den vorhandenen verbindungsgebundenen Decoder, der
   vollständigen Payloadverbrauch verlangt.
 
@@ -548,7 +550,7 @@ Wire-Test prüft jede registrierte globale State-ID.
 ### Unregistrierter Zustand
 
 Risiko: Ein künstlich konstruierter `BlockState`, der nicht im IdMapper liegt,
-würde als `-1` encodiert und beim Empfänger zu `null` decodiert.
+kann vom nativen `getIdOrThrow(...)`-Codec nicht serialisiert werden.
 
 Gegenmaßnahme: Der Value-Vertrag verlangt eine gültige nichtnegative ID in
 `Block.BLOCK_STATE_REGISTRY`.
@@ -622,7 +624,8 @@ Die Planung basiert auf:
 - den lokalen Paper-Dev-Bundles `26.2.build.135-stable` und
   `26.3.build.244-stable`,
 - dem dekompilierten `ClientboundBlockUpdatePacket` beider Builds,
-- dem lokalen `ByteBufCodecs.idMapper(...)`- und `IdMapper.byId(...)`-Vertrag,
+- dem lokalen `ByteBufCodecs.idMapper(...)`-, `getIdOrThrow(...)`- und
+  `byIdOrThrow(...)`-Vertrag,
 - dem 26.3-Client-Handler `handleBlockUpdate(...)`,
 - der bestehenden Capture-, Playback- und Checkpoint-Architektur des
   Projekts und

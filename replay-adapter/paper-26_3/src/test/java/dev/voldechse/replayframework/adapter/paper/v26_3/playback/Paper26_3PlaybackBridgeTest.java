@@ -25,6 +25,25 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class Paper26_3PlaybackBridgeTest {
 
     @Test
+    void replaysBlockUpdatesDuringLivePlaybackAndReconstruction() {
+        net.minecraft.SharedConstants.tryDetectVersion();
+        net.minecraft.server.Bootstrap.bootStrap();
+        PacketRegistry registry = Paper26_3PacketRegistry.discover();
+        PacketDescriptor descriptor = registry.find(
+                        PacketPhase.PLAY, PacketDescriptor.Direction.CLIENTBOUND, 8)
+                .orElseThrow();
+        RawPacketFrame blockUpdate = frame(8);
+
+        assertEquals("play.clientbound.minecraft:block_update", descriptor.typeName());
+        assertTrue(descriptor.replayable());
+        assertTrue(descriptor.checkpointRelevant());
+        assertTrue(Paper26_3PlaybackBridge.shouldReplay(
+                blockUpdate, PlaybackEmissionMode.LIVE, registry));
+        assertTrue(Paper26_3PlaybackBridge.shouldReplay(
+                blockUpdate, PlaybackEmissionMode.RECONSTRUCTION, registry));
+    }
+
+    @Test
     void replaysBlockEventsOnlyDuringLivePlayback() {
         net.minecraft.SharedConstants.tryDetectVersion();
         net.minecraft.server.Bootstrap.bootStrap();

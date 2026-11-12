@@ -156,7 +156,7 @@ test status.
 | 5 | `minecraft:block_destruction` | Spatial, ordered block-breaking overlay; isolate its source/overlay ID, preserve all unsigned progress values, and clear active overlays during reset | REWRITE | no |
 | 6 | `minecraft:block_entity_data` | Essential scene state: durable world or scene state | SEND | yes |
 | 7 | `minecraft:block_event` | Spatial, ordered block-local action; preserve the registered block and both unsigned action fields because their meaning depends on the block state at the position | SEND | no |
-| 8 | `minecraft:block_update` | Essential scene state: durable world or scene state | SEND | yes |
+| 8 | `minecraft:block_update` | Spatial, durable replacement of one global block state, preserving every state property such as orientation, shape, level, age and flags | SEND | yes |
 | 9 | `minecraft:boss_event` | Scene presentation with playback-session identity rewriting | REWRITE | yes |
 | 10 | `minecraft:change_difficulty` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 11 | `minecraft:chunk_batch_finished` | Transport, connection, or server control; never replay into an established connection | BLOCKED | no |

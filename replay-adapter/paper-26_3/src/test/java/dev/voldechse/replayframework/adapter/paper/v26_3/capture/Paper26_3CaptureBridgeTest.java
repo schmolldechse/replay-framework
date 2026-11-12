@@ -16,11 +16,37 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.protocol.game.ClientboundBlockDestructionPacket;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.network.protocol.game.ClientboundBlockEventPacket;
+import net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntityTypes;
 import org.junit.jupiter.api.Test;
 
 class Paper26_3CaptureBridgeTest {
+
+    @Test
+    void extractsTheExactBlockUpdatePositionForSpatialCapture() {
+        PacketDescriptor descriptor = new PacketDescriptor(
+                "minecraft:block_update",
+                PacketPhase.PLAY,
+                PacketDescriptor.Direction.CLIENTBOUND,
+                8,
+                PacketDisposition.STATEFUL,
+                true,
+                true,
+                true,
+                "test/block_update",
+                PacketDescriptor.PlaybackScope.SAFE);
+        BlockPos position = new BlockPos(-33_554_432, 2_047, 33_554_431);
+
+        var context = new PaperConnectionAccessor().captureContext(
+                new ClientboundBlockUpdatePacket(position, Blocks.WATER.defaultBlockState()),
+                descriptor,
+                Optional.of(Key.key("minecraft:overworld")));
+
+        assertEquals(
+                Optional.of(new BlockPosition(-33_554_432, 2_047, 33_554_431)),
+                context.position());
+    }
 
     @Test
     void extractsTheExactBlockEventPositionForSpatialCapture() {

@@ -11,7 +11,8 @@ public final class WorldPacketDefinitions {
             List.of(
                     new Id004BlockChangedAckPacketDefinition(),
                     new Id006BlockEntityDataPacketDefinition(),
-                    new Id007BlockEventPacketDefinition());
+                    new Id007BlockEventPacketDefinition(),
+                    new Id008BlockUpdatePacketDefinition());
 
     private WorldPacketDefinitions() {}
 
