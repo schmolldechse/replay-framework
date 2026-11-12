@@ -25,6 +25,27 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class Paper26_3PlaybackBridgeTest {
 
     @Test
+    void replaysChunkBiomesDuringLivePlaybackAndReconstruction() {
+        net.minecraft.SharedConstants.tryDetectVersion();
+        net.minecraft.server.Bootstrap.bootStrap();
+        PacketRegistry registry = Paper26_3PacketRegistry.discover();
+        PacketDescriptor descriptor = registry.find(
+                        PacketPhase.PLAY, PacketDescriptor.Direction.CLIENTBOUND, 13)
+                .orElseThrow();
+        RawPacketFrame chunksBiomes = frame(13);
+
+        assertEquals("play.clientbound.minecraft:chunks_biomes", descriptor.typeName());
+        assertEquals(PacketDisposition.STATEFUL, descriptor.disposition());
+        assertTrue(descriptor.replayable());
+        assertTrue(descriptor.checkpointRelevant());
+        assertEquals(PacketDescriptor.PlaybackScope.SAFE, descriptor.playbackScope());
+        assertTrue(Paper26_3PlaybackBridge.shouldReplay(
+                chunksBiomes, PlaybackEmissionMode.LIVE, registry));
+        assertTrue(Paper26_3PlaybackBridge.shouldReplay(
+                chunksBiomes, PlaybackEmissionMode.RECONSTRUCTION, registry));
+    }
+
+    @Test
     void neverReplaysRecordedChunkBatchFlowControl() {
         net.minecraft.SharedConstants.tryDetectVersion();
         net.minecraft.server.Bootstrap.bootStrap();

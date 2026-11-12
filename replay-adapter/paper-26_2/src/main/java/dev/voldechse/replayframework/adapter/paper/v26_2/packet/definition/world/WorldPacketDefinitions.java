@@ -13,7 +13,8 @@ public final class WorldPacketDefinitions {
                     new Id006BlockEntityDataPacketDefinition(),
                     new Id007BlockEventPacketDefinition(),
                     new Id008BlockUpdatePacketDefinition(),
-                    new Id010ChangeDifficultyPacketDefinition());
+                    new Id010ChangeDifficultyPacketDefinition(),
+                    new Id013ChunksBiomesPacketDefinition());
 
     private WorldPacketDefinitions() {}
 
