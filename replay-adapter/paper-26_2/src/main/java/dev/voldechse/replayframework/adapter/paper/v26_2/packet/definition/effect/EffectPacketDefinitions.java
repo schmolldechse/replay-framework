@@ -10,7 +10,8 @@ public final class EffectPacketDefinitions {
     private static final List<PacketDefinition<Paper26_2ReplayPacketRewriter>> DEFINITIONS =
             List.of(
                     new Id002AnimatePacketDefinition(),
-                    new Id005BlockDestructionPacketDefinition());
+                    new Id005BlockDestructionPacketDefinition(),
+                    new Id009BossEventPacketDefinition());
 
     private EffectPacketDefinitions() {}
 

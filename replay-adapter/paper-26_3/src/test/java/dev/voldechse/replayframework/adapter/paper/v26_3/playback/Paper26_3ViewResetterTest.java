@@ -7,12 +7,45 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import dev.voldechse.replayframework.adapter.PacketRegistry;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundBlockDestructionPacket;
+import net.minecraft.network.protocol.game.ClientboundBossEventPacket;
+import net.minecraft.world.BossEvent;
 import org.junit.jupiter.api.Test;
 
 class Paper26_3ViewResetterTest {
+
+    @Test
+    void removesOnlyActiveBossBarsInStableAddOrderAfterEveryUpdateVariant() {
+        List<Object> writes = new ArrayList<>();
+        Paper26_3ViewResetter resetter = resetter(writes);
+        UUID first = UUID.fromString("00000000-0000-0000-0000-000000000011");
+        UUID removed = UUID.fromString("00000000-0000-0000-0000-000000000012");
+        UUID third = UUID.fromString("00000000-0000-0000-0000-000000000013");
+        TestBossEvent firstEvent = bossEvent(first);
+        TestBossEvent removedEvent = bossEvent(removed);
+
+        resetter.observe(ClientboundBossEventPacket.createAddPacket(firstEvent));
+        resetter.observe(ClientboundBossEventPacket.createUpdateProgressPacket(firstEvent));
+        resetter.observe(ClientboundBossEventPacket.createUpdateNamePacket(firstEvent));
+        resetter.observe(ClientboundBossEventPacket.createUpdateStylePacket(firstEvent));
+        resetter.observe(ClientboundBossEventPacket.createUpdatePropertiesPacket(firstEvent));
+        resetter.observe(ClientboundBossEventPacket.createAddPacket(removedEvent));
+        resetter.observe(ClientboundBossEventPacket.createAddPacket(bossEvent(third)));
+        resetter.observe(ClientboundBossEventPacket.createRemovePacket(removed));
+        resetter.reset();
+
+        assertEquals(2, writes.size());
+        assertBossBarRemoval(writes.get(0), first);
+        assertBossBarRemoval(writes.get(1), third);
+
+        resetter.reset();
+        assertEquals(2, writes.size());
+    }
 
     @Test
     void clearsEveryActiveCrackInStableIdOrderAtItsLatestPosition() {
@@ -94,5 +127,36 @@ class Paper26_3ViewResetterTest {
         assertEquals(expectedId, packet.getId());
         assertEquals(expectedPosition, packet.getPos());
         assertEquals(-1, packet.getProgress());
+    }
+
+    private static void assertBossBarRemoval(Object value, UUID expectedId) {
+        ClientboundBossEventPacket packet = (ClientboundBossEventPacket) value;
+        AtomicReference<UUID> removed = new AtomicReference<>();
+        packet.dispatch(new ClientboundBossEventPacket.Handler() {
+            @Override
+            public void remove(UUID id) {
+                removed.set(id);
+            }
+        });
+        assertEquals(expectedId, removed.get());
+    }
+
+    private static TestBossEvent bossEvent(UUID id) {
+        TestBossEvent event = new TestBossEvent(id);
+        event.setProgress(0.5F);
+        event.setDarkenScreen(true);
+        event.setPlayBossMusic(true);
+        event.setCreateWorldFog(true);
+        return event;
+    }
+
+    private static final class TestBossEvent extends BossEvent {
+        private TestBossEvent(UUID id) {
+            super(
+                    id,
+                    Component.literal("Replay boss"),
+                    BossBarColor.PURPLE,
+                    BossBarOverlay.NOTCHED_10);
+        }
     }
 }
