@@ -25,6 +25,28 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class Paper26_3PlaybackBridgeTest {
 
     @Test
+    void routesViewerLocalDifficultyOnlyThroughLivePolicyBoundary() {
+        net.minecraft.SharedConstants.tryDetectVersion();
+        net.minecraft.server.Bootstrap.bootStrap();
+        PacketRegistry registry = Paper26_3PacketRegistry.discover();
+        PacketDescriptor descriptor = registry.find(
+                        PacketPhase.PLAY, PacketDescriptor.Direction.CLIENTBOUND, 10)
+                .orElseThrow();
+        RawPacketFrame changeDifficulty = frame(10);
+
+        assertEquals("play.clientbound.minecraft:change_difficulty", descriptor.typeName());
+        assertTrue(descriptor.replayable());
+        assertFalse(descriptor.checkpointRelevant());
+        assertEquals(
+                PacketDescriptor.PlaybackScope.VIEWER_LOCAL,
+                descriptor.playbackScope());
+        assertTrue(Paper26_3PlaybackBridge.shouldReplay(
+                changeDifficulty, PlaybackEmissionMode.LIVE, registry));
+        assertFalse(Paper26_3PlaybackBridge.shouldReplay(
+                changeDifficulty, PlaybackEmissionMode.RECONSTRUCTION, registry));
+    }
+
+    @Test
     void replaysBossEventsDuringLivePlaybackAndReconstruction() {
         net.minecraft.SharedConstants.tryDetectVersion();
         net.minecraft.server.Bootstrap.bootStrap();

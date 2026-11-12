@@ -12,7 +12,8 @@ public final class WorldPacketDefinitions {
                     new Id004BlockChangedAckPacketDefinition(),
                     new Id006BlockEntityDataPacketDefinition(),
                     new Id007BlockEventPacketDefinition(),
-                    new Id008BlockUpdatePacketDefinition());
+                    new Id008BlockUpdatePacketDefinition(),
+                    new Id010ChangeDifficultyPacketDefinition());
 
     private WorldPacketDefinitions() {}
 
