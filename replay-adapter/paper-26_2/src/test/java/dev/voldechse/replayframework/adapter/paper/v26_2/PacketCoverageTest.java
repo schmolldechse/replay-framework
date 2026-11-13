@@ -71,7 +71,8 @@ class PacketCoverageTest {
                         "play.clientbound.minecraft:login",
                         "play.clientbound.minecraft:low_disk_space_warning",
                         "play.clientbound.minecraft:map_item_data",
-                        "play.clientbound.minecraft:merchant_offers"),
+                        "play.clientbound.minecraft:merchant_offers",
+                        "play.clientbound.minecraft:move_entity_pos"),
                 Paper26_2PacketCatalog.catalog().definitions().stream()
                         .map(definition -> definition.typeName())
                         .toList());
@@ -181,6 +182,8 @@ class PacketCoverageTest {
                         .equals("play.clientbound.minecraft:map_item_data");
                 boolean merchantOffers = descriptor.typeName()
                         .equals("play.clientbound.minecraft:merchant_offers");
+                boolean moveEntityPos = descriptor.typeName()
+                        .equals("play.clientbound.minecraft:move_entity_pos");
                 PacketDisposition expectedDisposition;
                 if (bundleDelimiter
                         || blockChangedAck
@@ -226,6 +229,7 @@ class PacketCoverageTest {
                         || deleteChat
                         || disguisedChat
                         || entityEvent
+                        || moveEntityPos
                         || explode
                         || hurtAnimation
                         || gameEvent
@@ -263,6 +267,7 @@ class PacketCoverageTest {
                                 || lowDiskSpaceWarning
                                 || mapItemData
                                 || merchantOffers
+                                || moveEntityPos
                                 || damageEvent
                                 || deleteChat
                                 || disguisedChat
@@ -298,6 +303,7 @@ class PacketCoverageTest {
                         || bossEvent
                         || damageEvent
                         || entityEvent
+                        || moveEntityPos
                         || entityPositionSync
                         || explode
                         || hurtAnimation
@@ -394,6 +400,7 @@ class PacketCoverageTest {
                                 || lowDiskSpaceWarning
                                 || mapItemData
                                 || merchantOffers
+                                || moveEntityPos
                                 || disconnect,
                         Paper26_2PacketRegistry.explicitlyClassifies(descriptor.typeName()));
             }
