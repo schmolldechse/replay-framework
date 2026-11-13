@@ -12,7 +12,8 @@ public final class EffectPacketDefinitions {
                     new Id002AnimatePacketDefinition(),
                     new Id005BlockDestructionPacketDefinition(),
                     new Id009BossEventPacketDefinition(),
-                    new Id025DamageEventPacketDefinition());
+                    new Id025DamageEventPacketDefinition(),
+                    new Id034EntityEventPacketDefinition());
 
     private EffectPacketDefinitions() {}
 
