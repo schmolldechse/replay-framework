@@ -19,7 +19,8 @@ public final class UiPacketDefinitions {
                     new Id022CooldownPacketDefinition(),
                     new Id041MountScreenOpenPacketDefinition(),
                     new Id050LowDiskSpaceWarningPacketDefinition(),
-                    new Id052MerchantOffersPacketDefinition());
+                    new Id052MerchantOffersPacketDefinition(),
+                    new Id058OpenBookPacketDefinition());
 
     private UiPacketDefinitions() {}
 

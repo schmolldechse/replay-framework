@@ -206,7 +206,7 @@ test status.
 | 55 | `minecraft:move_minecart_along_track` | Ordered minecart trajectory steps, each with position, movement vector, yaw/pitch, and interpolation weight; remap its entity ID | REWRITE in timeline order | yes |
 | 56 | `minecraft:move_entity_rot` | Relative entity rotation as raw yaw/pitch bytes and an on-ground flag; remap the entity ID | REWRITE in timeline order | no |
 | 57 | `minecraft:move_vehicle` | Absolute vehicle position as three doubles plus Y/X rotation floats; corrects the recorded player's client-controlled vehicle | DROP_LOCAL to keep recorded player movement local to its source connection | no |
-| 58 | `minecraft:open_book` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
+| 58 | `minecraft:open_book` | Opens book-reading UI for the recorded player's main- or off-hand item; hand is an enum VarInt | DROP_LOCAL to keep the recorded player's UI action local to its source connection | no |
 | 59 | `minecraft:open_screen` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 60 | `minecraft:open_sign_editor` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 61 | `minecraft:ping` | Transport, connection, or server control; never replay into an established connection | BLOCKED | no |
