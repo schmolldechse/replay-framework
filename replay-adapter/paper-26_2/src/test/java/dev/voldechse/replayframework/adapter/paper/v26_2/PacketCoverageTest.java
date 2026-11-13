@@ -50,7 +50,8 @@ class PacketCoverageTest {
                         "play.clientbound.minecraft:debug/entity_value",
                         "play.clientbound.minecraft:debug/event",
                         "play.clientbound.minecraft:debug_sample",
-                        "play.clientbound.minecraft:delete_chat"),
+                        "play.clientbound.minecraft:delete_chat",
+                        "play.clientbound.minecraft:disconnect"),
                 Paper26_2PacketCatalog.catalog().definitions().stream()
                         .map(definition -> definition.typeName())
                         .toList());
@@ -119,6 +120,8 @@ class PacketCoverageTest {
                         descriptor.typeName().equals("play.clientbound.minecraft:debug_sample");
                 boolean deleteChat =
                         descriptor.typeName().equals("play.clientbound.minecraft:delete_chat");
+                boolean disconnect =
+                        descriptor.typeName().equals("play.clientbound.minecraft:disconnect");
                 PacketDisposition expectedDisposition;
                 if (bundleDelimiter
                         || blockChangedAck
@@ -129,7 +132,8 @@ class PacketCoverageTest {
                         || debugChunkValue
                         || debugEntityValue
                         || debugEvent
-                        || debugSample) {
+                        || debugSample
+                        || disconnect) {
                     expectedDisposition = PacketDisposition.CONTROL;
                 } else if (addEntity
                         || blockEntityData
@@ -240,7 +244,8 @@ class PacketCoverageTest {
                                 || debugEntityValue
                                 || debugEvent
                                 || debugSample
-                                || deleteChat,
+                                || deleteChat
+                                || disconnect,
                         Paper26_2PacketRegistry.explicitlyClassifies(descriptor.typeName()));
             }
         }

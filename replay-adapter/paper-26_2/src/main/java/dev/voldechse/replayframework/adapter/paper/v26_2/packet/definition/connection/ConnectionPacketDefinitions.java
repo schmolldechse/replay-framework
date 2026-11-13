@@ -13,7 +13,8 @@ public final class ConnectionPacketDefinitions {
                     new Id011ChunkBatchFinishedPacketDefinition(),
                     new Id012ChunkBatchStartPacketDefinition(),
                     new Id021CookieRequestPacketDefinition(),
-                    new Id024CustomPayloadPacketDefinition());
+                    new Id024CustomPayloadPacketDefinition(),
+                    new Id032DisconnectPacketDefinition());
 
     private ConnectionPacketDefinitions() {}
 

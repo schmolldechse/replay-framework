@@ -180,7 +180,7 @@ test status.
 | 29 | `minecraft:debug/event` | One-shot debug-subscription event with a mandatory type-specific payload that can contain registry-backed or world-specific data | BLOCKED | no |
 | 30 | `minecraft:debug_sample` | Periodic subscription-selected server telemetry; tick-time samples report full, server, task and idle nanoseconds and are operator-only | BLOCKED | no |
 | 31 | `minecraft:delete_chat` | Removes a signed player-chat entry using a connection-local packed signature reference or full signature; preserve the observer's own chat history | DROP_LOCAL | no |
-| 32 | `minecraft:disconnect` | Transport, connection, or server control; never replay into an established connection | BLOCKED | no |
+| 32 | `minecraft:disconnect` | Terminates the receiving connection with a required chat-component reason; retain for recording fidelity and diagnostics, never replay into the observer connection | BLOCKED | no |
 | 33 | `minecraft:disguised_chat` | Recorded connection chat retained according to capture policy but suppressed for neutral playback | DROP_LOCAL* | no |
 | 34 | `minecraft:entity_event` | Ordered scene effect: entity status or animation; rewrite entity ID | REWRITE | no |
 | 35 | `minecraft:entity_position_sync` | Essential scene state: scene presentation with playback-session identity rewriting | REWRITE | yes |
