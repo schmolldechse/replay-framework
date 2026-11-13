@@ -11,7 +11,11 @@ public final class UiPacketDefinitions {
             List.of(
                     new Id014ClearTitlesPacketDefinition(),
                     new Id015CommandSuggestionsPacketDefinition(),
-                    new Id016CommandsPacketDefinition());
+                    new Id016CommandsPacketDefinition(),
+                    new Id017ContainerClosePacketDefinition(),
+                    new Id018ContainerSetContentPacketDefinition(),
+                    new Id019ContainerSetDataPacketDefinition(),
+                    new Id020ContainerSetSlotPacketDefinition());
 
     private UiPacketDefinitions() {}
 

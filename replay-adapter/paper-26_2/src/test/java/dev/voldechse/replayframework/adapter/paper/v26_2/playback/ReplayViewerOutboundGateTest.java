@@ -107,7 +107,11 @@ class ReplayViewerOutboundGateTest {
                 "set_title_text",
                 "clear_titles",
                 "command_suggestions",
-                "commands")) {
+                "commands",
+                "container_close",
+                "container_set_content",
+                "container_set_data",
+                "container_set_slot")) {
             var descriptor = new PacketDescriptor("play.clientbound.minecraft:" + name,
                     PacketPhase.PLAY, PacketDescriptor.Direction.CLIENTBOUND, 9,
                     PacketDisposition.STATEFUL, true, true, false, "test/" + name,

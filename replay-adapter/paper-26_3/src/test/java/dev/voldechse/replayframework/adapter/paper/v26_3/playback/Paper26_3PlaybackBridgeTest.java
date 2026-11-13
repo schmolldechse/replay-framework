@@ -79,6 +79,33 @@ class Paper26_3PlaybackBridgeTest {
     }
 
     @Test
+    void routesViewerLocalContainerPacketsOnlyThroughLivePolicyBoundary() {
+        net.minecraft.SharedConstants.tryDetectVersion();
+        net.minecraft.server.Bootstrap.bootStrap();
+        PacketRegistry registry = Paper26_3PacketRegistry.discover();
+
+        for (int packetId : new int[] {17, 18, 19, 20}) {
+            PacketDescriptor descriptor = registry.find(
+                            PacketPhase.PLAY,
+                            PacketDescriptor.Direction.CLIENTBOUND,
+                            packetId)
+                    .orElseThrow();
+            RawPacketFrame containerPacket = frame(packetId);
+
+            assertEquals(PacketDisposition.STATEFUL, descriptor.disposition());
+            assertTrue(descriptor.replayable());
+            assertFalse(descriptor.checkpointRelevant());
+            assertEquals(
+                    PacketDescriptor.PlaybackScope.VIEWER_LOCAL,
+                    descriptor.playbackScope());
+            assertTrue(Paper26_3PlaybackBridge.shouldReplay(
+                    containerPacket, PlaybackEmissionMode.LIVE, registry));
+            assertFalse(Paper26_3PlaybackBridge.shouldReplay(
+                    containerPacket, PlaybackEmissionMode.RECONSTRUCTION, registry));
+        }
+    }
+
+    @Test
     void replaysChunkBiomesDuringLivePlaybackAndReconstruction() {
         net.minecraft.SharedConstants.tryDetectVersion();
         net.minecraft.server.Bootstrap.bootStrap();

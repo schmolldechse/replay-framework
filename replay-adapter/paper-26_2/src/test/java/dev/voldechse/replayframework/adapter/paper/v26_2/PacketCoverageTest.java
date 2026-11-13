@@ -35,7 +35,11 @@ class PacketCoverageTest {
                         "play.clientbound.minecraft:chunks_biomes",
                         "play.clientbound.minecraft:clear_titles",
                         "play.clientbound.minecraft:command_suggestions",
-                        "play.clientbound.minecraft:commands"),
+                        "play.clientbound.minecraft:commands",
+                        "play.clientbound.minecraft:container_close",
+                        "play.clientbound.minecraft:container_set_content",
+                        "play.clientbound.minecraft:container_set_data",
+                        "play.clientbound.minecraft:container_set_slot"),
                 Paper26_2PacketCatalog.catalog().definitions().stream()
                         .map(definition -> definition.typeName())
                         .toList());
@@ -76,6 +80,12 @@ class PacketCoverageTest {
                         .equals("play.clientbound.minecraft:command_suggestions");
                 boolean commands =
                         descriptor.typeName().equals("play.clientbound.minecraft:commands");
+                boolean containerPacket = java.util.Set.of(
+                                "play.clientbound.minecraft:container_close",
+                                "play.clientbound.minecraft:container_set_content",
+                                "play.clientbound.minecraft:container_set_data",
+                                "play.clientbound.minecraft:container_set_slot")
+                        .contains(descriptor.typeName());
                 PacketDisposition expectedDisposition;
                 if (bundleDelimiter || blockChangedAck || chunkBatchFinished || chunkBatchStart) {
                     expectedDisposition = PacketDisposition.CONTROL;
@@ -86,7 +96,8 @@ class PacketCoverageTest {
                         || changeDifficulty
                         || chunksBiomes
                         || clearTitles
-                        || commands) {
+                        || commands
+                        || containerPacket) {
                     expectedDisposition = PacketDisposition.STATEFUL;
                 } else if (animate || blockDestruction || blockEvent || commandSuggestions) {
                     expectedDisposition = PacketDisposition.EPHEMERAL;
@@ -110,7 +121,8 @@ class PacketCoverageTest {
                                 || chunksBiomes
                                 || clearTitles
                                 || commandSuggestions
-                                || commands,
+                                || commands
+                                || containerPacket,
                         descriptor.replayable());
                 assertEquals(
                         addEntity || blockEntityData || blockUpdate || bossEvent || chunksBiomes,
@@ -123,7 +135,8 @@ class PacketCoverageTest {
                         || changeDifficulty
                         || clearTitles
                         || commandSuggestions
-                        || commands) {
+                        || commands
+                        || containerPacket) {
                     assertEquals(
                             dev.voldechse.replayframework.adapter.PacketDescriptor.PlaybackScope.VIEWER_LOCAL,
                             descriptor.playbackScope());
@@ -155,7 +168,8 @@ class PacketCoverageTest {
                                 || chunksBiomes
                                 || clearTitles
                                 || commandSuggestions
-                                || commands,
+                                || commands
+                                || containerPacket,
                         Paper26_2PacketRegistry.explicitlyClassifies(descriptor.typeName()));
             }
         }

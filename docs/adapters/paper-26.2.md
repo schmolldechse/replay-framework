@@ -165,10 +165,10 @@ test status.
 | 14 | `minecraft:clear_titles` | Clears the recorded connection's title and subtitle and can also reset its animation timings; never apply either operation to the neutral observer | DROP_LOCAL | no |
 | 15 | `minecraft:command_suggestions` | Correlates a recorded input request with its replacement range, completion texts and optional tooltips; preserve the observer's current command input | DROP_LOCAL | no |
 | 16 | `minecraft:commands` | Installs the permission-sensitive Brigadier tree with literals, typed arguments, redirects, restrictions and suggestion providers; preserve the observer's live command tree | DROP_LOCAL | no |
-| 17 | `minecraft:container_close` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
-| 18 | `minecraft:container_set_content` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
-| 19 | `minecraft:container_set_data` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
-| 20 | `minecraft:container_set_slot` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
+| 17 | `minecraft:container_close` | Closes the connection-local menu identified by its container ID; preserve the neutral observer's live screen | DROP_LOCAL | no |
+| 18 | `minecraft:container_set_content` | Replaces one menu state's indexed item contents and carried stack; preserve the neutral observer's live inventory | DROP_LOCAL | no |
+| 19 | `minecraft:container_set_data` | Updates a signed, menu-type-specific property for one container; preserve the neutral observer's live menu data | DROP_LOCAL | no |
+| 20 | `minecraft:container_set_slot` | Updates one signed menu slot with an optional component-bearing item stack for a container state; preserve the neutral observer's live inventory | DROP_LOCAL | no |
 | 21 | `minecraft:cookie_request` | Transport, connection, or server control; never replay into an established connection | BLOCKED | no |
 | 22 | `minecraft:cooldown` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 23 | `minecraft:custom_chat_completions` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
