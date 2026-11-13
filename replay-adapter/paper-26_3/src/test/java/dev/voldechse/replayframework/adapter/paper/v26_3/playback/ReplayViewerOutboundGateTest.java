@@ -58,6 +58,30 @@ class ReplayViewerOutboundGateTest {
     }
 
     @Test
+    void suppressesLiveDamageEventsDuringReplayIsolation() {
+        PacketDescriptor damageEvent = new PacketDescriptor(
+                "play.clientbound.minecraft:damage_event",
+                PacketPhase.PLAY,
+                PacketDescriptor.Direction.CLIENTBOUND,
+                25,
+                PacketDisposition.EPHEMERAL,
+                true,
+                true,
+                false,
+                "paper-26.3/minecraft:damage_event",
+                PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES);
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        EmbeddedChannel channel = new EmbeddedChannel(
+                gateFor(PacketRegistry.of(List.of(damageEvent)), failure));
+
+        assertFalse(channel.writeOutbound(new TestPacket(25)));
+        assertTrue(channel.outboundMessages().isEmpty());
+        assertTrue(channel.isOpen());
+        assertNull(failure.get());
+        channel.finishAndReleaseAll();
+    }
+
+    @Test
     void forwardsTeleportTrafficUntilReplayIsolationIsActivated() {
         PacketRegistry registry = PacketRegistry.of(List.of(REPLAYABLE));
         AtomicReference<Throwable> failure = new AtomicReference<>();

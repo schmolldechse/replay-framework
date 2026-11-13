@@ -43,7 +43,8 @@ class PacketCoverageTest {
                         "play.clientbound.minecraft:cookie_request",
                         "play.clientbound.minecraft:cooldown",
                         "play.clientbound.minecraft:custom_chat_completions",
-                        "play.clientbound.minecraft:custom_payload"),
+                        "play.clientbound.minecraft:custom_payload",
+                        "play.clientbound.minecraft:damage_event"),
                 Paper26_3PacketCatalog.catalog().definitions().stream()
                         .map(definition -> definition.typeName())
                         .toList());
@@ -98,6 +99,8 @@ class PacketCoverageTest {
                         .equals("play.clientbound.minecraft:custom_chat_completions");
                 boolean customPayload =
                         descriptor.typeName().equals("play.clientbound.minecraft:custom_payload");
+                boolean damageEvent =
+                        descriptor.typeName().equals("play.clientbound.minecraft:damage_event");
                 PacketDisposition expectedDisposition;
                 if (bundleDelimiter
                         || blockChangedAck
@@ -117,7 +120,7 @@ class PacketCoverageTest {
                         || cooldown
                         || customChatCompletions) {
                     expectedDisposition = PacketDisposition.STATEFUL;
-                } else if (animate || blockDestruction || blockEvent || commandSuggestions) {
+                } else if (animate || blockDestruction || blockEvent || commandSuggestions || damageEvent) {
                     expectedDisposition = PacketDisposition.EPHEMERAL;
                 } else if (customPayload) {
                     expectedDisposition = PacketDisposition.CONFIGURABLE;
@@ -145,12 +148,13 @@ class PacketCoverageTest {
                                 || containerPacket
                                 || cooldown
                                 || customChatCompletions
-                                || customPayload,
+                                || customPayload
+                                || damageEvent,
                         descriptor.replayable());
                 assertEquals(
                         addEntity || blockEntityData || blockUpdate || bossEvent || chunksBiomes,
                         descriptor.checkpointRelevant());
-                if (addEntity || animate || blockDestruction || bossEvent) {
+                if (addEntity || animate || blockDestruction || bossEvent || damageEvent) {
                     assertEquals(
                             dev.voldechse.replayframework.adapter.PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES,
                             descriptor.playbackScope());
@@ -199,7 +203,8 @@ class PacketCoverageTest {
                                 || cookieRequest
                                 || cooldown
                                 || customChatCompletions
-                                || customPayload,
+                                || customPayload
+                                || damageEvent,
                         Paper26_3PacketRegistry.explicitlyClassifies(descriptor.typeName()));
             }
         }

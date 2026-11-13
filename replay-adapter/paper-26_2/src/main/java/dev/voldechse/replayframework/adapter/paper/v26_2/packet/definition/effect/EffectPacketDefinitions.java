@@ -11,7 +11,8 @@ public final class EffectPacketDefinitions {
             List.of(
                     new Id002AnimatePacketDefinition(),
                     new Id005BlockDestructionPacketDefinition(),
-                    new Id009BossEventPacketDefinition());
+                    new Id009BossEventPacketDefinition(),
+                    new Id025DamageEventPacketDefinition());
 
     private EffectPacketDefinitions() {}
 

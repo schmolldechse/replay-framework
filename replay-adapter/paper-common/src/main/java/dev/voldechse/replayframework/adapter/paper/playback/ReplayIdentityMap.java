@@ -68,8 +68,10 @@ public final class ReplayIdentityMap {
         long mixed = context.playbackSessionId().getLeastSignificantBits()
                 ^ (recordedId * 0x9E3779B9L);
         int candidate = -((int) (mixed & 0x3FFFFFFFL) + 1);
-        while (!usedEntityIds.add(candidate)) {
-            candidate = candidate == Integer.MIN_VALUE ? -1 : candidate - 1;
+        // -1 is the wire sentinel for absent entity references in packets such
+        // as damage_event, so replay identities must never be allocated there.
+        while (candidate == -1 || !usedEntityIds.add(candidate)) {
+            candidate = candidate == Integer.MIN_VALUE ? -2 : candidate - 1;
         }
         return candidate;
     }

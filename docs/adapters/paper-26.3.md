@@ -174,7 +174,7 @@ test status.
 | 22 | `minecraft:cooldown` | Sets, replaces or clears an item-use cooldown for one receiver-local group; shared groups can affect multiple items, so leave the neutral observer unchanged | DROP_LOCAL | no |
 | 23 | `minecraft:custom_chat_completions` | Adds, removes or replaces receiver-local chat suggestions; leave the neutral observer's own suggestion set unchanged | DROP_LOCAL | no |
 | 24 | `minecraft:custom_payload` | Carries brand or channel-defined plugin/mod bytes whose schema and effects belong to the receiving connection | DROP_LOCAL | no |
-| 25 | `minecraft:damage_event` | Ordered scene effect: damage on replay entities with isolated source IDs | REWRITE | no |
+| 25 | `minecraft:damage_event` | Ordered hurt effect with rewritten target, causing-entity and direct-source IDs; optional source position takes precedence over entity sources | REWRITE | no |
 | 26 | `minecraft:debug/block_value` | Diagnostic or special-purpose packet without a safe playback contract | BLOCKED | no |
 | 27 | `minecraft:debug/chunk_value` | Diagnostic or special-purpose packet without a safe playback contract | BLOCKED | no |
 | 28 | `minecraft:debug/entity_value` | Diagnostic or special-purpose packet without a safe playback contract | BLOCKED | no |

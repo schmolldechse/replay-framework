@@ -52,6 +52,17 @@ final class ReplayIdentityMapTest {
     }
 
     @Test
+    void neverAllocatesMinusOneWhichIsReservedForAbsentEntityReferences() {
+        UUID sessionId = new UUID(0L, 0x9E3779B9L);
+        var identities = identities(sessionId, Set.of());
+
+        int mappedEntityId = identities.mapEntityId(1);
+
+        assertNotEquals(-1, mappedEntityId);
+        assertEquals(mappedEntityId, identities.mapEntityId(1));
+    }
+
+    @Test
     void clearRemovesMappingsButRetainsReservations() {
         UUID recordedUuid = UUID.fromString("00000000-0000-0000-0000-000000000006");
         var identities = identities(SESSION_ID, Set.of(-200));
