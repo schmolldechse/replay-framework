@@ -205,7 +205,7 @@ test status.
 | 54 | `minecraft:move_entity_pos_rot` | Ordered relative entity movement with signed 1/4096-block X/Y/Z deltas, raw yaw/pitch bytes, and on-ground flag; remap its entity ID | REWRITE in timeline order | no |
 | 55 | `minecraft:move_minecart_along_track` | Ordered minecart trajectory steps, each with position, movement vector, yaw/pitch, and interpolation weight; remap its entity ID | REWRITE in timeline order | yes |
 | 56 | `minecraft:move_entity_rot` | Relative entity rotation as raw yaw/pitch bytes and an on-ground flag; remap the entity ID | REWRITE in timeline order | no |
-| 57 | `minecraft:move_vehicle` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
+| 57 | `minecraft:move_vehicle` | Absolute vehicle position as three doubles plus Y/X rotation floats; corrects the recorded player's client-controlled vehicle | DROP_LOCAL to keep recorded player movement local to its source connection | no |
 | 58 | `minecraft:open_book` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 59 | `minecraft:open_screen` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 60 | `minecraft:open_sign_editor` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |

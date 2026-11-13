@@ -75,7 +75,8 @@ class PacketCoverageTest {
                         "play.clientbound.minecraft:move_entity_pos",
                         "play.clientbound.minecraft:move_entity_pos_rot",
                         "play.clientbound.minecraft:move_minecart_along_track",
-                        "play.clientbound.minecraft:move_entity_rot"),
+                        "play.clientbound.minecraft:move_entity_rot",
+                        "play.clientbound.minecraft:move_vehicle"),
                 Paper26_2PacketCatalog.catalog().definitions().stream()
                         .map(definition -> definition.typeName())
                         .toList());
@@ -193,6 +194,8 @@ class PacketCoverageTest {
                         .equals("play.clientbound.minecraft:move_minecart_along_track");
                 boolean moveEntityRot = descriptor.typeName()
                         .equals("play.clientbound.minecraft:move_entity_rot");
+                boolean moveVehicle = descriptor.typeName()
+                        .equals("play.clientbound.minecraft:move_vehicle");
                 PacketDisposition expectedDisposition;
                 if (bundleDelimiter
                         || blockChangedAck
@@ -242,6 +245,7 @@ class PacketCoverageTest {
                         || moveEntityPos
                         || moveEntityPosRot
                         || moveEntityRot
+                        || moveVehicle
                         || explode
                         || hurtAnimation
                         || gameEvent
@@ -282,6 +286,7 @@ class PacketCoverageTest {
                                 || moveEntityPos
                                 || moveEntityPosRot
                                 || moveEntityRot
+                                || moveVehicle
                                 || moveMinecartAlongTrack
                                 || damageEvent
                                 || deleteChat
@@ -340,6 +345,7 @@ class PacketCoverageTest {
                         || customChatCompletions
                         || customPayload
                         || lowDiskSpaceWarning
+                        || moveVehicle
                         || mapItemData
                         || merchantOffers
                         || deleteChat
@@ -423,6 +429,7 @@ class PacketCoverageTest {
                                 || moveEntityPosRot
                                 || moveEntityRot
                                 || moveMinecartAlongTrack
+                                || moveVehicle
                                 || disconnect,
                         Paper26_2PacketRegistry.explicitlyClassifies(descriptor.typeName()));
             }
