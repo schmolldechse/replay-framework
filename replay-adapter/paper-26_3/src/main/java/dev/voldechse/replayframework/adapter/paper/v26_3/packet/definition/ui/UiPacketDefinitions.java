@@ -15,7 +15,8 @@ public final class UiPacketDefinitions {
                     new Id017ContainerClosePacketDefinition(),
                     new Id018ContainerSetContentPacketDefinition(),
                     new Id019ContainerSetDataPacketDefinition(),
-                    new Id020ContainerSetSlotPacketDefinition());
+                    new Id020ContainerSetSlotPacketDefinition(),
+                    new Id022CooldownPacketDefinition());
 
     private UiPacketDefinitions() {}
 

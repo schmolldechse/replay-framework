@@ -40,7 +40,8 @@ class PacketCoverageTest {
                         "play.clientbound.minecraft:container_set_content",
                         "play.clientbound.minecraft:container_set_data",
                         "play.clientbound.minecraft:container_set_slot",
-                        "play.clientbound.minecraft:cookie_request"),
+                        "play.clientbound.minecraft:cookie_request",
+                        "play.clientbound.minecraft:cooldown"),
                 Paper26_2PacketCatalog.catalog().definitions().stream()
                         .map(definition -> definition.typeName())
                         .toList());
@@ -89,6 +90,8 @@ class PacketCoverageTest {
                         .contains(descriptor.typeName());
                 boolean cookieRequest =
                         descriptor.typeName().equals("play.clientbound.minecraft:cookie_request");
+                boolean cooldown =
+                        descriptor.typeName().equals("play.clientbound.minecraft:cooldown");
                 PacketDisposition expectedDisposition;
                 if (bundleDelimiter
                         || blockChangedAck
@@ -104,7 +107,8 @@ class PacketCoverageTest {
                         || chunksBiomes
                         || clearTitles
                         || commands
-                        || containerPacket) {
+                        || containerPacket
+                        || cooldown) {
                     expectedDisposition = PacketDisposition.STATEFUL;
                 } else if (animate || blockDestruction || blockEvent || commandSuggestions) {
                     expectedDisposition = PacketDisposition.EPHEMERAL;
@@ -129,7 +133,8 @@ class PacketCoverageTest {
                                 || clearTitles
                                 || commandSuggestions
                                 || commands
-                                || containerPacket,
+                                || containerPacket
+                                || cooldown,
                         descriptor.replayable());
                 assertEquals(
                         addEntity || blockEntityData || blockUpdate || bossEvent || chunksBiomes,
@@ -143,7 +148,8 @@ class PacketCoverageTest {
                         || clearTitles
                         || commandSuggestions
                         || commands
-                        || containerPacket) {
+                        || containerPacket
+                        || cooldown) {
                     assertEquals(
                             dev.voldechse.replayframework.adapter.PacketDescriptor.PlaybackScope.VIEWER_LOCAL,
                             descriptor.playbackScope());
@@ -177,7 +183,8 @@ class PacketCoverageTest {
                                 || commandSuggestions
                                 || commands
                                 || containerPacket
-                                || cookieRequest,
+                                || cookieRequest
+                                || cooldown,
                         Paper26_2PacketRegistry.explicitlyClassifies(descriptor.typeName()));
             }
         }

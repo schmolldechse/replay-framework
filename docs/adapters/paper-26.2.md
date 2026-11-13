@@ -170,7 +170,7 @@ test status.
 | 19 | `minecraft:container_set_data` | Updates a signed, menu-type-specific property for one container; preserve the neutral observer's live menu data | DROP_LOCAL | no |
 | 20 | `minecraft:container_set_slot` | Updates one signed menu slot with an optional component-bearing item stack for a container state; preserve the neutral observer's live inventory | DROP_LOCAL | no |
 | 21 | `minecraft:cookie_request` | Requests the client cookie under one namespaced key and elicits a nullable, size-bounded response owned by the current connection; never replay into an established connection | BLOCKED | no |
-| 22 | `minecraft:cooldown` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
+| 22 | `minecraft:cooldown` | Sets, replaces or clears an item-use cooldown for one receiver-local group; shared groups can affect multiple items, so leave the neutral observer unchanged | DROP_LOCAL | no |
 | 23 | `minecraft:custom_chat_completions` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 24 | `minecraft:custom_payload` | Must remain local: plugin-specific state of the recorded client; blocked for playback | DROP_LOCAL | no |
 | 25 | `minecraft:damage_event` | Ordered scene effect: damage on replay entities with isolated source IDs | REWRITE | no |
