@@ -11,7 +11,8 @@ public final class PlayerPacketDefinitions {
             List.of(
                     new Id003AwardStatsPacketDefinition(),
                     new Id064PlayerAbilitiesPacketDefinition(),
-                    new Id066PlayerCombatEndPacketDefinition());
+                    new Id066PlayerCombatEndPacketDefinition(),
+                    new Id067PlayerCombatEnterPacketDefinition());
 
     private PlayerPacketDefinitions() {}
 

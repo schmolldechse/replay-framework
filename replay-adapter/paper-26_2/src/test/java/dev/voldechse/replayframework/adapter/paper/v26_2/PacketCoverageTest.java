@@ -85,7 +85,8 @@ class PacketCoverageTest {
                         "play.clientbound.minecraft:place_ghost_recipe",
                         "play.clientbound.minecraft:player_abilities",
                         "play.clientbound.minecraft:player_chat",
-                        "play.clientbound.minecraft:player_combat_end"),
+                        "play.clientbound.minecraft:player_combat_end",
+                        "play.clientbound.minecraft:player_combat_enter"),
                 Paper26_2PacketCatalog.catalog().definitions().stream()
                         .map(definition -> definition.typeName())
                         .toList());
@@ -223,6 +224,8 @@ class PacketCoverageTest {
                         .equals("play.clientbound.minecraft:player_chat");
                 boolean playerCombatEnd = descriptor.typeName()
                         .equals("play.clientbound.minecraft:player_combat_end");
+                boolean playerCombatEnter = descriptor.typeName()
+                        .equals("play.clientbound.minecraft:player_combat_enter");
                 PacketDisposition expectedDisposition;
                 if (bundleDelimiter
                         || blockChangedAck
@@ -279,6 +282,7 @@ class PacketCoverageTest {
                         || openScreen
                         || openSignEditor
                         || playerCombatEnd
+                        || playerCombatEnter
                         || placeGhostRecipe
                         || explode
                         || hurtAnimation
@@ -328,6 +332,7 @@ class PacketCoverageTest {
                                 || playerAbilities
                                 || playerChat
                                 || playerCombatEnd
+                                || playerCombatEnter
                                 || moveMinecartAlongTrack
                                 || damageEvent
                                 || deleteChat
@@ -393,6 +398,7 @@ class PacketCoverageTest {
                         || openScreen
                         || openSignEditor
                         || playerCombatEnd
+                        || playerCombatEnter
                         || mapItemData
                         || merchantOffers
                         || deleteChat
@@ -487,6 +493,7 @@ class PacketCoverageTest {
                                 || placeGhostRecipe
                                 || playerAbilities
                                 || playerCombatEnd
+                                || playerCombatEnter
                                 || disconnect,
                         Paper26_2PacketRegistry.explicitlyClassifies(descriptor.typeName()));
             }
