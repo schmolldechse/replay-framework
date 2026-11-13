@@ -67,7 +67,8 @@ class PacketCoverageTest {
                         "play.clientbound.minecraft:level_chunk_with_light",
                         "play.clientbound.minecraft:level_event",
                         "play.clientbound.minecraft:level_particles",
-                        "play.clientbound.minecraft:light_update"),
+                        "play.clientbound.minecraft:light_update",
+                        "play.clientbound.minecraft:login"),
                 Paper26_2PacketCatalog.catalog().definitions().stream()
                         .map(definition -> definition.typeName())
                         .toList());
@@ -170,6 +171,7 @@ class PacketCoverageTest {
                         .equals("play.clientbound.minecraft:level_particles");
                 boolean lightUpdate =
                         descriptor.typeName().equals("play.clientbound.minecraft:light_update");
+                boolean login = descriptor.typeName().equals("play.clientbound.minecraft:login");
                 PacketDisposition expectedDisposition;
                 if (bundleDelimiter
                         || blockChangedAck
@@ -183,6 +185,7 @@ class PacketCoverageTest {
                         || debugSample
                         || gameTestHighlightPos
                         || keepAlive
+                        || login
                         || disconnect) {
                     expectedDisposition = PacketDisposition.CONTROL;
                 } else if (addEntity
@@ -369,6 +372,7 @@ class PacketCoverageTest {
                                 || levelEvent
                                 || levelParticles
                                 || lightUpdate
+                                || login
                                 || disconnect,
                         Paper26_2PacketRegistry.explicitlyClassifies(descriptor.typeName()));
             }

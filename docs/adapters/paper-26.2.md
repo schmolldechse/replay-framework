@@ -197,7 +197,7 @@ test status.
 | 46 | `minecraft:level_event` | One-shot sound, particle, animation, or related world effect; event-specific data and the global-volume flag must be preserved | SEND in event order, retaining global-volume semantics | no |
 | 47 | `minecraft:level_particles` | Particle spawn with visibility flags, coordinates, spread, speed, count, and registry-specific payload; vibration particles can reference a block or entity destination | REWRITE entity vibration destination; preserve other payloads and rendering flags | no |
 | 48 | `minecraft:light_update` | Incremental sky/block light data for one chunk; masks distinguish changed sections, explicit all-zero sections, and unchanged sections | SEND with exact masks and section arrays | yes |
-| 49 | `minecraft:login` | Transport, connection, or server control; never replay into an established connection | BLOCKED | no |
+| 49 | `minecraft:login` | Initializes the active player and world with player ID, available dimensions, view/simulation settings, and common spawn information | BLOCKED; do not replace an established observer connection's player/world context | no |
 | 50 | `minecraft:low_disk_space_warning` | Diagnostic or special-purpose packet without a safe playback contract | BLOCKED | no |
 | 51 | `minecraft:map_item_data` | Map presentation; numeric map IDs are not currently isolated | SEND | yes |
 | 52 | `minecraft:merchant_offers` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
