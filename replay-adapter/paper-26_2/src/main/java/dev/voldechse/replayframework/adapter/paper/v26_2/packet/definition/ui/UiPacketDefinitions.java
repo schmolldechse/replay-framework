@@ -20,7 +20,8 @@ public final class UiPacketDefinitions {
                     new Id041MountScreenOpenPacketDefinition(),
                     new Id050LowDiskSpaceWarningPacketDefinition(),
                     new Id052MerchantOffersPacketDefinition(),
-                    new Id058OpenBookPacketDefinition());
+                    new Id058OpenBookPacketDefinition(),
+                    new Id059OpenScreenPacketDefinition());
 
     private UiPacketDefinitions() {}
 

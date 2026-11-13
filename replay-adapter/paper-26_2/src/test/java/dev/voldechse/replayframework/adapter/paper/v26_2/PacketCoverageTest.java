@@ -77,7 +77,8 @@ class PacketCoverageTest {
                         "play.clientbound.minecraft:move_minecart_along_track",
                         "play.clientbound.minecraft:move_entity_rot",
                         "play.clientbound.minecraft:move_vehicle",
-                        "play.clientbound.minecraft:open_book"),
+                        "play.clientbound.minecraft:open_book",
+                        "play.clientbound.minecraft:open_screen"),
                 Paper26_2PacketCatalog.catalog().definitions().stream()
                         .map(definition -> definition.typeName())
                         .toList());
@@ -199,6 +200,8 @@ class PacketCoverageTest {
                         .equals("play.clientbound.minecraft:move_vehicle");
                 boolean openBook = descriptor.typeName()
                         .equals("play.clientbound.minecraft:open_book");
+                boolean openScreen = descriptor.typeName()
+                        .equals("play.clientbound.minecraft:open_screen");
                 PacketDisposition expectedDisposition;
                 if (bundleDelimiter
                         || blockChangedAck
@@ -250,6 +253,7 @@ class PacketCoverageTest {
                         || moveEntityRot
                         || moveVehicle
                         || openBook
+                        || openScreen
                         || explode
                         || hurtAnimation
                         || gameEvent
@@ -292,6 +296,7 @@ class PacketCoverageTest {
                                 || moveEntityRot
                                 || moveVehicle
                                 || openBook
+                                || openScreen
                                 || moveMinecartAlongTrack
                                 || damageEvent
                                 || deleteChat
@@ -352,6 +357,7 @@ class PacketCoverageTest {
                         || lowDiskSpaceWarning
                         || moveVehicle
                         || openBook
+                        || openScreen
                         || mapItemData
                         || merchantOffers
                         || deleteChat
@@ -437,6 +443,7 @@ class PacketCoverageTest {
                                 || moveMinecartAlongTrack
                                 || moveVehicle
                                 || openBook
+                                || openScreen
                                 || disconnect,
                         Paper26_2PacketRegistry.explicitlyClassifies(descriptor.typeName()));
             }
