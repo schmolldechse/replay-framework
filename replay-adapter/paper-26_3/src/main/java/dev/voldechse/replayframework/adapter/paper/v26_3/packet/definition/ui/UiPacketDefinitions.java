@@ -8,7 +8,10 @@ import java.util.List;
 public final class UiPacketDefinitions {
 
     private static final List<PacketDefinition<Paper26_3ReplayPacketRewriter>> DEFINITIONS =
-            List.of(new Id014ClearTitlesPacketDefinition());
+            List.of(
+                    new Id014ClearTitlesPacketDefinition(),
+                    new Id015CommandSuggestionsPacketDefinition(),
+                    new Id016CommandsPacketDefinition());
 
     private UiPacketDefinitions() {}
 

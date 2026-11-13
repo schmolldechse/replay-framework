@@ -33,7 +33,9 @@ class PacketCoverageTest {
                         "play.clientbound.minecraft:chunk_batch_finished",
                         "play.clientbound.minecraft:chunk_batch_start",
                         "play.clientbound.minecraft:chunks_biomes",
-                        "play.clientbound.minecraft:clear_titles"),
+                        "play.clientbound.minecraft:clear_titles",
+                        "play.clientbound.minecraft:command_suggestions",
+                        "play.clientbound.minecraft:commands"),
                 Paper26_3PacketCatalog.catalog().definitions().stream()
                         .map(definition -> definition.typeName())
                         .toList());
@@ -70,6 +72,10 @@ class PacketCoverageTest {
                         descriptor.typeName().equals("play.clientbound.minecraft:chunks_biomes");
                 boolean clearTitles =
                         descriptor.typeName().equals("play.clientbound.minecraft:clear_titles");
+                boolean commandSuggestions = descriptor.typeName()
+                        .equals("play.clientbound.minecraft:command_suggestions");
+                boolean commands =
+                        descriptor.typeName().equals("play.clientbound.minecraft:commands");
                 PacketDisposition expectedDisposition;
                 if (bundleDelimiter || blockChangedAck || chunkBatchFinished || chunkBatchStart) {
                     expectedDisposition = PacketDisposition.CONTROL;
@@ -79,9 +85,10 @@ class PacketCoverageTest {
                         || bossEvent
                         || changeDifficulty
                         || chunksBiomes
-                        || clearTitles) {
+                        || clearTitles
+                        || commands) {
                     expectedDisposition = PacketDisposition.STATEFUL;
-                } else if (animate || blockDestruction || blockEvent) {
+                } else if (animate || blockDestruction || blockEvent || commandSuggestions) {
                     expectedDisposition = PacketDisposition.EPHEMERAL;
                 } else if (awardStats) {
                     expectedDisposition = PacketDisposition.STATEFUL;
@@ -101,7 +108,9 @@ class PacketCoverageTest {
                                 || bossEvent
                                 || changeDifficulty
                                 || chunksBiomes
-                                || clearTitles,
+                                || clearTitles
+                                || commandSuggestions
+                                || commands,
                         descriptor.replayable());
                 assertEquals(
                         addEntity || blockEntityData || blockUpdate || bossEvent || chunksBiomes,
@@ -110,7 +119,11 @@ class PacketCoverageTest {
                     assertEquals(
                             dev.voldechse.replayframework.adapter.PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES,
                             descriptor.playbackScope());
-                } else if (awardStats || changeDifficulty || clearTitles) {
+                } else if (awardStats
+                        || changeDifficulty
+                        || clearTitles
+                        || commandSuggestions
+                        || commands) {
                     assertEquals(
                             dev.voldechse.replayframework.adapter.PacketDescriptor.PlaybackScope.VIEWER_LOCAL,
                             descriptor.playbackScope());
@@ -140,7 +153,9 @@ class PacketCoverageTest {
                                 || chunkBatchFinished
                                 || chunkBatchStart
                                 || chunksBiomes
-                                || clearTitles,
+                                || clearTitles
+                                || commandSuggestions
+                                || commands,
                         Paper26_3PacketRegistry.explicitlyClassifies(descriptor.typeName()));
             }
         }
