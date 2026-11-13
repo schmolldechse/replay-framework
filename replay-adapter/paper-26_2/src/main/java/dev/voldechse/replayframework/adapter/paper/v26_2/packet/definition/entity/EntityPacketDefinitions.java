@@ -13,7 +13,8 @@ public final class EntityPacketDefinitions {
                     new Id035EntityPositionSyncPacketDefinition(),
                     new Id053MoveEntityPosPacketDefinition(),
                     new Id054MoveEntityPosRotPacketDefinition(),
-                    new Id055MoveMinecartAlongTrackPacketDefinition());
+                    new Id055MoveMinecartAlongTrackPacketDefinition(),
+                    new Id056MoveEntityRotPacketDefinition());
 
     private EntityPacketDefinitions() {}
 
