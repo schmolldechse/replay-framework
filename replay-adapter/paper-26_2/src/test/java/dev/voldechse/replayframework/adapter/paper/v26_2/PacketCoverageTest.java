@@ -58,7 +58,8 @@ class PacketCoverageTest {
                         "play.clientbound.minecraft:explode",
                         "play.clientbound.minecraft:forget_level_chunk",
                         "play.clientbound.minecraft:game_event",
-                        "play.clientbound.minecraft:game_rule_values"),
+                        "play.clientbound.minecraft:game_rule_values",
+                        "play.clientbound.minecraft:game_test_highlight_pos"),
                 Paper26_2PacketCatalog.catalog().definitions().stream()
                         .map(definition -> definition.typeName())
                         .toList());
@@ -143,6 +144,8 @@ class PacketCoverageTest {
                         descriptor.typeName().equals("play.clientbound.minecraft:game_event");
                 boolean gameRuleValues = descriptor.typeName()
                         .equals("play.clientbound.minecraft:game_rule_values");
+                boolean gameTestHighlightPos = descriptor.typeName()
+                        .equals("play.clientbound.minecraft:game_test_highlight_pos");
                 PacketDisposition expectedDisposition;
                 if (bundleDelimiter
                         || blockChangedAck
@@ -154,6 +157,7 @@ class PacketCoverageTest {
                         || debugEntityValue
                         || debugEvent
                         || debugSample
+                        || gameTestHighlightPos
                         || disconnect) {
                     expectedDisposition = PacketDisposition.CONTROL;
                 } else if (addEntity
@@ -307,6 +311,7 @@ class PacketCoverageTest {
                                 || forgetLevelChunk
                                 || gameEvent
                                 || gameRuleValues
+                                || gameTestHighlightPos
                                 || disconnect,
                         Paper26_2PacketRegistry.explicitlyClassifies(descriptor.typeName()));
             }

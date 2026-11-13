@@ -13,7 +13,8 @@ public final class DiagnosticPacketDefinitions {
                     new Id027DebugChunkValuePacketDefinition(),
                     new Id028DebugEntityValuePacketDefinition(),
                     new Id029DebugEventPacketDefinition(),
-                    new Id030DebugSamplePacketDefinition());
+                    new Id030DebugSamplePacketDefinition(),
+                    new Id040GameTestHighlightPosPacketDefinition());
 
     private DiagnosticPacketDefinitions() {}
 
