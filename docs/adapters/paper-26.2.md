@@ -213,7 +213,7 @@ test status.
 | 62 | `minecraft:pong_response` | Returns the client-generated 64-bit ping time used for that connection's latency sample | BLOCKED to keep the response paired with its originating client request | no |
 | 63 | `minecraft:place_ghost_recipe` | Container ID and registry-dispatched recipe display, including nested slot displays; previews the selected recipe in the active crafting UI | DROP_LOCAL to preserve the observer's own menu and recipe selection | no |
 | 64 | `minecraft:player_abilities` | Four player-ability flags (invulnerable, flying, may fly, instabuild) and flying/walking speeds; controls the receiving player's local abilities | DROP_LOCAL to preserve the observer's own abilities and movement settings | no |
-| 65 | `minecraft:player_chat` | Recorded connection chat retained according to capture policy but suppressed for neutral playback | DROP_LOCAL* | no |
+| 65 | `minecraft:player_chat` | Global and sender message indexes, optional signature, packed signed body and last-seen chain, optional unsigned display component, filter mask, and bound chat decoration; recorded chat belongs to the replay's presentation state | Convert to `minecraft:disguised_chat` for unsigned visible presentation; source signature and last-seen chain are not applied to the observer | no |
 | 66 | `minecraft:player_combat_end` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 67 | `minecraft:player_combat_enter` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 68 | `minecraft:player_combat_kill` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |

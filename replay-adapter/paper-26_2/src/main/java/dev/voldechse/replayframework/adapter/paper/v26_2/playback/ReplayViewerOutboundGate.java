@@ -4,6 +4,7 @@ import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.PacketDisposition;
 import dev.voldechse.replayframework.adapter.PacketRegistry;
 import dev.voldechse.replayframework.adapter.paper.v26_2.capture.PaperConnectionAccessor;
+import dev.voldechse.replayframework.adapter.playback.NeutralObserverPolicy;
 import dev.voldechse.replayframework.format.PacketPhase;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelOutboundHandlerAdapter;
@@ -25,6 +26,7 @@ import net.minecraft.network.protocol.Packet;
 final class ReplayViewerOutboundGate extends ChannelOutboundHandlerAdapter {
 
     static final String HANDLER_NAME = "replay-framework-playback-gate";
+    private static final String CLIENTBOUND_TYPE_PREFIX = "play.clientbound.";
 
     private final PacketRegistry registry;
     private final Function<Object, PaperConnectionAccessor.WirePacket> inspector;
@@ -156,6 +158,11 @@ final class ReplayViewerOutboundGate extends ChannelOutboundHandlerAdapter {
         // They are live control/status UI, not replay state that should be
         // suppressed from the observer.
         if (value.playbackScope() == PacketDescriptor.PlaybackScope.VIEWER_LOCAL) {
+            return false;
+        }
+        if (value.typeName().startsWith(CLIENTBOUND_TYPE_PREFIX)
+                && NeutralObserverPolicy.isRecordedChatPresentation(
+                        value.typeName().substring(CLIENTBOUND_TYPE_PREFIX.length()))) {
             return false;
         }
         return value.replayable()

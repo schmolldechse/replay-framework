@@ -352,7 +352,16 @@ public final class PaperConnectionAccessor {
         if (packet instanceof ClientboundSystemChatPacket systemChat) {
             text = systemChat.content().getString();
         } else if (packet instanceof ClientboundPlayerChatPacket playerChat) {
-            text = playerChat.unsignedContent().getString();
+            if (playerChat.filterMask().isFullyFiltered()) {
+                text = "";
+            } else if (playerChat.unsignedContent() != null) {
+                text = playerChat.unsignedContent().getString();
+            } else {
+                // Paper 26.2 permits absent unsigned content. In that form,
+                // expose only the signed body text allowed by its filter mask.
+                String filtered = playerChat.filterMask().apply(playerChat.body().content());
+                text = filtered == null ? "" : filtered;
+            }
         } else if (packet instanceof ClientboundDisguisedChatPacket disguisedChat) {
             text = disguisedChat.message().getString();
         } else {

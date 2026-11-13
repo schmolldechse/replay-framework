@@ -83,7 +83,8 @@ class PacketCoverageTest {
                         "play.clientbound.minecraft:ping",
                         "play.clientbound.minecraft:pong_response",
                         "play.clientbound.minecraft:place_ghost_recipe",
-                        "play.clientbound.minecraft:player_abilities"),
+                        "play.clientbound.minecraft:player_abilities",
+                        "play.clientbound.minecraft:player_chat"),
                 Paper26_2PacketCatalog.catalog().definitions().stream()
                         .map(definition -> definition.typeName())
                         .toList());
@@ -217,6 +218,8 @@ class PacketCoverageTest {
                         .equals("play.clientbound.minecraft:place_ghost_recipe");
                 boolean playerAbilities = descriptor.typeName()
                         .equals("play.clientbound.minecraft:player_abilities");
+                boolean playerChat = descriptor.typeName()
+                        .equals("play.clientbound.minecraft:player_chat");
                 PacketDisposition expectedDisposition;
                 if (bundleDelimiter
                         || blockChangedAck
@@ -280,7 +283,7 @@ class PacketCoverageTest {
                         || levelParticles
                         || lowDiskSpaceWarning) {
                     expectedDisposition = PacketDisposition.EPHEMERAL;
-                } else if (customPayload) {
+                } else if (customPayload || playerChat) {
                     expectedDisposition = PacketDisposition.CONFIGURABLE;
                 } else if (awardStats || playerAbilities) {
                     expectedDisposition = PacketDisposition.STATEFUL;
@@ -319,6 +322,7 @@ class PacketCoverageTest {
                                 || openScreen
                                 || openSignEditor
                                 || playerAbilities
+                                || playerChat
                                 || moveMinecartAlongTrack
                                 || damageEvent
                                 || deleteChat
@@ -401,7 +405,8 @@ class PacketCoverageTest {
                         || levelChunkWithLight
                         || levelEvent
                         || lightUpdate
-                        || initializeBorder) {
+                        || initializeBorder
+                        || playerChat) {
                     assertEquals(
                             dev.voldechse.replayframework.adapter.PacketDescriptor.PlaybackScope.SAFE,
                             descriptor.playbackScope());
@@ -435,6 +440,7 @@ class PacketCoverageTest {
                                 || cooldown
                                 || customChatCompletions
                                 || customPayload
+                                || playerChat
                                 || damageEvent
                                 || debugBlockValue
                                 || debugChunkValue

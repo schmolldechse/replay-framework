@@ -390,7 +390,19 @@ public final class Paper26_2PlaybackBridge implements PlaybackBridge {
         }
         if (result.decision() == Paper26_2ReplayPacketRewriter.RewriteResult.Decision.SEND) {
             resetter.observe(result.packet());
-            replayWriter.write(currentRewriter.encode(result.packet(), descriptor, codec));
+            PacketDescriptor outputDescriptor = result.outputPacketId()
+                    .map(packetId -> registry.find(
+                                    frame.phase(),
+                                    PacketDescriptor.Direction.CLIENTBOUND,
+                                    packetId)
+                            .filter(candidate -> candidate.replayable())
+                            .filter(candidate -> registry.replayAllowed(
+                                    candidate.phase(), candidate.direction(), candidate.packetId()))
+                            .orElseThrow(() -> incompatible(
+                                    "rewritten packet output ID is not permitted by the verified registry",
+                                    null)))
+                    .orElse(descriptor);
+            replayWriter.write(currentRewriter.encode(result.packet(), outputDescriptor, codec));
         }
     }
 

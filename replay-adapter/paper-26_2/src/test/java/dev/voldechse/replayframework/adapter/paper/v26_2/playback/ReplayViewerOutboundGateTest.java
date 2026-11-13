@@ -156,6 +156,30 @@ class ReplayViewerOutboundGateTest {
         }
     }
 
+    @Test
+    void livePlayerChatRemainsVisibleDuringReplayIsolation() {
+        PacketDescriptor playerChat = new PacketDescriptor(
+                "play.clientbound.minecraft:player_chat",
+                PacketPhase.PLAY,
+                PacketDescriptor.Direction.CLIENTBOUND,
+                65,
+                PacketDisposition.CONFIGURABLE,
+                true,
+                true,
+                false,
+                "paper-26.2/minecraft:player_chat",
+                PacketDescriptor.PlaybackScope.SAFE);
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        EmbeddedChannel channel = new EmbeddedChannel(
+                gateFor(PacketRegistry.of(List.of(playerChat)), failure));
+
+        TestPacket liveChat = new TestPacket(65);
+        assertTrue(channel.writeOutbound(liveChat));
+        assertSame(liveChat, channel.readOutbound());
+        assertNull(failure.get());
+        channel.finishAndReleaseAll();
+    }
+
     private static ReplayViewerOutboundGate gateFor(
             PacketRegistry registry,
             AtomicReference<Throwable> failure) {

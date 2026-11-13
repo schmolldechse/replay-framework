@@ -8,6 +8,7 @@ import dev.voldechse.replayframework.adapter.paper.v26_3.packet.Paper26_3PacketC
 import dev.voldechse.replayframework.adapter.playback.PlaybackIdentityContext;
 import dev.voldechse.replayframework.format.RawPacketFrame;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -73,34 +74,43 @@ public final class Paper26_3ReplayPacketRewriter {
 
     private static RewriteResult toRewriteResult(PacketRewriteResult result) {
         return switch (result.decision()) {
-            case SEND -> RewriteResult.send(result.packet().orElseThrow());
+            case SEND -> RewriteResult.send(
+                    result.packet().orElseThrow(), result.outputPacketId());
             case DROP_LOCAL -> RewriteResult.dropLocal(result.reason());
             case FAIL -> RewriteResult.fail(result.reason());
         };
     }
 
     /** Result of the version-bound packet dispatch step. */
-    record RewriteResult(Decision decision, Object packet, String reason) {
+    record RewriteResult(
+            Decision decision,
+            Object packet,
+            Optional<Integer> outputPacketId,
+            String reason) {
         RewriteResult {
             Objects.requireNonNull(decision, "decision");
+            Objects.requireNonNull(outputPacketId, "outputPacketId");
             if (decision == Decision.SEND) {
                 Objects.requireNonNull(packet, "packet");
             } else if (packet != null) {
                 throw new IllegalArgumentException("non-send rewrite result must not carry a packet");
             }
+            if (decision != Decision.SEND && outputPacketId.isPresent()) {
+                throw new IllegalArgumentException("non-send rewrite result must not declare output ID");
+            }
             Objects.requireNonNull(reason, "reason");
         }
 
         static RewriteResult fail(String reason) {
-            return new RewriteResult(Decision.FAIL, null, reason);
+            return new RewriteResult(Decision.FAIL, null, Optional.empty(), reason);
         }
 
-        static RewriteResult send(Object packet) {
-            return new RewriteResult(Decision.SEND, packet, "send");
+        static RewriteResult send(Object packet, Optional<Integer> outputPacketId) {
+            return new RewriteResult(Decision.SEND, packet, outputPacketId, "send");
         }
 
         static RewriteResult dropLocal(String reason) {
-            return new RewriteResult(Decision.DROP_LOCAL, null, reason);
+            return new RewriteResult(Decision.DROP_LOCAL, null, Optional.empty(), reason);
         }
 
         enum Decision {
