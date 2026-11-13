@@ -49,7 +49,8 @@ class PacketCoverageTest {
                         "play.clientbound.minecraft:debug/chunk_value",
                         "play.clientbound.minecraft:debug/entity_value",
                         "play.clientbound.minecraft:debug/event",
-                        "play.clientbound.minecraft:debug_sample"),
+                        "play.clientbound.minecraft:debug_sample",
+                        "play.clientbound.minecraft:delete_chat"),
                 Paper26_2PacketCatalog.catalog().definitions().stream()
                         .map(definition -> definition.typeName())
                         .toList());
@@ -116,6 +117,8 @@ class PacketCoverageTest {
                         descriptor.typeName().equals("play.clientbound.minecraft:debug/event");
                 boolean debugSample =
                         descriptor.typeName().equals("play.clientbound.minecraft:debug_sample");
+                boolean deleteChat =
+                        descriptor.typeName().equals("play.clientbound.minecraft:delete_chat");
                 PacketDisposition expectedDisposition;
                 if (bundleDelimiter
                         || blockChangedAck
@@ -140,7 +143,12 @@ class PacketCoverageTest {
                         || cooldown
                         || customChatCompletions) {
                     expectedDisposition = PacketDisposition.STATEFUL;
-                } else if (animate || blockDestruction || blockEvent || commandSuggestions || damageEvent) {
+                } else if (animate
+                        || blockDestruction
+                        || blockEvent
+                        || commandSuggestions
+                        || damageEvent
+                        || deleteChat) {
                     expectedDisposition = PacketDisposition.EPHEMERAL;
                 } else if (customPayload) {
                     expectedDisposition = PacketDisposition.CONFIGURABLE;
@@ -169,7 +177,8 @@ class PacketCoverageTest {
                                 || cooldown
                                 || customChatCompletions
                                 || customPayload
-                                || damageEvent,
+                                || damageEvent
+                                || deleteChat,
                         descriptor.replayable());
                 assertEquals(
                         addEntity || blockEntityData || blockUpdate || bossEvent || chunksBiomes,
@@ -186,7 +195,8 @@ class PacketCoverageTest {
                         || containerPacket
                         || cooldown
                         || customChatCompletions
-                        || customPayload) {
+                        || customPayload
+                        || deleteChat) {
                     assertEquals(
                             dev.voldechse.replayframework.adapter.PacketDescriptor.PlaybackScope.VIEWER_LOCAL,
                             descriptor.playbackScope());
@@ -229,7 +239,8 @@ class PacketCoverageTest {
                                 || debugChunkValue
                                 || debugEntityValue
                                 || debugEvent
-                                || debugSample,
+                                || debugSample
+                                || deleteChat,
                         Paper26_2PacketRegistry.explicitlyClassifies(descriptor.typeName()));
             }
         }

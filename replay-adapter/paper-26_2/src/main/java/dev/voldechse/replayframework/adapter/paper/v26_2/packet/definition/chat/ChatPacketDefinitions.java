@@ -8,7 +8,9 @@ import java.util.List;
 public final class ChatPacketDefinitions {
 
     private static final List<PacketDefinition<Paper26_2ReplayPacketRewriter>> DEFINITIONS =
-            List.of(new Id023CustomChatCompletionsPacketDefinition());
+            List.of(
+                    new Id023CustomChatCompletionsPacketDefinition(),
+                    new Id031DeleteChatPacketDefinition());
 
     private ChatPacketDefinitions() {}
 
