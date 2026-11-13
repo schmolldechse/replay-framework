@@ -21,7 +21,8 @@ public final class UiPacketDefinitions {
                     new Id050LowDiskSpaceWarningPacketDefinition(),
                     new Id052MerchantOffersPacketDefinition(),
                     new Id058OpenBookPacketDefinition(),
-                    new Id059OpenScreenPacketDefinition());
+                    new Id059OpenScreenPacketDefinition(),
+                    new Id060OpenSignEditorPacketDefinition());
 
     private UiPacketDefinitions() {}
 

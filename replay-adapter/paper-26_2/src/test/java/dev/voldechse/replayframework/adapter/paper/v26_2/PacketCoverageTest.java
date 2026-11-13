@@ -78,7 +78,8 @@ class PacketCoverageTest {
                         "play.clientbound.minecraft:move_entity_rot",
                         "play.clientbound.minecraft:move_vehicle",
                         "play.clientbound.minecraft:open_book",
-                        "play.clientbound.minecraft:open_screen"),
+                        "play.clientbound.minecraft:open_screen",
+                        "play.clientbound.minecraft:open_sign_editor"),
                 Paper26_2PacketCatalog.catalog().definitions().stream()
                         .map(definition -> definition.typeName())
                         .toList());
@@ -202,6 +203,8 @@ class PacketCoverageTest {
                         .equals("play.clientbound.minecraft:open_book");
                 boolean openScreen = descriptor.typeName()
                         .equals("play.clientbound.minecraft:open_screen");
+                boolean openSignEditor = descriptor.typeName()
+                        .equals("play.clientbound.minecraft:open_sign_editor");
                 PacketDisposition expectedDisposition;
                 if (bundleDelimiter
                         || blockChangedAck
@@ -254,6 +257,7 @@ class PacketCoverageTest {
                         || moveVehicle
                         || openBook
                         || openScreen
+                        || openSignEditor
                         || explode
                         || hurtAnimation
                         || gameEvent
@@ -297,6 +301,7 @@ class PacketCoverageTest {
                                 || moveVehicle
                                 || openBook
                                 || openScreen
+                                || openSignEditor
                                 || moveMinecartAlongTrack
                                 || damageEvent
                                 || deleteChat
@@ -358,6 +363,7 @@ class PacketCoverageTest {
                         || moveVehicle
                         || openBook
                         || openScreen
+                        || openSignEditor
                         || mapItemData
                         || merchantOffers
                         || deleteChat
@@ -444,6 +450,7 @@ class PacketCoverageTest {
                                 || moveVehicle
                                 || openBook
                                 || openScreen
+                                || openSignEditor
                                 || disconnect,
                         Paper26_2PacketRegistry.explicitlyClassifies(descriptor.typeName()));
             }
