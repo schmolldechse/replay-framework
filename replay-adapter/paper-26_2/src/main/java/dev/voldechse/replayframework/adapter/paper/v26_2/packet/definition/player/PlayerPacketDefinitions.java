@@ -12,7 +12,8 @@ public final class PlayerPacketDefinitions {
                     new Id003AwardStatsPacketDefinition(),
                     new Id064PlayerAbilitiesPacketDefinition(),
                     new Id066PlayerCombatEndPacketDefinition(),
-                    new Id067PlayerCombatEnterPacketDefinition());
+                    new Id067PlayerCombatEnterPacketDefinition(),
+                    new Id068PlayerCombatKillPacketDefinition());
 
     private PlayerPacketDefinitions() {}
 
