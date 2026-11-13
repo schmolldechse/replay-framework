@@ -68,7 +68,8 @@ class PacketCoverageTest {
                         "play.clientbound.minecraft:level_event",
                         "play.clientbound.minecraft:level_particles",
                         "play.clientbound.minecraft:light_update",
-                        "play.clientbound.minecraft:login"),
+                        "play.clientbound.minecraft:login",
+                        "play.clientbound.minecraft:low_disk_space_warning"),
                 Paper26_2PacketCatalog.catalog().definitions().stream()
                         .map(definition -> definition.typeName())
                         .toList());
@@ -172,6 +173,8 @@ class PacketCoverageTest {
                 boolean lightUpdate =
                         descriptor.typeName().equals("play.clientbound.minecraft:light_update");
                 boolean login = descriptor.typeName().equals("play.clientbound.minecraft:login");
+                boolean lowDiskSpaceWarning = descriptor.typeName()
+                        .equals("play.clientbound.minecraft:low_disk_space_warning");
                 PacketDisposition expectedDisposition;
                 if (bundleDelimiter
                         || blockChangedAck
@@ -219,7 +222,8 @@ class PacketCoverageTest {
                         || hurtAnimation
                         || gameEvent
                         || levelEvent
-                        || levelParticles) {
+                        || levelParticles
+                        || lowDiskSpaceWarning) {
                     expectedDisposition = PacketDisposition.EPHEMERAL;
                 } else if (customPayload) {
                     expectedDisposition = PacketDisposition.CONFIGURABLE;
@@ -248,6 +252,7 @@ class PacketCoverageTest {
                                 || cooldown
                                 || customChatCompletions
                                 || customPayload
+                                || lowDiskSpaceWarning
                                 || damageEvent
                                 || deleteChat
                                 || disguisedChat
@@ -299,6 +304,7 @@ class PacketCoverageTest {
                         || cooldown
                         || customChatCompletions
                         || customPayload
+                        || lowDiskSpaceWarning
                         || deleteChat
                         || disguisedChat
                         || gameRuleValues
@@ -373,6 +379,7 @@ class PacketCoverageTest {
                                 || levelParticles
                                 || lightUpdate
                                 || login
+                                || lowDiskSpaceWarning
                                 || disconnect,
                         Paper26_2PacketRegistry.explicitlyClassifies(descriptor.typeName()));
             }
