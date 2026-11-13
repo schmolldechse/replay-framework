@@ -191,7 +191,7 @@ test status.
 | 40 | `minecraft:game_test_highlight_pos` | GameTest `showPos` highlight for a selected block and its test-relative coordinates; no general replay target exists | BLOCKED | no |
 | 41 | `minecraft:mount_screen_open` | Opens the recorded player's horse or Nautilus inventory using its connection-local container ID and mount entity ID; leave the observer's UI unchanged | DROP_LOCAL | no |
 | 42 | `minecraft:hurt_animation` | Directional damage animation for a replay entity; remap its target entity ID and preserve yaw | REWRITE | no |
-| 43 | `minecraft:initialize_border` | Essential scene state: durable world or scene state | SEND | yes |
+| 43 | `minecraft:initialize_border` | Full world-border center, current and target size, transition, maximum boundary, and warning settings | SEND | yes |
 | 44 | `minecraft:keep_alive` | Transport, connection, or server control; never replay into an established connection | BLOCKED | no |
 | 45 | `minecraft:level_chunk_with_light` | Essential scene state: durable world or scene state | SEND | yes |
 | 46 | `minecraft:level_event` | Ordered presentation or environment effect | SEND | no |
