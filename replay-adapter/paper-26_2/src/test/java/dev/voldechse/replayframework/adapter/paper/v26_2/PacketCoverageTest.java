@@ -59,7 +59,8 @@ class PacketCoverageTest {
                         "play.clientbound.minecraft:forget_level_chunk",
                         "play.clientbound.minecraft:game_event",
                         "play.clientbound.minecraft:game_rule_values",
-                        "play.clientbound.minecraft:game_test_highlight_pos"),
+                        "play.clientbound.minecraft:game_test_highlight_pos",
+                        "play.clientbound.minecraft:mount_screen_open"),
                 Paper26_2PacketCatalog.catalog().definitions().stream()
                         .map(definition -> definition.typeName())
                         .toList());
@@ -146,6 +147,8 @@ class PacketCoverageTest {
                         .equals("play.clientbound.minecraft:game_rule_values");
                 boolean gameTestHighlightPos = descriptor.typeName()
                         .equals("play.clientbound.minecraft:game_test_highlight_pos");
+                boolean mountScreenOpen = descriptor.typeName()
+                        .equals("play.clientbound.minecraft:mount_screen_open");
                 PacketDisposition expectedDisposition;
                 if (bundleDelimiter
                         || blockChangedAck
@@ -173,7 +176,8 @@ class PacketCoverageTest {
                         || customChatCompletions
                         || entityPositionSync
                         || forgetLevelChunk
-                        || gameRuleValues) {
+                        || gameRuleValues
+                        || mountScreenOpen) {
                     expectedDisposition = PacketDisposition.STATEFUL;
                 } else if (animate
                         || blockDestruction
@@ -221,7 +225,8 @@ class PacketCoverageTest {
                                 || explode
                                 || forgetLevelChunk
                                 || gameEvent
-                                || gameRuleValues,
+                                || gameRuleValues
+                                || mountScreenOpen,
                         descriptor.replayable());
                 assertEquals(
                         addEntity
@@ -254,7 +259,8 @@ class PacketCoverageTest {
                         || customPayload
                         || deleteChat
                         || disguisedChat
-                        || gameRuleValues) {
+                        || gameRuleValues
+                        || mountScreenOpen) {
                     assertEquals(
                             dev.voldechse.replayframework.adapter.PacketDescriptor.PlaybackScope.VIEWER_LOCAL,
                             descriptor.playbackScope());
@@ -312,6 +318,7 @@ class PacketCoverageTest {
                                 || gameEvent
                                 || gameRuleValues
                                 || gameTestHighlightPos
+                                || mountScreenOpen
                                 || disconnect,
                         Paper26_2PacketRegistry.explicitlyClassifies(descriptor.typeName()));
             }
