@@ -64,7 +64,8 @@ class PacketCoverageTest {
                         "play.clientbound.minecraft:hurt_animation",
                         "play.clientbound.minecraft:initialize_border",
                         "play.clientbound.minecraft:keep_alive",
-                        "play.clientbound.minecraft:level_chunk_with_light"),
+                        "play.clientbound.minecraft:level_chunk_with_light",
+                        "play.clientbound.minecraft:level_event"),
                 Paper26_2PacketCatalog.catalog().definitions().stream()
                         .map(definition -> definition.typeName())
                         .toList());
@@ -161,6 +162,8 @@ class PacketCoverageTest {
                         .equals("play.clientbound.minecraft:keep_alive");
                 boolean levelChunkWithLight = descriptor.typeName()
                         .equals("play.clientbound.minecraft:level_chunk_with_light");
+                boolean levelEvent =
+                        descriptor.typeName().equals("play.clientbound.minecraft:level_event");
                 PacketDisposition expectedDisposition;
                 if (bundleDelimiter
                         || blockChangedAck
@@ -204,7 +207,8 @@ class PacketCoverageTest {
                         || entityEvent
                         || explode
                         || hurtAnimation
-                        || gameEvent) {
+                        || gameEvent
+                        || levelEvent) {
                     expectedDisposition = PacketDisposition.EPHEMERAL;
                 } else if (customPayload) {
                     expectedDisposition = PacketDisposition.CONFIGURABLE;
@@ -245,7 +249,8 @@ class PacketCoverageTest {
                                 || hurtAnimation
                                 || mountScreenOpen
                                 || initializeBorder
-                                || levelChunkWithLight,
+                                || levelChunkWithLight
+                                || levelEvent,
                         descriptor.replayable());
                 assertEquals(
                         addEntity
@@ -293,6 +298,7 @@ class PacketCoverageTest {
                         || forgetLevelChunk
                         || gameEvent
                         || levelChunkWithLight
+                        || levelEvent
                         || initializeBorder) {
                     assertEquals(
                             dev.voldechse.replayframework.adapter.PacketDescriptor.PlaybackScope.SAFE,
@@ -347,6 +353,7 @@ class PacketCoverageTest {
                                 || initializeBorder
                                 || keepAlive
                                 || levelChunkWithLight
+                                || levelEvent
                                 || disconnect,
                         Paper26_2PacketRegistry.explicitlyClassifies(descriptor.typeName()));
             }

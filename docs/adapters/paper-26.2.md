@@ -194,7 +194,7 @@ test status.
 | 43 | `minecraft:initialize_border` | Full world-border center, current and target size, transition, maximum boundary, and warning settings | SEND | yes |
 | 44 | `minecraft:keep_alive` | 64-bit keep-alive challenge; the live connection expects a matching response and may disconnect on a mismatch | BLOCKED | no |
 | 45 | `minecraft:level_chunk_with_light` | Chunk terrain, heightmaps, block entity updates, and sky/block light for one world coordinate | SEND | yes |
-| 46 | `minecraft:level_event` | Ordered presentation or environment effect | SEND | no |
+| 46 | `minecraft:level_event` | One-shot sound, particle, animation, or related world effect; event-specific data and the global-volume flag must be preserved | SEND in event order, retaining global-volume semantics | no |
 | 47 | `minecraft:level_particles` | Ordered presentation or environment effect | SEND | no |
 | 48 | `minecraft:light_update` | Essential scene state: durable world or scene state | SEND | yes |
 | 49 | `minecraft:login` | Transport, connection, or server control; never replay into an established connection | BLOCKED | no |
