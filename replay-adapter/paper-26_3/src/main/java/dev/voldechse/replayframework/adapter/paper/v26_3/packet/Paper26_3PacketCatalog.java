@@ -2,6 +2,7 @@ package dev.voldechse.replayframework.adapter.paper.v26_3.packet;
 
 import dev.voldechse.replayframework.adapter.paper.packet.PacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.packet.PacketDefinitionCatalog;
+import dev.voldechse.replayframework.adapter.paper.v26_3.packet.definition.chat.ChatPacketDefinitions;
 import dev.voldechse.replayframework.adapter.paper.v26_3.packet.definition.connection.ConnectionPacketDefinitions;
 import dev.voldechse.replayframework.adapter.paper.v26_3.packet.definition.effect.EffectPacketDefinitions;
 import dev.voldechse.replayframework.adapter.paper.v26_3.packet.definition.entity.EntityPacketDefinitions;
@@ -17,16 +18,18 @@ public final class Paper26_3PacketCatalog {
 
     private static final PacketDefinitionCatalog<Paper26_3ReplayPacketRewriter> CATALOG =
             new PacketDefinitionCatalog<>(Stream.concat(
+                            ChatPacketDefinitions.definitions().stream(),
                             Stream.concat(
                                     Stream.concat(
-                                            ConnectionPacketDefinitions.definitions().stream(),
-                                            EntityPacketDefinitions.definitions().stream()),
+                                            Stream.concat(
+                                                    ConnectionPacketDefinitions.definitions().stream(),
+                                                    EntityPacketDefinitions.definitions().stream()),
+                                            Stream.concat(
+                                                    EffectPacketDefinitions.definitions().stream(),
+                                                    PlayerPacketDefinitions.definitions().stream())),
                                     Stream.concat(
-                                            EffectPacketDefinitions.definitions().stream(),
-                                            PlayerPacketDefinitions.definitions().stream())),
-                            Stream.concat(
-                                    WorldPacketDefinitions.definitions().stream(),
-                                    UiPacketDefinitions.definitions().stream()))
+                                            WorldPacketDefinitions.definitions().stream(),
+                                            UiPacketDefinitions.definitions().stream())))
                     .sorted(Comparator.comparingInt(PacketDefinition::packetId))
                     .toList());
 

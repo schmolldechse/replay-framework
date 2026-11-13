@@ -172,8 +172,8 @@ test status.
 | 20 | `minecraft:container_set_slot` | Updates one signed menu slot with an optional component-bearing item stack for a container state; preserve the neutral observer's live inventory | DROP_LOCAL | no |
 | 21 | `minecraft:cookie_request` | Requests the client cookie under one namespaced key and elicits a nullable, size-bounded response owned by the current connection; never replay into an established connection | BLOCKED | no |
 | 22 | `minecraft:cooldown` | Sets, replaces or clears an item-use cooldown for one receiver-local group; shared groups can affect multiple items, so leave the neutral observer unchanged | DROP_LOCAL | no |
-| 23 | `minecraft:custom_chat_completions` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
-| 24 | `minecraft:custom_payload` | Must remain local: plugin-specific state of the recorded client; blocked for playback | DROP_LOCAL | no |
+| 23 | `minecraft:custom_chat_completions` | Adds, removes or replaces receiver-local chat suggestions; leave the neutral observer's own suggestion set unchanged | DROP_LOCAL | no |
+| 24 | `minecraft:custom_payload` | Carries brand or channel-defined plugin/mod bytes whose schema and effects belong to the receiving connection | DROP_LOCAL | no |
 | 25 | `minecraft:damage_event` | Ordered scene effect: damage on replay entities with isolated source IDs | REWRITE | no |
 | 26 | `minecraft:debug/block_value` | Diagnostic or special-purpose packet without a safe playback contract | BLOCKED | no |
 | 27 | `minecraft:debug/chunk_value` | Diagnostic or special-purpose packet without a safe playback contract | BLOCKED | no |

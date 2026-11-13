@@ -2,6 +2,7 @@ package dev.voldechse.replayframework.adapter.paper.v26_2.packet;
 
 import dev.voldechse.replayframework.adapter.paper.packet.PacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.packet.PacketDefinitionCatalog;
+import dev.voldechse.replayframework.adapter.paper.v26_2.packet.definition.chat.ChatPacketDefinitions;
 import dev.voldechse.replayframework.adapter.paper.v26_2.packet.definition.connection.ConnectionPacketDefinitions;
 import dev.voldechse.replayframework.adapter.paper.v26_2.packet.definition.effect.EffectPacketDefinitions;
 import dev.voldechse.replayframework.adapter.paper.v26_2.packet.definition.entity.EntityPacketDefinitions;
@@ -19,6 +20,7 @@ public final class Paper26_2PacketCatalog {
 
     private static final PacketDefinitionCatalog<Paper26_2ReplayPacketRewriter> CATALOG =
             new PacketDefinitionCatalog<>(Stream.of(
+                            ChatPacketDefinitions.definitions(),
                             ConnectionPacketDefinitions.definitions(),
                             EffectPacketDefinitions.definitions(),
                             EntityPacketDefinitions.definitions(),

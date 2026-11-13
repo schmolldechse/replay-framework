@@ -12,7 +12,8 @@ public final class ConnectionPacketDefinitions {
                     new Id000BundleDelimiterPacketDefinition(),
                     new Id011ChunkBatchFinishedPacketDefinition(),
                     new Id012ChunkBatchStartPacketDefinition(),
-                    new Id021CookieRequestPacketDefinition());
+                    new Id021CookieRequestPacketDefinition(),
+                    new Id024CustomPayloadPacketDefinition());
 
     private ConnectionPacketDefinitions() {}
 

@@ -41,7 +41,9 @@ class PacketCoverageTest {
                         "play.clientbound.minecraft:container_set_data",
                         "play.clientbound.minecraft:container_set_slot",
                         "play.clientbound.minecraft:cookie_request",
-                        "play.clientbound.minecraft:cooldown"),
+                        "play.clientbound.minecraft:cooldown",
+                        "play.clientbound.minecraft:custom_chat_completions",
+                        "play.clientbound.minecraft:custom_payload"),
                 Paper26_2PacketCatalog.catalog().definitions().stream()
                         .map(definition -> definition.typeName())
                         .toList());
@@ -92,6 +94,10 @@ class PacketCoverageTest {
                         descriptor.typeName().equals("play.clientbound.minecraft:cookie_request");
                 boolean cooldown =
                         descriptor.typeName().equals("play.clientbound.minecraft:cooldown");
+                boolean customChatCompletions = descriptor.typeName()
+                        .equals("play.clientbound.minecraft:custom_chat_completions");
+                boolean customPayload =
+                        descriptor.typeName().equals("play.clientbound.minecraft:custom_payload");
                 PacketDisposition expectedDisposition;
                 if (bundleDelimiter
                         || blockChangedAck
@@ -108,10 +114,13 @@ class PacketCoverageTest {
                         || clearTitles
                         || commands
                         || containerPacket
-                        || cooldown) {
+                        || cooldown
+                        || customChatCompletions) {
                     expectedDisposition = PacketDisposition.STATEFUL;
                 } else if (animate || blockDestruction || blockEvent || commandSuggestions) {
                     expectedDisposition = PacketDisposition.EPHEMERAL;
+                } else if (customPayload) {
+                    expectedDisposition = PacketDisposition.CONFIGURABLE;
                 } else if (awardStats) {
                     expectedDisposition = PacketDisposition.STATEFUL;
                 } else {
@@ -134,7 +143,9 @@ class PacketCoverageTest {
                                 || commandSuggestions
                                 || commands
                                 || containerPacket
-                                || cooldown,
+                                || cooldown
+                                || customChatCompletions
+                                || customPayload,
                         descriptor.replayable());
                 assertEquals(
                         addEntity || blockEntityData || blockUpdate || bossEvent || chunksBiomes,
@@ -149,7 +160,9 @@ class PacketCoverageTest {
                         || commandSuggestions
                         || commands
                         || containerPacket
-                        || cooldown) {
+                        || cooldown
+                        || customChatCompletions
+                        || customPayload) {
                     assertEquals(
                             dev.voldechse.replayframework.adapter.PacketDescriptor.PlaybackScope.VIEWER_LOCAL,
                             descriptor.playbackScope());
@@ -184,7 +197,9 @@ class PacketCoverageTest {
                                 || commands
                                 || containerPacket
                                 || cookieRequest
-                                || cooldown,
+                                || cooldown
+                                || customChatCompletions
+                                || customPayload,
                         Paper26_2PacketRegistry.explicitlyClassifies(descriptor.typeName()));
             }
         }
