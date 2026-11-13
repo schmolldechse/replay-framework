@@ -4,6 +4,7 @@ import dev.voldechse.replayframework.adapter.paper.packet.PacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.packet.PacketDefinitionCatalog;
 import dev.voldechse.replayframework.adapter.paper.v26_2.packet.definition.chat.ChatPacketDefinitions;
 import dev.voldechse.replayframework.adapter.paper.v26_2.packet.definition.connection.ConnectionPacketDefinitions;
+import dev.voldechse.replayframework.adapter.paper.v26_2.packet.definition.diagnostic.DiagnosticPacketDefinitions;
 import dev.voldechse.replayframework.adapter.paper.v26_2.packet.definition.effect.EffectPacketDefinitions;
 import dev.voldechse.replayframework.adapter.paper.v26_2.packet.definition.entity.EntityPacketDefinitions;
 import dev.voldechse.replayframework.adapter.paper.v26_2.packet.definition.player.PlayerPacketDefinitions;
@@ -22,6 +23,7 @@ public final class Paper26_2PacketCatalog {
             new PacketDefinitionCatalog<>(Stream.of(
                             ChatPacketDefinitions.definitions(),
                             ConnectionPacketDefinitions.definitions(),
+                            DiagnosticPacketDefinitions.definitions(),
                             EffectPacketDefinitions.definitions(),
                             EntityPacketDefinitions.definitions(),
                             PlayerPacketDefinitions.definitions(),

@@ -175,11 +175,11 @@ test status.
 | 23 | `minecraft:custom_chat_completions` | Adds, removes or replaces receiver-local chat suggestions; leave the neutral observer's own suggestion set unchanged | DROP_LOCAL | no |
 | 24 | `minecraft:custom_payload` | Carries brand or channel-defined plugin/mod bytes whose schema and effects belong to the receiving connection | DROP_LOCAL | no |
 | 25 | `minecraft:damage_event` | Ordered hurt effect with rewritten target, causing-entity and direct-source IDs; optional source position takes precedence over entity sources | REWRITE | no |
-| 26 | `minecraft:debug/block_value` | Diagnostic or special-purpose packet without a safe playback contract | BLOCKED | no |
-| 27 | `minecraft:debug/chunk_value` | Diagnostic or special-purpose packet without a safe playback contract | BLOCKED | no |
-| 28 | `minecraft:debug/entity_value` | Diagnostic or special-purpose packet without a safe playback contract | BLOCKED | no |
-| 29 | `minecraft:debug/event` | Diagnostic or special-purpose packet without a safe playback contract | BLOCKED | no |
-| 30 | `minecraft:debug_sample` | Diagnostic or special-purpose packet without a safe playback contract | BLOCKED | no |
+| 26 | `minecraft:debug/block_value` | Subscription-keyed diagnostic value at a block position; optional value can clear the viewer's debug entry and registry-backed values describe the recorded world | BLOCKED | no |
+| 27 | `minecraft:debug/chunk_value` | Subscription-keyed diagnostic value at a chunk position; the protocol sends Z before X and updates can clear the viewer's debug entry | BLOCKED | no |
+| 28 | `minecraft:debug/entity_value` | Subscription-keyed diagnostic value at a source entity ID; entity identity and the viewer's active debug subscriptions are connection-local | BLOCKED | no |
+| 29 | `minecraft:debug/event` | One-shot debug-subscription event with a mandatory type-specific payload that can contain registry-backed or world-specific data | BLOCKED | no |
+| 30 | `minecraft:debug_sample` | Periodic subscription-selected server telemetry; tick-time samples report full, server, task and idle nanoseconds and are operator-only | BLOCKED | no |
 | 31 | `minecraft:delete_chat` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 32 | `minecraft:disconnect` | Transport, connection, or server control; never replay into an established connection | BLOCKED | no |
 | 33 | `minecraft:disguised_chat` | Recorded connection chat retained according to capture policy but suppressed for neutral playback | DROP_LOCAL* | no |

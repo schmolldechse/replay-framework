@@ -44,7 +44,12 @@ class PacketCoverageTest {
                         "play.clientbound.minecraft:cooldown",
                         "play.clientbound.minecraft:custom_chat_completions",
                         "play.clientbound.minecraft:custom_payload",
-                        "play.clientbound.minecraft:damage_event"),
+                        "play.clientbound.minecraft:damage_event",
+                        "play.clientbound.minecraft:debug/block_value",
+                        "play.clientbound.minecraft:debug/chunk_value",
+                        "play.clientbound.minecraft:debug/entity_value",
+                        "play.clientbound.minecraft:debug/event",
+                        "play.clientbound.minecraft:debug_sample"),
                 Paper26_2PacketCatalog.catalog().definitions().stream()
                         .map(definition -> definition.typeName())
                         .toList());
@@ -101,12 +106,27 @@ class PacketCoverageTest {
                         descriptor.typeName().equals("play.clientbound.minecraft:custom_payload");
                 boolean damageEvent =
                         descriptor.typeName().equals("play.clientbound.minecraft:damage_event");
+                boolean debugBlockValue = descriptor.typeName()
+                        .equals("play.clientbound.minecraft:debug/block_value");
+                boolean debugChunkValue = descriptor.typeName()
+                        .equals("play.clientbound.minecraft:debug/chunk_value");
+                boolean debugEntityValue = descriptor.typeName()
+                        .equals("play.clientbound.minecraft:debug/entity_value");
+                boolean debugEvent =
+                        descriptor.typeName().equals("play.clientbound.minecraft:debug/event");
+                boolean debugSample =
+                        descriptor.typeName().equals("play.clientbound.minecraft:debug_sample");
                 PacketDisposition expectedDisposition;
                 if (bundleDelimiter
                         || blockChangedAck
                         || chunkBatchFinished
                         || chunkBatchStart
-                        || cookieRequest) {
+                        || cookieRequest
+                        || debugBlockValue
+                        || debugChunkValue
+                        || debugEntityValue
+                        || debugEvent
+                        || debugSample) {
                     expectedDisposition = PacketDisposition.CONTROL;
                 } else if (addEntity
                         || blockEntityData
@@ -204,7 +224,12 @@ class PacketCoverageTest {
                                 || cooldown
                                 || customChatCompletions
                                 || customPayload
-                                || damageEvent,
+                                || damageEvent
+                                || debugBlockValue
+                                || debugChunkValue
+                                || debugEntityValue
+                                || debugEvent
+                                || debugSample,
                         Paper26_2PacketRegistry.explicitlyClassifies(descriptor.typeName()));
             }
         }
