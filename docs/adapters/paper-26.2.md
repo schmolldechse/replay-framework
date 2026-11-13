@@ -190,7 +190,7 @@ test status.
 | 39 | `minecraft:game_rule_values` | Carries serialized values for the recorded player's available game rules in response to a privileged request; keep the observer's rule view unchanged | DROP_LOCAL | no |
 | 40 | `minecraft:game_test_highlight_pos` | GameTest `showPos` highlight for a selected block and its test-relative coordinates; no general replay target exists | BLOCKED | no |
 | 41 | `minecraft:mount_screen_open` | Opens the recorded player's horse or Nautilus inventory using its connection-local container ID and mount entity ID; leave the observer's UI unchanged | DROP_LOCAL | no |
-| 42 | `minecraft:hurt_animation` | Ordered scene effect: hurt animation for a replay entity | REWRITE | no |
+| 42 | `minecraft:hurt_animation` | Directional damage animation for a replay entity; remap its target entity ID and preserve yaw | REWRITE | no |
 | 43 | `minecraft:initialize_border` | Essential scene state: durable world or scene state | SEND | yes |
 | 44 | `minecraft:keep_alive` | Transport, connection, or server control; never replay into an established connection | BLOCKED | no |
 | 45 | `minecraft:level_chunk_with_light` | Essential scene state: durable world or scene state | SEND | yes |

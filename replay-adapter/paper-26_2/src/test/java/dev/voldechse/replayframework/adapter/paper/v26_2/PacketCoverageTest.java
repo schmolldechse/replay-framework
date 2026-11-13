@@ -60,7 +60,8 @@ class PacketCoverageTest {
                         "play.clientbound.minecraft:game_event",
                         "play.clientbound.minecraft:game_rule_values",
                         "play.clientbound.minecraft:game_test_highlight_pos",
-                        "play.clientbound.minecraft:mount_screen_open"),
+                        "play.clientbound.minecraft:mount_screen_open",
+                        "play.clientbound.minecraft:hurt_animation"),
                 Paper26_2PacketCatalog.catalog().definitions().stream()
                         .map(definition -> definition.typeName())
                         .toList());
@@ -147,6 +148,8 @@ class PacketCoverageTest {
                         .equals("play.clientbound.minecraft:game_rule_values");
                 boolean gameTestHighlightPos = descriptor.typeName()
                         .equals("play.clientbound.minecraft:game_test_highlight_pos");
+                boolean hurtAnimation =
+                        descriptor.typeName().equals("play.clientbound.minecraft:hurt_animation");
                 boolean mountScreenOpen = descriptor.typeName()
                         .equals("play.clientbound.minecraft:mount_screen_open");
                 PacketDisposition expectedDisposition;
@@ -188,6 +191,7 @@ class PacketCoverageTest {
                         || disguisedChat
                         || entityEvent
                         || explode
+                        || hurtAnimation
                         || gameEvent) {
                     expectedDisposition = PacketDisposition.EPHEMERAL;
                 } else if (customPayload) {
@@ -226,6 +230,7 @@ class PacketCoverageTest {
                                 || forgetLevelChunk
                                 || gameEvent
                                 || gameRuleValues
+                                || hurtAnimation
                                 || mountScreenOpen,
                         descriptor.replayable());
                 assertEquals(
@@ -244,7 +249,8 @@ class PacketCoverageTest {
                         || damageEvent
                         || entityEvent
                         || entityPositionSync
-                        || explode) {
+                        || explode
+                        || hurtAnimation) {
                     assertEquals(
                             dev.voldechse.replayframework.adapter.PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES,
                             descriptor.playbackScope());
@@ -318,6 +324,7 @@ class PacketCoverageTest {
                                 || gameEvent
                                 || gameRuleValues
                                 || gameTestHighlightPos
+                                || hurtAnimation
                                 || mountScreenOpen
                                 || disconnect,
                         Paper26_2PacketRegistry.explicitlyClassifies(descriptor.typeName()));

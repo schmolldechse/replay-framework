@@ -14,7 +14,8 @@ public final class EffectPacketDefinitions {
                     new Id009BossEventPacketDefinition(),
                     new Id025DamageEventPacketDefinition(),
                     new Id034EntityEventPacketDefinition(),
-                    new Id036ExplodePacketDefinition());
+                    new Id036ExplodePacketDefinition(),
+                    new Id042HurtAnimationPacketDefinition());
 
     private EffectPacketDefinitions() {}
 
