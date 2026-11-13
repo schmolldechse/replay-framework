@@ -186,7 +186,7 @@ test status.
 | 35 | `minecraft:entity_position_sync` | Absolute entity position, movement vector, rotation and ground state; preserve as essential scene state with playback-session identity rewriting | REWRITE | yes |
 | 36 | `minecraft:explode` | Explosion scene effect with sound and weighted particle data; suppress recorded-player knockback and remap entity-backed vibration destinations | REWRITE | no |
 | 37 | `minecraft:forget_level_chunk` | Unloads a recorded chunk column from the client view; preserve its signed coordinates to remove stale terrain | SEND | yes |
-| 38 | `minecraft:game_event` | Allow weather presentation; block game-mode, respawn, demo, and other observer-affecting events | SEND | no |
+| 38 | `minecraft:game_event` | Forward rain and thunder changes; keep recorded-player, game-rule and loading-screen events from changing the observer | SEND / DROP_LOCAL* | no |
 | 39 | `minecraft:game_rule_values` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 40 | `minecraft:game_test_highlight_pos` | Diagnostic or special-purpose packet without a safe playback contract | BLOCKED | no |
 | 41 | `minecraft:mount_screen_open` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
