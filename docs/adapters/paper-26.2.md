@@ -214,7 +214,7 @@ test status.
 | 63 | `minecraft:place_ghost_recipe` | Container ID and registry-dispatched recipe display, including nested slot displays; previews the selected recipe in the active crafting UI | DROP_LOCAL to preserve the observer's own menu and recipe selection | no |
 | 64 | `minecraft:player_abilities` | Four player-ability flags (invulnerable, flying, may fly, instabuild) and flying/walking speeds; controls the receiving player's local abilities | DROP_LOCAL to preserve the observer's own abilities and movement settings | no |
 | 65 | `minecraft:player_chat` | Global and sender message indexes, optional signature, packed signed body and last-seen chain, optional unsigned display component, filter mask, and bound chat decoration; recorded chat belongs to the replay's presentation state | Convert to `minecraft:disguised_chat` for unsigned visible presentation; source signature and last-seen chain are not applied to the observer | no |
-| 66 | `minecraft:player_combat_end` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
+| 66 | `minecraft:player_combat_end` | Transient combat-tracker event with combat duration in ticks (VarInt); not checkpoint state | DROP_LOCAL to keep the recorded player's combat episode off the observer's connection | no |
 | 67 | `minecraft:player_combat_enter` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 68 | `minecraft:player_combat_kill` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 69 | `minecraft:player_info_remove` | Essential scene state: remove only replay-owned player profiles | REWRITE | yes |

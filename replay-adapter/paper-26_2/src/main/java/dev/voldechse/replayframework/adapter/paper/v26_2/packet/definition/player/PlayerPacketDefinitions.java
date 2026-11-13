@@ -10,7 +10,8 @@ public final class PlayerPacketDefinitions {
     private static final List<PacketDefinition<Paper26_2ReplayPacketRewriter>> DEFINITIONS =
             List.of(
                     new Id003AwardStatsPacketDefinition(),
-                    new Id064PlayerAbilitiesPacketDefinition());
+                    new Id064PlayerAbilitiesPacketDefinition(),
+                    new Id066PlayerCombatEndPacketDefinition());
 
     private PlayerPacketDefinitions() {}
 
