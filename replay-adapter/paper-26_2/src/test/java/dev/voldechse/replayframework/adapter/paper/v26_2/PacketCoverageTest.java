@@ -62,7 +62,8 @@ class PacketCoverageTest {
                         "play.clientbound.minecraft:game_test_highlight_pos",
                         "play.clientbound.minecraft:mount_screen_open",
                         "play.clientbound.minecraft:hurt_animation",
-                        "play.clientbound.minecraft:initialize_border"),
+                        "play.clientbound.minecraft:initialize_border",
+                        "play.clientbound.minecraft:keep_alive"),
                 Paper26_2PacketCatalog.catalog().definitions().stream()
                         .map(definition -> definition.typeName())
                         .toList());
@@ -155,6 +156,8 @@ class PacketCoverageTest {
                         .equals("play.clientbound.minecraft:mount_screen_open");
                 boolean initializeBorder = descriptor.typeName()
                         .equals("play.clientbound.minecraft:initialize_border");
+                boolean keepAlive = descriptor.typeName()
+                        .equals("play.clientbound.minecraft:keep_alive");
                 PacketDisposition expectedDisposition;
                 if (bundleDelimiter
                         || blockChangedAck
@@ -167,6 +170,7 @@ class PacketCoverageTest {
                         || debugEvent
                         || debugSample
                         || gameTestHighlightPos
+                        || keepAlive
                         || disconnect) {
                     expectedDisposition = PacketDisposition.CONTROL;
                 } else if (addEntity
@@ -334,6 +338,7 @@ class PacketCoverageTest {
                                 || hurtAnimation
                                 || mountScreenOpen
                                 || initializeBorder
+                                || keepAlive
                                 || disconnect,
                         Paper26_2PacketRegistry.explicitlyClassifies(descriptor.typeName()));
             }

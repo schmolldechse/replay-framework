@@ -14,7 +14,8 @@ public final class ConnectionPacketDefinitions {
                     new Id012ChunkBatchStartPacketDefinition(),
                     new Id021CookieRequestPacketDefinition(),
                     new Id024CustomPayloadPacketDefinition(),
-                    new Id032DisconnectPacketDefinition());
+                    new Id032DisconnectPacketDefinition(),
+                    new Id044KeepAlivePacketDefinition());
 
     private ConnectionPacketDefinitions() {}
 
