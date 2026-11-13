@@ -8,7 +8,9 @@ import java.util.List;
 public final class EntityPacketDefinitions {
 
     private static final List<PacketDefinition<Paper26_2ReplayPacketRewriter>> DEFINITIONS =
-            List.of(new Id001AddEntityPacketDefinition());
+            List.of(
+                    new Id001AddEntityPacketDefinition(),
+                    new Id035EntityPositionSyncPacketDefinition());
 
     private EntityPacketDefinitions() {}
 

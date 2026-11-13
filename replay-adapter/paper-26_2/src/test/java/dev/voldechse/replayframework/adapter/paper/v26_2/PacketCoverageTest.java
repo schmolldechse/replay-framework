@@ -53,7 +53,8 @@ class PacketCoverageTest {
                         "play.clientbound.minecraft:delete_chat",
                         "play.clientbound.minecraft:disconnect",
                         "play.clientbound.minecraft:disguised_chat",
-                        "play.clientbound.minecraft:entity_event"),
+                        "play.clientbound.minecraft:entity_event",
+                        "play.clientbound.minecraft:entity_position_sync"),
                 Paper26_2PacketCatalog.catalog().definitions().stream()
                         .map(definition -> definition.typeName())
                         .toList());
@@ -128,6 +129,8 @@ class PacketCoverageTest {
                         descriptor.typeName().equals("play.clientbound.minecraft:disguised_chat");
                 boolean entityEvent =
                         descriptor.typeName().equals("play.clientbound.minecraft:entity_event");
+                boolean entityPositionSync = descriptor.typeName()
+                        .equals("play.clientbound.minecraft:entity_position_sync");
                 PacketDisposition expectedDisposition;
                 if (bundleDelimiter
                         || blockChangedAck
@@ -151,7 +154,8 @@ class PacketCoverageTest {
                         || commands
                         || containerPacket
                         || cooldown
-                        || customChatCompletions) {
+                        || customChatCompletions
+                        || entityPositionSync) {
                     expectedDisposition = PacketDisposition.STATEFUL;
                 } else if (animate
                         || blockDestruction
@@ -192,17 +196,24 @@ class PacketCoverageTest {
                                 || damageEvent
                                 || deleteChat
                                 || disguisedChat
-                                || entityEvent,
+                                || entityEvent
+                                || entityPositionSync,
                         descriptor.replayable());
                 assertEquals(
-                        addEntity || blockEntityData || blockUpdate || bossEvent || chunksBiomes,
+                        addEntity
+                                || blockEntityData
+                                || blockUpdate
+                                || bossEvent
+                                || chunksBiomes
+                                || entityPositionSync,
                         descriptor.checkpointRelevant());
                 if (addEntity
                         || animate
                         || blockDestruction
                         || bossEvent
                         || damageEvent
-                        || entityEvent) {
+                        || entityEvent
+                        || entityPositionSync) {
                     assertEquals(
                             dev.voldechse.replayframework.adapter.PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES,
                             descriptor.playbackScope());
@@ -216,8 +227,7 @@ class PacketCoverageTest {
                         || customChatCompletions
                         || customPayload
                         || deleteChat
-                        || disguisedChat
-                        || entityEvent) {
+                        || disguisedChat) {
                     assertEquals(
                             dev.voldechse.replayframework.adapter.PacketDescriptor.PlaybackScope.VIEWER_LOCAL,
                             descriptor.playbackScope());
@@ -264,6 +274,7 @@ class PacketCoverageTest {
                                 || deleteChat
                                 || disguisedChat
                                 || entityEvent
+                                || entityPositionSync
                                 || disconnect,
                         Paper26_2PacketRegistry.explicitlyClassifies(descriptor.typeName()));
             }

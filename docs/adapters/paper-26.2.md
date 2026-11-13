@@ -183,7 +183,7 @@ test status.
 | 32 | `minecraft:disconnect` | Terminates the receiving connection with a required chat-component reason; retain for recording fidelity and diagnostics, never replay into the observer connection | BLOCKED | no |
 | 33 | `minecraft:disguised_chat` | Disguised chat presentation with message content, bound chat type, sender name and optional target name; keep recorded chat local to preserve the observer's chat history | DROP_LOCAL* | no |
 | 34 | `minecraft:entity_event` | Entity-specific transient status byte; rewrite its entity ID and preserve unknown values. Player debug and permission statuses belong to the recorded connection | REWRITE / DROP_LOCAL* | no |
-| 35 | `minecraft:entity_position_sync` | Essential scene state: scene presentation with playback-session identity rewriting | REWRITE | yes |
+| 35 | `minecraft:entity_position_sync` | Absolute entity position, movement vector, rotation and ground state; preserve as essential scene state with playback-session identity rewriting | REWRITE | yes |
 | 36 | `minecraft:explode` | Ordered scene effect: explosion presentation; remove observer knockback | SEND | no |
 | 37 | `minecraft:forget_level_chunk` | Essential scene state: durable world or scene state | SEND | yes |
 | 38 | `minecraft:game_event` | Allow weather presentation; block game-mode, respawn, demo, and other observer-affecting events | SEND | no |

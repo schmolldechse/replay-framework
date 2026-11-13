@@ -10,7 +10,9 @@ import org.junit.jupiter.api.Test;
 import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.BeforeAll;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 final class Paper26_2NativePacketCodecTest {
 
@@ -38,7 +40,7 @@ final class Paper26_2NativePacketCodecTest {
     }
 
     @Test
-    void rejectsSyntheticStateWithoutAPacketImplementation() {
+    void encodesImplementedEntityPositionSyncState() {
         Paper26_2PacketRegistry registry = Paper26_2PacketRegistry.discover();
         Paper26_2NativePacketCodec codec = Paper26_2NativePacketCodec.forTesting(
                 registry,
@@ -50,9 +52,17 @@ final class Paper26_2NativePacketCodecTest {
                 90.0F,
                 15.0F);
 
-        assertThrows(IncompatibleAdapterException.class, () -> codec.encodeState(
+        var encoded = codec.encodeState(
                 new net.minecraft.network.protocol.game.ClientboundEntityPositionSyncPacket(
-                        42, values, true)));
+                        42, values, true));
+
+        assertEquals(35, encoded.packetId());
+        assertEquals(58, encoded.payload().length);
+        assertEquals("play.clientbound.minecraft:entity_position_sync", encoded.descriptor().typeName());
+        assertEquals(
+                dev.voldechse.replayframework.adapter.PacketDisposition.STATEFUL,
+                encoded.descriptor().disposition());
+        assertTrue(encoded.descriptor().checkpointRelevant());
     }
 
     @Test
