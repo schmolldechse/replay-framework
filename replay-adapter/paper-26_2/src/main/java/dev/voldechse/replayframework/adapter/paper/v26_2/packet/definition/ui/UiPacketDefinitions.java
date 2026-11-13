@@ -18,7 +18,8 @@ public final class UiPacketDefinitions {
                     new Id020ContainerSetSlotPacketDefinition(),
                     new Id022CooldownPacketDefinition(),
                     new Id041MountScreenOpenPacketDefinition(),
-                    new Id050LowDiskSpaceWarningPacketDefinition());
+                    new Id050LowDiskSpaceWarningPacketDefinition(),
+                    new Id052MerchantOffersPacketDefinition());
 
     private UiPacketDefinitions() {}
 

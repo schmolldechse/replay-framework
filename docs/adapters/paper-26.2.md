@@ -200,7 +200,7 @@ test status.
 | 49 | `minecraft:login` | Initializes the active player and world with player ID, available dimensions, view/simulation settings, and common spawn information | BLOCKED; do not replace an established observer connection's player/world context | no |
 | 50 | `minecraft:low_disk_space_warning` | Source-server low-storage warning presented as a system toast; describes the recorded server's storage environment | DROP_LOCAL; do not present it as a warning about the playback observer's environment | no |
 | 51 | `minecraft:map_item_data` | Updates saved map scale, lock state, decorations, and color patches by numeric map ID; map items share references to that ID | DROP_LOCAL until map IDs are isolated consistently across map updates and map-item references | no |
-| 52 | `minecraft:merchant_offers` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
+| 52 | `minecraft:merchant_offers` | Supplies the active trading container's offers, merchant level/XP, progress visibility, and restock capability; container IDs and trade UI state belong to the recorded player's connection | DROP_LOCAL; preserve the observer's own trade menu and offers | no |
 | 53 | `minecraft:move_entity_pos` | Essential scene state: scene presentation with playback-session identity rewriting | REWRITE | yes |
 | 54 | `minecraft:move_entity_pos_rot` | Essential scene state: scene presentation with playback-session identity rewriting | REWRITE | yes |
 | 55 | `minecraft:move_minecart_along_track` | Essential scene state: minecart interpolation and movement steps | REWRITE | yes |
