@@ -16,7 +16,8 @@ public final class ConnectionPacketDefinitions {
                     new Id024CustomPayloadPacketDefinition(),
                     new Id032DisconnectPacketDefinition(),
                     new Id044KeepAlivePacketDefinition(),
-                    new Id049LoginPacketDefinition());
+                    new Id049LoginPacketDefinition(),
+                    new Id061PingPacketDefinition());
 
     private ConnectionPacketDefinitions() {}
 

@@ -79,7 +79,8 @@ class PacketCoverageTest {
                         "play.clientbound.minecraft:move_vehicle",
                         "play.clientbound.minecraft:open_book",
                         "play.clientbound.minecraft:open_screen",
-                        "play.clientbound.minecraft:open_sign_editor"),
+                        "play.clientbound.minecraft:open_sign_editor",
+                        "play.clientbound.minecraft:ping"),
                 Paper26_2PacketCatalog.catalog().definitions().stream()
                         .map(definition -> definition.typeName())
                         .toList());
@@ -205,6 +206,8 @@ class PacketCoverageTest {
                         .equals("play.clientbound.minecraft:open_screen");
                 boolean openSignEditor = descriptor.typeName()
                         .equals("play.clientbound.minecraft:open_sign_editor");
+                boolean ping = descriptor.typeName()
+                        .equals("play.clientbound.minecraft:ping");
                 PacketDisposition expectedDisposition;
                 if (bundleDelimiter
                         || blockChangedAck
@@ -218,6 +221,7 @@ class PacketCoverageTest {
                         || debugSample
                         || gameTestHighlightPos
                         || keepAlive
+                        || ping
                         || login
                         || disconnect) {
                     expectedDisposition = PacketDisposition.CONTROL;
@@ -451,6 +455,7 @@ class PacketCoverageTest {
                                 || openBook
                                 || openScreen
                                 || openSignEditor
+                                || ping
                                 || disconnect,
                         Paper26_2PacketRegistry.explicitlyClassifies(descriptor.typeName()));
             }

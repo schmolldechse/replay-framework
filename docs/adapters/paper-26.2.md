@@ -209,7 +209,7 @@ test status.
 | 58 | `minecraft:open_book` | Opens book-reading UI for the recorded player's main- or off-hand item; hand is an enum VarInt | DROP_LOCAL to keep the recorded player's UI action local to its source connection | no |
 | 59 | `minecraft:open_screen` | Container ID as VarInt, `minecraft:menu` registry type and trusted title component; opens the recorded player's menu UI | DROP_LOCAL to preserve the observer's own open container and title | no |
 | 60 | `minecraft:open_sign_editor` | Sign block position and front/back text side; opens the recorded player's sign editor | DROP_LOCAL to keep the recorded player's editing UI local to its source connection | no |
-| 61 | `minecraft:ping` | Transport, connection, or server control; never replay into an established connection | BLOCKED | no |
+| 61 | `minecraft:ping` | Connection-local synchronization challenge with a signed 32-bit ID echoed by the client's Pong response | BLOCKED to keep the challenge and response on their originating connection | no |
 | 62 | `minecraft:pong_response` | Transport, connection, or server control; never replay into an established connection | BLOCKED | no |
 | 63 | `minecraft:place_ghost_recipe` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 64 | `minecraft:player_abilities` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
