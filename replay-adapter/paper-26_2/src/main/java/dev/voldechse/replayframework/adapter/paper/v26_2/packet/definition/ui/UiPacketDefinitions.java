@@ -22,7 +22,8 @@ public final class UiPacketDefinitions {
                     new Id052MerchantOffersPacketDefinition(),
                     new Id058OpenBookPacketDefinition(),
                     new Id059OpenScreenPacketDefinition(),
-                    new Id060OpenSignEditorPacketDefinition());
+                    new Id060OpenSignEditorPacketDefinition(),
+                    new Id063PlaceGhostRecipePacketDefinition());
 
     private UiPacketDefinitions() {}
 

@@ -211,7 +211,7 @@ test status.
 | 60 | `minecraft:open_sign_editor` | Sign block position and front/back text side; opens the recorded player's sign editor | DROP_LOCAL to keep the recorded player's editing UI local to its source connection | no |
 | 61 | `minecraft:ping` | Connection-local synchronization challenge with a signed 32-bit ID echoed by the client's Pong response | BLOCKED to keep the challenge and response on their originating connection | no |
 | 62 | `minecraft:pong_response` | Returns the client-generated 64-bit ping time used for that connection's latency sample | BLOCKED to keep the response paired with its originating client request | no |
-| 63 | `minecraft:place_ghost_recipe` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
+| 63 | `minecraft:place_ghost_recipe` | Container ID and registry-dispatched recipe display, including nested slot displays; previews the selected recipe in the active crafting UI | DROP_LOCAL to preserve the observer's own menu and recipe selection | no |
 | 64 | `minecraft:player_abilities` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 65 | `minecraft:player_chat` | Recorded connection chat retained according to capture policy but suppressed for neutral playback | DROP_LOCAL* | no |
 | 66 | `minecraft:player_combat_end` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |

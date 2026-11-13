@@ -12,8 +12,8 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Version-local dispatch boundary retained while the catalog has no replayable
- * packet definition. It never decodes or encodes blocked control packets.
+ * Version-local dispatch boundary that routes recorded frames through the
+ * packet catalog. It never decodes or encodes blocked control packets.
  */
 public final class Paper26_2ReplayPacketRewriter {
 

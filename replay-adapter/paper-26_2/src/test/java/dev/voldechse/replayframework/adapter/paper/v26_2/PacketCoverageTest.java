@@ -81,7 +81,8 @@ class PacketCoverageTest {
                         "play.clientbound.minecraft:open_screen",
                         "play.clientbound.minecraft:open_sign_editor",
                         "play.clientbound.minecraft:ping",
-                        "play.clientbound.minecraft:pong_response"),
+                        "play.clientbound.minecraft:pong_response",
+                        "play.clientbound.minecraft:place_ghost_recipe"),
                 Paper26_2PacketCatalog.catalog().definitions().stream()
                         .map(definition -> definition.typeName())
                         .toList());
@@ -211,6 +212,8 @@ class PacketCoverageTest {
                         .equals("play.clientbound.minecraft:ping");
                 boolean pongResponse = descriptor.typeName()
                         .equals("play.clientbound.minecraft:pong_response");
+                boolean placeGhostRecipe = descriptor.typeName()
+                        .equals("play.clientbound.minecraft:place_ghost_recipe");
                 PacketDisposition expectedDisposition;
                 if (bundleDelimiter
                         || blockChangedAck
@@ -266,6 +269,7 @@ class PacketCoverageTest {
                         || openBook
                         || openScreen
                         || openSignEditor
+                        || placeGhostRecipe
                         || explode
                         || hurtAnimation
                         || gameEvent
@@ -303,6 +307,7 @@ class PacketCoverageTest {
                                 || lowDiskSpaceWarning
                                 || mapItemData
                                 || merchantOffers
+                                || placeGhostRecipe
                                 || moveEntityPos
                                 || moveEntityPosRot
                                 || moveEntityRot
@@ -368,6 +373,7 @@ class PacketCoverageTest {
                         || customChatCompletions
                         || customPayload
                         || lowDiskSpaceWarning
+                        || placeGhostRecipe
                         || moveVehicle
                         || openBook
                         || openScreen
@@ -461,6 +467,7 @@ class PacketCoverageTest {
                                 || openSignEditor
                                 || ping
                                 || pongResponse
+                                || placeGhostRecipe
                                 || disconnect,
                         Paper26_2PacketRegistry.explicitlyClassifies(descriptor.typeName()));
             }
