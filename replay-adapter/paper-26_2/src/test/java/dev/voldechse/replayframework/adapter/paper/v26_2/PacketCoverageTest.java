@@ -55,7 +55,8 @@ class PacketCoverageTest {
                         "play.clientbound.minecraft:disguised_chat",
                         "play.clientbound.minecraft:entity_event",
                         "play.clientbound.minecraft:entity_position_sync",
-                        "play.clientbound.minecraft:explode"),
+                        "play.clientbound.minecraft:explode",
+                        "play.clientbound.minecraft:forget_level_chunk"),
                 Paper26_2PacketCatalog.catalog().definitions().stream()
                         .map(definition -> definition.typeName())
                         .toList());
@@ -134,6 +135,8 @@ class PacketCoverageTest {
                         .equals("play.clientbound.minecraft:entity_position_sync");
                 boolean explode =
                         descriptor.typeName().equals("play.clientbound.minecraft:explode");
+                boolean forgetLevelChunk = descriptor.typeName()
+                        .equals("play.clientbound.minecraft:forget_level_chunk");
                 PacketDisposition expectedDisposition;
                 if (bundleDelimiter
                         || blockChangedAck
@@ -158,7 +161,8 @@ class PacketCoverageTest {
                         || containerPacket
                         || cooldown
                         || customChatCompletions
-                        || entityPositionSync) {
+                        || entityPositionSync
+                        || forgetLevelChunk) {
                     expectedDisposition = PacketDisposition.STATEFUL;
                 } else if (animate
                         || blockDestruction
@@ -202,7 +206,8 @@ class PacketCoverageTest {
                                 || disguisedChat
                                 || entityEvent
                                 || entityPositionSync
-                                || explode,
+                                || explode
+                                || forgetLevelChunk,
                         descriptor.replayable());
                 assertEquals(
                         addEntity
@@ -210,7 +215,8 @@ class PacketCoverageTest {
                                 || blockUpdate
                                 || bossEvent
                                 || chunksBiomes
-                                || entityPositionSync,
+                                || entityPositionSync
+                                || forgetLevelChunk,
                         descriptor.checkpointRelevant());
                 if (addEntity
                         || animate
@@ -237,7 +243,11 @@ class PacketCoverageTest {
                     assertEquals(
                             dev.voldechse.replayframework.adapter.PacketDescriptor.PlaybackScope.VIEWER_LOCAL,
                             descriptor.playbackScope());
-                } else if (blockEntityData || blockEvent || blockUpdate || chunksBiomes) {
+                } else if (blockEntityData
+                        || blockEvent
+                        || blockUpdate
+                        || chunksBiomes
+                        || forgetLevelChunk) {
                     assertEquals(
                             dev.voldechse.replayframework.adapter.PacketDescriptor.PlaybackScope.SAFE,
                             descriptor.playbackScope());
@@ -282,6 +292,7 @@ class PacketCoverageTest {
                                 || entityEvent
                                 || entityPositionSync
                                 || explode
+                                || forgetLevelChunk
                                 || disconnect,
                         Paper26_2PacketRegistry.explicitlyClassifies(descriptor.typeName()));
             }

@@ -14,7 +14,8 @@ public final class WorldPacketDefinitions {
                     new Id007BlockEventPacketDefinition(),
                     new Id008BlockUpdatePacketDefinition(),
                     new Id010ChangeDifficultyPacketDefinition(),
-                    new Id013ChunksBiomesPacketDefinition());
+                    new Id013ChunksBiomesPacketDefinition(),
+                    new Id037ForgetLevelChunkPacketDefinition());
 
     private WorldPacketDefinitions() {}
 
