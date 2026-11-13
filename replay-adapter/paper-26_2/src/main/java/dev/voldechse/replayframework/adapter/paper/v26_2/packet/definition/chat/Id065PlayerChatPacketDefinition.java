@@ -10,7 +10,7 @@ import net.minecraft.network.protocol.game.ClientboundDisguisedChatPacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerChatPacket;
 
 /**
- * Viewer-local contract for {@code minecraft:player_chat}.
+ * Replay presentation contract for {@code minecraft:player_chat}.
  *
  * <p>The packet carries the sender's signed-message chain, the recipient's
  * last-seen acknowledgements, filtering state, and a bound chat decoration.
