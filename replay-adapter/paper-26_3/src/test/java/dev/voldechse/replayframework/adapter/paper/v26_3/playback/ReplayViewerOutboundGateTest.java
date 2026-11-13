@@ -99,7 +99,13 @@ class ReplayViewerOutboundGateTest {
 
     @Test
     void liveObserverStateAlwaysPassesTheReplayGate() {
-        for (String name : List.of("set_health", "player_position", "player_abilities", "set_player_inventory", "set_title_text")) {
+        for (String name : List.of(
+                "set_health",
+                "player_position",
+                "player_abilities",
+                "set_player_inventory",
+                "set_title_text",
+                "clear_titles")) {
             var descriptor = new PacketDescriptor("play.clientbound.minecraft:" + name,
                     PacketPhase.PLAY, PacketDescriptor.Direction.CLIENTBOUND, 9,
                     PacketDisposition.STATEFUL, true, true, false, "test/" + name,

@@ -1,0 +1,18 @@
+package dev.voldechse.replayframework.adapter.paper.v26_2.packet.definition.ui;
+
+import dev.voldechse.replayframework.adapter.paper.packet.PacketDefinition;
+import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
+import java.util.List;
+
+/** Immutable Paper 26.2 definitions owned by the user-interface protocol domain. */
+public final class UiPacketDefinitions {
+
+    private static final List<PacketDefinition<Paper26_2ReplayPacketRewriter>> DEFINITIONS =
+            List.of(new Id014ClearTitlesPacketDefinition());
+
+    private UiPacketDefinitions() {}
+
+    public static List<PacketDefinition<Paper26_2ReplayPacketRewriter>> definitions() {
+        return DEFINITIONS;
+    }
+}

@@ -6,6 +6,7 @@ import dev.voldechse.replayframework.adapter.paper.v26_3.packet.definition.conne
 import dev.voldechse.replayframework.adapter.paper.v26_3.packet.definition.effect.EffectPacketDefinitions;
 import dev.voldechse.replayframework.adapter.paper.v26_3.packet.definition.entity.EntityPacketDefinitions;
 import dev.voldechse.replayframework.adapter.paper.v26_3.packet.definition.player.PlayerPacketDefinitions;
+import dev.voldechse.replayframework.adapter.paper.v26_3.packet.definition.ui.UiPacketDefinitions;
 import dev.voldechse.replayframework.adapter.paper.v26_3.packet.definition.world.WorldPacketDefinitions;
 import dev.voldechse.replayframework.adapter.paper.v26_3.playback.Paper26_3ReplayPacketRewriter;
 import java.util.Comparator;
@@ -23,7 +24,9 @@ public final class Paper26_3PacketCatalog {
                                     Stream.concat(
                                             EffectPacketDefinitions.definitions().stream(),
                                             PlayerPacketDefinitions.definitions().stream())),
-                            WorldPacketDefinitions.definitions().stream())
+                            Stream.concat(
+                                    WorldPacketDefinitions.definitions().stream(),
+                                    UiPacketDefinitions.definitions().stream()))
                     .sorted(Comparator.comparingInt(PacketDefinition::packetId))
                     .toList());
 

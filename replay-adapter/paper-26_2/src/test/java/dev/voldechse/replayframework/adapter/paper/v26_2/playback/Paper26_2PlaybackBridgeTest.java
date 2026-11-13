@@ -25,6 +25,29 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class Paper26_2PlaybackBridgeTest {
 
     @Test
+    void routesViewerLocalTitleClearingOnlyThroughLivePolicyBoundary() {
+        net.minecraft.SharedConstants.tryDetectVersion();
+        net.minecraft.server.Bootstrap.bootStrap();
+        PacketRegistry registry = Paper26_2PacketRegistry.discover();
+        PacketDescriptor descriptor = registry.find(
+                        PacketPhase.PLAY, PacketDescriptor.Direction.CLIENTBOUND, 14)
+                .orElseThrow();
+        RawPacketFrame clearTitles = frame(14);
+
+        assertEquals("play.clientbound.minecraft:clear_titles", descriptor.typeName());
+        assertEquals(PacketDisposition.STATEFUL, descriptor.disposition());
+        assertTrue(descriptor.replayable());
+        assertFalse(descriptor.checkpointRelevant());
+        assertEquals(
+                PacketDescriptor.PlaybackScope.VIEWER_LOCAL,
+                descriptor.playbackScope());
+        assertTrue(Paper26_2PlaybackBridge.shouldReplay(
+                clearTitles, PlaybackEmissionMode.LIVE, registry));
+        assertFalse(Paper26_2PlaybackBridge.shouldReplay(
+                clearTitles, PlaybackEmissionMode.RECONSTRUCTION, registry));
+    }
+
+    @Test
     void replaysChunkBiomesDuringLivePlaybackAndReconstruction() {
         net.minecraft.SharedConstants.tryDetectVersion();
         net.minecraft.server.Bootstrap.bootStrap();

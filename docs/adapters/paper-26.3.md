@@ -163,7 +163,7 @@ test status.
 | 11 | `minecraft:chunk_batch_finished` | Ends the client-side chunk-throughput measurement with the transmitted batch size and triggers a serverbound rate acknowledgement; never replay into an established connection | BLOCKED | no |
 | 12 | `minecraft:chunk_batch_start` | Payload-free start of a connection-local chunk-batch timing measurement; never replay into an established connection | BLOCKED | no |
 | 13 | `minecraft:chunks_biomes` | Replaces the serialized biome palettes of zero or more chunks while preserving entry order, duplicate coordinates, and the complete per-chunk payload | SEND | yes |
-| 14 | `minecraft:clear_titles` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
+| 14 | `minecraft:clear_titles` | Clears the recorded connection's title and subtitle and can also reset its animation timings; never apply either operation to the neutral observer | DROP_LOCAL | no |
 | 15 | `minecraft:command_suggestions` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 16 | `minecraft:commands` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 17 | `minecraft:container_close` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
