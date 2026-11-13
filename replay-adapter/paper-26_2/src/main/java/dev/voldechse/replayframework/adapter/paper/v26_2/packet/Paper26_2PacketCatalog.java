@@ -9,6 +9,8 @@ import dev.voldechse.replayframework.adapter.paper.v26_2.packet.definition.playe
 import dev.voldechse.replayframework.adapter.paper.v26_2.packet.definition.ui.UiPacketDefinitions;
 import dev.voldechse.replayframework.adapter.paper.v26_2.packet.definition.world.WorldPacketDefinitions;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
+
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.stream.Stream;
 
@@ -16,21 +18,19 @@ import java.util.stream.Stream;
 public final class Paper26_2PacketCatalog {
 
     private static final PacketDefinitionCatalog<Paper26_2ReplayPacketRewriter> CATALOG =
-            new PacketDefinitionCatalog<>(Stream.concat(
-                            Stream.concat(
-                                    Stream.concat(
-                                            ConnectionPacketDefinitions.definitions().stream(),
-                                            EntityPacketDefinitions.definitions().stream()),
-                                    Stream.concat(
-                                            EffectPacketDefinitions.definitions().stream(),
-                                            PlayerPacketDefinitions.definitions().stream())),
-                            Stream.concat(
-                                    WorldPacketDefinitions.definitions().stream(),
-                                    UiPacketDefinitions.definitions().stream()))
+            new PacketDefinitionCatalog<>(Stream.of(
+                            ConnectionPacketDefinitions.definitions(),
+                            EffectPacketDefinitions.definitions(),
+                            EntityPacketDefinitions.definitions(),
+                            PlayerPacketDefinitions.definitions(),
+                            UiPacketDefinitions.definitions(),
+                            WorldPacketDefinitions.definitions())
+                    .flatMap(Collection::stream)
                     .sorted(Comparator.comparingInt(PacketDefinition::packetId))
                     .toList());
 
-    private Paper26_2PacketCatalog() {}
+    private Paper26_2PacketCatalog() {
+    }
 
     public static PacketDefinitionCatalog<Paper26_2ReplayPacketRewriter> catalog() {
         return CATALOG;
