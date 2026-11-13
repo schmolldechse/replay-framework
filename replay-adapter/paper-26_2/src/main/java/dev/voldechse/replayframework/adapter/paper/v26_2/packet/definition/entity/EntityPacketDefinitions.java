@@ -11,7 +11,8 @@ public final class EntityPacketDefinitions {
             List.of(
                     new Id001AddEntityPacketDefinition(),
                     new Id035EntityPositionSyncPacketDefinition(),
-                    new Id053MoveEntityPosPacketDefinition());
+                    new Id053MoveEntityPosPacketDefinition(),
+                    new Id054MoveEntityPosRotPacketDefinition());
 
     private EntityPacketDefinitions() {}
 
