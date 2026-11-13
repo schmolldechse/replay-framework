@@ -187,7 +187,7 @@ test status.
 | 36 | `minecraft:explode` | Explosion scene effect with sound and weighted particle data; suppress recorded-player knockback and remap entity-backed vibration destinations | REWRITE | no |
 | 37 | `minecraft:forget_level_chunk` | Unloads a recorded chunk column from the client view; preserve its signed coordinates to remove stale terrain | SEND | yes |
 | 38 | `minecraft:game_event` | Forward rain and thunder changes; keep recorded-player, game-rule and loading-screen events from changing the observer | SEND / DROP_LOCAL* | no |
-| 39 | `minecraft:game_rule_values` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
+| 39 | `minecraft:game_rule_values` | Carries serialized values for the recorded player's available game rules in response to a privileged request; keep the observer's rule view unchanged | DROP_LOCAL | no |
 | 40 | `minecraft:game_test_highlight_pos` | Diagnostic or special-purpose packet without a safe playback contract | BLOCKED | no |
 | 41 | `minecraft:mount_screen_open` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 42 | `minecraft:hurt_animation` | Ordered scene effect: hurt animation for a replay entity | REWRITE | no |

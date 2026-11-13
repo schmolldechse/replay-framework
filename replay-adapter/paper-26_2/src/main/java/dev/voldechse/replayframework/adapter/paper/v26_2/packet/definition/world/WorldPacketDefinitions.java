@@ -16,7 +16,8 @@ public final class WorldPacketDefinitions {
                     new Id010ChangeDifficultyPacketDefinition(),
                     new Id013ChunksBiomesPacketDefinition(),
                     new Id037ForgetLevelChunkPacketDefinition(),
-                    new Id038GameEventPacketDefinition());
+                    new Id038GameEventPacketDefinition(),
+                    new Id039GameRuleValuesPacketDefinition());
 
     private WorldPacketDefinitions() {}
 
