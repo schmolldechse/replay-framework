@@ -169,7 +169,7 @@ test status.
 | 18 | `minecraft:container_set_content` | Replaces one menu state's indexed item contents and carried stack; preserve the neutral observer's live inventory | DROP_LOCAL | no |
 | 19 | `minecraft:container_set_data` | Updates a signed, menu-type-specific property for one container; preserve the neutral observer's live menu data | DROP_LOCAL | no |
 | 20 | `minecraft:container_set_slot` | Updates one signed menu slot with an optional component-bearing item stack for a container state; preserve the neutral observer's live inventory | DROP_LOCAL | no |
-| 21 | `minecraft:cookie_request` | Transport, connection, or server control; never replay into an established connection | BLOCKED | no |
+| 21 | `minecraft:cookie_request` | Requests the client cookie under one namespaced key and elicits a nullable, size-bounded response owned by the current connection; never replay into an established connection | BLOCKED | no |
 | 22 | `minecraft:cooldown` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 23 | `minecraft:custom_chat_completions` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 24 | `minecraft:custom_payload` | Must remain local: plugin-specific state of the recorded client; blocked for playback | DROP_LOCAL | no |

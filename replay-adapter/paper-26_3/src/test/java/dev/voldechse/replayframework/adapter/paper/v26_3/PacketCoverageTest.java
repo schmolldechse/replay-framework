@@ -39,7 +39,8 @@ class PacketCoverageTest {
                         "play.clientbound.minecraft:container_close",
                         "play.clientbound.minecraft:container_set_content",
                         "play.clientbound.minecraft:container_set_data",
-                        "play.clientbound.minecraft:container_set_slot"),
+                        "play.clientbound.minecraft:container_set_slot",
+                        "play.clientbound.minecraft:cookie_request"),
                 Paper26_3PacketCatalog.catalog().definitions().stream()
                         .map(definition -> definition.typeName())
                         .toList());
@@ -86,8 +87,14 @@ class PacketCoverageTest {
                                 "play.clientbound.minecraft:container_set_data",
                                 "play.clientbound.minecraft:container_set_slot")
                         .contains(descriptor.typeName());
+                boolean cookieRequest =
+                        descriptor.typeName().equals("play.clientbound.minecraft:cookie_request");
                 PacketDisposition expectedDisposition;
-                if (bundleDelimiter || blockChangedAck || chunkBatchFinished || chunkBatchStart) {
+                if (bundleDelimiter
+                        || blockChangedAck
+                        || chunkBatchFinished
+                        || chunkBatchStart
+                        || cookieRequest) {
                     expectedDisposition = PacketDisposition.CONTROL;
                 } else if (addEntity
                         || blockEntityData
@@ -169,7 +176,8 @@ class PacketCoverageTest {
                                 || clearTitles
                                 || commandSuggestions
                                 || commands
-                                || containerPacket,
+                                || containerPacket
+                                || cookieRequest,
                         Paper26_3PacketRegistry.explicitlyClassifies(descriptor.typeName()));
             }
         }

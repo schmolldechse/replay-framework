@@ -127,12 +127,12 @@ class Paper26_2PlaybackBridgeTest {
     }
 
     @Test
-    void neverReplaysRecordedChunkBatchFlowControl() {
+    void neverReplaysRecordedConnectionControl() {
         net.minecraft.SharedConstants.tryDetectVersion();
         net.minecraft.server.Bootstrap.bootStrap();
         PacketRegistry registry = Paper26_2PacketRegistry.discover();
 
-        for (int packetId : new int[] {11, 12}) {
+        for (int packetId : new int[] {11, 12, 21}) {
             PacketDescriptor descriptor = registry.find(
                             PacketPhase.PLAY,
                             PacketDescriptor.Direction.CLIENTBOUND,
