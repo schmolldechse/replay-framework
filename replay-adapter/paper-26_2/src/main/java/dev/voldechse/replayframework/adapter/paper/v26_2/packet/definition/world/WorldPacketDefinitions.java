@@ -18,7 +18,8 @@ public final class WorldPacketDefinitions {
                     new Id037ForgetLevelChunkPacketDefinition(),
                     new Id038GameEventPacketDefinition(),
                     new Id039GameRuleValuesPacketDefinition(),
-                    new Id043InitializeBorderPacketDefinition());
+                    new Id043InitializeBorderPacketDefinition(),
+                    new Id045LevelChunkWithLightPacketDefinition());
 
     private WorldPacketDefinitions() {}
 

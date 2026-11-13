@@ -193,7 +193,7 @@ test status.
 | 42 | `minecraft:hurt_animation` | Directional damage animation for a replay entity; remap its target entity ID and preserve yaw | REWRITE | no |
 | 43 | `minecraft:initialize_border` | Full world-border center, current and target size, transition, maximum boundary, and warning settings | SEND | yes |
 | 44 | `minecraft:keep_alive` | 64-bit keep-alive challenge; the live connection expects a matching response and may disconnect on a mismatch | BLOCKED | no |
-| 45 | `minecraft:level_chunk_with_light` | Essential scene state: durable world or scene state | SEND | yes |
+| 45 | `minecraft:level_chunk_with_light` | Chunk terrain, heightmaps, block entity updates, and sky/block light for one world coordinate | SEND | yes |
 | 46 | `minecraft:level_event` | Ordered presentation or environment effect | SEND | no |
 | 47 | `minecraft:level_particles` | Ordered presentation or environment effect | SEND | no |
 | 48 | `minecraft:light_update` | Essential scene state: durable world or scene state | SEND | yes |
