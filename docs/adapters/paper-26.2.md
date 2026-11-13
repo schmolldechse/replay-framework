@@ -203,7 +203,7 @@ test status.
 | 52 | `minecraft:merchant_offers` | Supplies the active trading container's offers, merchant level/XP, progress visibility, and restock capability; container IDs and trade UI state belong to the recorded player's connection | DROP_LOCAL; preserve the observer's own trade menu and offers | no |
 | 53 | `minecraft:move_entity_pos` | Ordered movement delta for any tracked entity: signed 1/4096-block X/Y/Z deltas and on-ground flag; remap its entity ID | REWRITE in timeline order | no |
 | 54 | `minecraft:move_entity_pos_rot` | Ordered relative entity movement with signed 1/4096-block X/Y/Z deltas, raw yaw/pitch bytes, and on-ground flag; remap its entity ID | REWRITE in timeline order | no |
-| 55 | `minecraft:move_minecart_along_track` | Essential scene state: minecart interpolation and movement steps | REWRITE | yes |
+| 55 | `minecraft:move_minecart_along_track` | Ordered minecart trajectory steps, each with position, movement vector, yaw/pitch, and interpolation weight; remap its entity ID | REWRITE in timeline order | yes |
 | 56 | `minecraft:move_entity_rot` | Essential scene state: scene presentation with playback-session identity rewriting | REWRITE | yes |
 | 57 | `minecraft:move_vehicle` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 58 | `minecraft:open_book` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |

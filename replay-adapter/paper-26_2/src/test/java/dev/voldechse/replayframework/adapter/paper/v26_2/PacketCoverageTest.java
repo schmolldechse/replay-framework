@@ -73,7 +73,8 @@ class PacketCoverageTest {
                         "play.clientbound.minecraft:map_item_data",
                         "play.clientbound.minecraft:merchant_offers",
                         "play.clientbound.minecraft:move_entity_pos",
-                        "play.clientbound.minecraft:move_entity_pos_rot"),
+                        "play.clientbound.minecraft:move_entity_pos_rot",
+                        "play.clientbound.minecraft:move_minecart_along_track"),
                 Paper26_2PacketCatalog.catalog().definitions().stream()
                         .map(definition -> definition.typeName())
                         .toList());
@@ -187,6 +188,8 @@ class PacketCoverageTest {
                         .equals("play.clientbound.minecraft:move_entity_pos");
                 boolean moveEntityPosRot = descriptor.typeName()
                         .equals("play.clientbound.minecraft:move_entity_pos_rot");
+                boolean moveMinecartAlongTrack = descriptor.typeName()
+                        .equals("play.clientbound.minecraft:move_minecart_along_track");
                 PacketDisposition expectedDisposition;
                 if (bundleDelimiter
                         || blockChangedAck
@@ -215,6 +218,7 @@ class PacketCoverageTest {
                         || cooldown
                         || customChatCompletions
                         || entityPositionSync
+                        || moveMinecartAlongTrack
                         || forgetLevelChunk
                         || gameRuleValues
                         || mountScreenOpen
@@ -273,6 +277,7 @@ class PacketCoverageTest {
                                 || merchantOffers
                                 || moveEntityPos
                                 || moveEntityPosRot
+                                || moveMinecartAlongTrack
                                 || damageEvent
                                 || deleteChat
                                 || disguisedChat
@@ -296,6 +301,7 @@ class PacketCoverageTest {
                                 || blockUpdate
                                 || bossEvent
                                 || chunksBiomes
+                                || moveMinecartAlongTrack
                                 || entityPositionSync
                                 || forgetLevelChunk
                                 || initializeBorder
@@ -310,6 +316,7 @@ class PacketCoverageTest {
                         || entityEvent
                         || moveEntityPos
                         || moveEntityPosRot
+                        || moveMinecartAlongTrack
                         || entityPositionSync
                         || explode
                         || hurtAnimation
@@ -408,6 +415,7 @@ class PacketCoverageTest {
                                 || merchantOffers
                                 || moveEntityPos
                                 || moveEntityPosRot
+                                || moveMinecartAlongTrack
                                 || disconnect,
                         Paper26_2PacketRegistry.explicitlyClassifies(descriptor.typeName()));
             }
