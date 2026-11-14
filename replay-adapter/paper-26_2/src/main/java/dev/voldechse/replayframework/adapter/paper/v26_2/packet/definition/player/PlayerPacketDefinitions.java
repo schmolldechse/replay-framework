@@ -23,7 +23,8 @@ public final class PlayerPacketDefinitions {
                     new Id093SetCameraPacketDefinition(),
                     new Id103SetExperiencePacketDefinition(),
                     new Id104SetHealthPacketDefinition(),
-                    new Id105SetHeldSlotPacketDefinition());
+                    new Id105SetHeldSlotPacketDefinition(),
+                    new Id130UpdateAdvancementsPacketDefinition());
 
     private PlayerPacketDefinitions() {}
 

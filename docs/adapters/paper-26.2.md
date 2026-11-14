@@ -278,7 +278,7 @@ test status.
 | 127 | `minecraft:ticking_state` | Client tick-rate float and frozen flag; changes the receiving client's processing cadence and can freeze it | BLOCKED | no |
 | 128 | `minecraft:ticking_step` | Tick-step count as VarInt; manually advances client processing only while the receiving client is frozen | BLOCKED | no |
 | 129 | `minecraft:transfer` | Target host string and port VarInt; instructs the client to reconnect elsewhere and preserve stored cookies | BLOCKED | no |
-| 130 | `minecraft:update_advancements` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
+| 130 | `minecraft:update_advancements` | Reset flag, added advancement definitions, removed advancement identifiers, per-advancement criterion progress with completion times, and advancement-screen visibility; belongs to the recorded player's progression UI | DROP_LOCAL | no |
 | 131 | `minecraft:update_attributes` | Essential scene state: scene presentation with playback-session identity rewriting | REWRITE | yes |
 | 132 | `minecraft:update_mob_effect` | Essential scene state: scene presentation with playback-session identity rewriting | REWRITE | yes |
 | 133 | `minecraft:update_recipes` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |

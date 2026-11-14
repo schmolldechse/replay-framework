@@ -146,7 +146,8 @@ class PacketCoverageTest {
             control(0x7E, "test_instance_block_status"),
             control(0x7F, "ticking_state"),
             control(0x80, "ticking_step"),
-            control(0x81, "transfer"));
+            control(0x81, "transfer"),
+            stateful(0x82, "update_advancements", PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
 
     private static final Map<String, ExpectedPacket> EXPECTED_BY_TYPE = IMPLEMENTED_PACKETS.stream()
             .collect(Collectors.toUnmodifiableMap(
