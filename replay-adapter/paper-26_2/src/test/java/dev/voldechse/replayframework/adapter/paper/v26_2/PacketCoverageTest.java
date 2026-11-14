@@ -136,7 +136,8 @@ class PacketCoverageTest {
             ephemeral(0x74, "sound_entity", PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES),
             ephemeral(0x75, "sound", PacketDescriptor.PlaybackScope.SAFE),
             control(0x76, "start_configuration"),
-            ephemeral(0x77, "stop_sound", PacketDescriptor.PlaybackScope.SAFE));
+            ephemeral(0x77, "stop_sound", PacketDescriptor.PlaybackScope.SAFE),
+            control(0x78, "store_cookie"));
 
     private static final Map<String, ExpectedPacket> EXPECTED_BY_TYPE = IMPLEMENTED_PACKETS.stream()
             .collect(Collectors.toUnmodifiableMap(
