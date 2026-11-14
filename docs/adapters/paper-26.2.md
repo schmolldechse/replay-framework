@@ -241,7 +241,7 @@ test status.
 | 90 | `minecraft:set_border_size` | One new border diameter as a double; applies immediately without interpolation to the shared world border | SEND | yes |
 | 91 | `minecraft:set_border_warning_delay` | Nonnegative VarInt warning threshold stored as ticks in Paper 26.2; configures when the shared world border warning appears | SEND | yes |
 | 92 | `minecraft:set_border_warning_distance` | Nonnegative VarInt distance in blocks; configures how far from the shared world border its distance warning appears | SEND | yes |
-| 93 | `minecraft:set_camera` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
+| 93 | `minecraft:set_camera` | Entity ID selecting the entity followed by the receiving client's camera; changing it would take control of the observer's view | DROP_LOCAL | no |
 | 94 | `minecraft:set_chunk_cache_center` | Supplementary durable world or scene state | SEND | yes |
 | 95 | `minecraft:set_chunk_cache_radius` | Supplementary durable world or scene state | SEND | yes |
 | 96 | `minecraft:set_cursor_item` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
