@@ -275,7 +275,7 @@ test status.
 | 123 | `minecraft:swing_animation` | Ordered scene effect: 26.3 swing animation; rewrite entity ID and retain hand/animation data | REWRITE | no |
 | 124 | `minecraft:system_chat` | Trusted text component and overlay Boolean; includeChat and chatFilter control recording capture, while chat-history and action-bar changes stay local to the recorded connection | DROP_LOCAL* | no |
 | 125 | `minecraft:tab_list` | Two trusted text components customize the player-list header and footer for the recorded connection; preserve the observer's own tab-list presentation | DROP_LOCAL | no |
-| 126 | `minecraft:tag_query` | Diagnostic or special-purpose packet without a safe playback contract | BLOCKED | no |
+| 126 | `minecraft:tag_query` | Response to a client block-entity or entity tag query: the request's VarInt transaction ID and a nullable NBT compound; the response is tied to that requesting connection | BLOCKED | no |
 | 127 | `minecraft:take_item_entity` | Scene presentation with playback-session identity rewriting | REWRITE | no |
 | 128 | `minecraft:teleport_entity` | Essential scene state: scene presentation with playback-session identity rewriting | REWRITE | yes |
 | 129 | `minecraft:test_instance_block_status` | Diagnostic or special-purpose packet without a safe playback contract | BLOCKED | no |

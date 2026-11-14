@@ -14,7 +14,8 @@ public final class DiagnosticPacketDefinitions {
                     new Id028DebugEntityValuePacketDefinition(),
                     new Id029DebugEventPacketDefinition(),
                     new Id030DebugSamplePacketDefinition(),
-                    new Id040GameTestHighlightPosPacketDefinition());
+                    new Id040GameTestHighlightPosPacketDefinition(),
+                    new Id123TagQueryPacketDefinition());
 
     private DiagnosticPacketDefinitions() {}
 
