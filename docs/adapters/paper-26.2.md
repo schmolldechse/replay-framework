@@ -283,7 +283,7 @@ test status.
 | 132 | `minecraft:update_mob_effect` | Entity ID VarInt, registry-backed effect, amplifier and duration VarInts, plus ambient, particle, icon, and blend flags. Active effects belong to their entity and are restored in running-effect checkpoints | REWRITE | yes |
 | 133 | `minecraft:update_recipes` | Recipe-property-set map (registry keys and item sets) plus stonecutter input ingredients and slot-display options; recipe objects are omitted from the wire display entries. Connection-local recipe synchronization; drop for the neutral observer | DROP_LOCAL | no |
 | 134 | `minecraft:update_tags` | Registry-key map of tag names to numeric registry-entry IDs (VarInts); updates client tags for blocks, items, biomes and other synchronized registries. Requires matching registry/data-pack contents and entry-ID order | SEND | yes |
-| 135 | `minecraft:projectile_power` | Scene presentation with playback-session identity rewriting | REWRITE | yes |
+| 135 | `minecraft:projectile_power` | Projectile entity ID VarInt and acceleration-power double; updates `AbstractHurtingProjectile` acceleration separately from motion. Rewrites the entity ID and restores this entity state in checkpoints | REWRITE | yes |
 | 136 | `minecraft:custom_report_details` | Transport, connection, or server control; never replay into an established connection | BLOCKED | no |
 | 137 | `minecraft:server_links` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 138 | `minecraft:waypoint` | Recorded-viewer waypoint presentation; keep local to preserve observer state | DROP_LOCAL | no |

@@ -24,7 +24,8 @@ public final class EntityPacketDefinitions {
                     new Id102SetEquipmentPacketDefinition(),
                     new Id107SetPassengersPacketDefinition(),
                     new Id125TeleportEntityPacketDefinition(),
-                    new Id131UpdateAttributesPacketDefinition());
+                    new Id131UpdateAttributesPacketDefinition(),
+                    new Id135ProjectilePowerPacketDefinition());
 
     private EntityPacketDefinitions() {}
 
