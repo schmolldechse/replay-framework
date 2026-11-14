@@ -22,7 +22,8 @@ public final class WorldPacketDefinitions {
                     new Id045LevelChunkWithLightPacketDefinition(),
                     new Id046LevelEventPacketDefinition(),
                     new Id048LightUpdatePacketDefinition(),
-                    new Id051MapItemDataPacketDefinition());
+                    new Id051MapItemDataPacketDefinition(),
+                    new Id084SectionBlocksUpdatePacketDefinition());
 
     private WorldPacketDefinitions() {}
 
