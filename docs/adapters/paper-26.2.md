@@ -274,7 +274,7 @@ test status.
 | 123 | `minecraft:tag_query` | Response to a client block-entity or entity tag query: the request's VarInt transaction ID and a nullable NBT compound; the response is tied to that requesting connection | BLOCKED | no |
 | 124 | `minecraft:take_item_entity` | Ordered item-pickup animation: collected item entity ID, collector entity ID, and collected stack amount as VarInts; rewrite both entity IDs | REWRITE | no |
 | 125 | `minecraft:teleport_entity` | Entity ID, position/delta movement/yaw/pitch, nine independent relative flags, and on-ground bit; preserve each absolute or relative value and rewrite the entity ID | REWRITE | yes |
-| 126 | `minecraft:test_instance_block_status` | Diagnostic or special-purpose packet without a safe playback contract | BLOCKED | no |
+| 126 | `minecraft:test_instance_block_status` | Status text component and optional integer Vec3i structure size for the recipient's open GameTest instance-block editor; depends on that editor's test context | BLOCKED | no |
 | 127 | `minecraft:ticking_state` | Transport, connection, or server control; never replay into an established connection | BLOCKED | no |
 | 128 | `minecraft:ticking_step` | Transport, connection, or server control; never replay into an established connection | BLOCKED | no |
 | 129 | `minecraft:transfer` | Transport, connection, or server control; never replay into an established connection | BLOCKED | no |
