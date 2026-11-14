@@ -236,7 +236,7 @@ test status.
 | 85 | `minecraft:select_advancements_tab` | Optional advancement-tab identifier; switches tabs after a client selection or an advancement in another tab; an absent or unknown identifier selects the first available tab | DROP_LOCAL to preserve the observer's advancements view | no |
 | 86 | `minecraft:server_data` | Server MOTD as a rich text component and an optional byte array containing the server icon; connection-specific server presentation | DROP_LOCAL to preserve the observer's server details | no |
 | 87 | `minecraft:set_action_bar_text` | Rich text component displayed temporarily above the hotbar as an action-bar message; carries no duration or clear operation | DROP_LOCAL to preserve the observer's action bar | no |
-| 88 | `minecraft:set_border_center` | Supplementary durable world or scene state | SEND | yes |
+| 88 | `minecraft:set_border_center` | Center X and Z as doubles; updates the shared world's border center without changing its size or other border settings | SEND | yes |
 | 89 | `minecraft:set_border_lerp_size` | Supplementary durable world or scene state | SEND | yes |
 | 90 | `minecraft:set_border_size` | Supplementary durable world or scene state | SEND | yes |
 | 91 | `minecraft:set_border_warning_delay` | Supplementary durable world or scene state | SEND | yes |

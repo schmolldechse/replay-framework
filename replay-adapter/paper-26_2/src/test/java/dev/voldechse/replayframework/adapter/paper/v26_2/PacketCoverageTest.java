@@ -104,7 +104,8 @@ class PacketCoverageTest {
             stateful(0x54, "section_blocks_update", PacketDescriptor.PlaybackScope.SAFE),
             ephemeral(0x55, "select_advancements_tab", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
             stateful(0x56, "server_data", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
-            ephemeral(0x57, "set_action_bar_text", PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
+            ephemeral(0x57, "set_action_bar_text", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
+            stateful(0x58, "set_border_center", PacketDescriptor.PlaybackScope.SAFE));
 
     private static final Map<String, ExpectedPacket> EXPECTED_BY_TYPE = IMPLEMENTED_PACKETS.stream()
             .collect(Collectors.toUnmodifiableMap(

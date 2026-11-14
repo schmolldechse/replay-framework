@@ -23,7 +23,8 @@ public final class WorldPacketDefinitions {
                     new Id046LevelEventPacketDefinition(),
                     new Id048LightUpdatePacketDefinition(),
                     new Id051MapItemDataPacketDefinition(),
-                    new Id084SectionBlocksUpdatePacketDefinition());
+                    new Id084SectionBlocksUpdatePacketDefinition(),
+                    new Id088SetBorderCenterPacketDefinition());
 
     private WorldPacketDefinitions() {}
 

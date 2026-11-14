@@ -1,7 +1,9 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.checkpoint;
 
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
+import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.paper.v26_2.Paper26_2PacketRegistry;
+import dev.voldechse.replayframework.format.PacketPhase;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.protocol.game.ClientboundChangeDifficultyPacket;
 import net.minecraft.network.protocol.game.GameProtocols;
@@ -11,6 +13,7 @@ import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.BeforeAll;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -23,7 +26,7 @@ final class Paper26_2NativePacketCodecTest {
     }
 
     @Test
-    void rejectsCheckpointEncodingWithoutAPacketImplementation() {
+    void encodesCheckpointRelevantBorderCenterState() {
         Paper26_2PacketRegistry registry = Paper26_2PacketRegistry.discover();
         Paper26_2CheckpointEncoder.PacketBlueprint blueprint = new Paper26_2CheckpointEncoder.PacketBlueprint(
                 "play.clientbound.minecraft:set_border_center",
@@ -36,7 +39,25 @@ final class Paper26_2NativePacketCodecTest {
                 GameProtocols.CLIENTBOUND_TEMPLATE.bind(
                         net.minecraft.network.RegistryFriendlyByteBuf.decorator(RegistryAccess.EMPTY)));
 
-        assertThrows(IncompatibleAdapterException.class, () -> codec.encode(blueprint));
+        var encoded = codec.encode(blueprint);
+
+        assertEquals("play.clientbound.minecraft:set_border_center", encoded.descriptorTypeName());
+        assertEquals(PacketPhase.PLAY, encoded.phase());
+        assertEquals(
+                PacketDescriptor.Direction.CLIENTBOUND, encoded.direction());
+        assertEquals(0x58, encoded.packetId());
+        assertEquals(Paper26_2CheckpointEncoder.CheckpointPacketFamily.GLOBAL_STATE,
+                encoded.family());
+        assertEquals("minecraft:world", encoded.worldKey());
+        assertEquals("global", encoded.targetKey());
+        var payload = io.netty.buffer.Unpooled.wrappedBuffer(encoded.payload());
+        try {
+            assertEquals(32.0, payload.readDouble());
+            assertEquals(-16.0, payload.readDouble());
+            assertFalse(payload.isReadable());
+        } finally {
+            payload.release();
+        }
     }
 
     @Test
