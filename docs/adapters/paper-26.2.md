@@ -260,7 +260,7 @@ test status.
 | 109 | `minecraft:set_player_team` | Team name and method byte create, remove, update, add members, or remove members; create/update include display name, styled member prefix and suffix, name-tag visibility, collision rule, optional team color, and friendly-fire/invisibility flags; create/add/remove-member modes include player-name collections; team and member presentation are viewer-local | DROP_LOCAL | no |
 | 110 | `minecraft:set_score` | Owner and objective UTF-8 strings with a signed score VarInt; optional per-score display component and independent optional blank, styled, or fixed number format; the owner is scoreboard text rather than an entity ID, and the score changes recorded-viewer scoreboard state | DROP_LOCAL | no |
 | 111 | `minecraft:set_simulation_distance` | Server simulation distance sent as a VarInt; the client uses it to determine when distant entity death animations pause | SEND | yes |
-| 112 | `minecraft:set_subtitle_text` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
+| 112 | `minecraft:set_subtitle_text` | Text component staged as the subtitle for the next title; changes the receiving client's title HUD state | DROP_LOCAL | no |
 | 113 | `minecraft:set_time` | Essential scene state: durable world or scene state | SEND | yes |
 | 114 | `minecraft:set_title_text` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 115 | `minecraft:set_titles_animation` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |

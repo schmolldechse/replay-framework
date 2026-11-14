@@ -263,7 +263,7 @@ test status.
 | 111 | `minecraft:set_player_team` | Recorded-viewer team and name presentation; keep local to preserve observer state | DROP_LOCAL | no |
 | 112 | `minecraft:set_score` | Recorded-viewer scoreboard value; preserve the observer scoreboard | DROP_LOCAL | no |
 | 113 | `minecraft:set_simulation_distance` | Server simulation distance sent as a VarInt; the client uses it to determine when distant entity death animations pause | SEND | yes |
-| 114 | `minecraft:set_subtitle_text` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
+| 114 | `minecraft:set_subtitle_text` | Text component staged as the subtitle for the next title; changes the receiving client's title HUD state | DROP_LOCAL | no |
 | 115 | `minecraft:set_time` | Essential scene state: durable world or scene state | SEND | yes |
 | 116 | `minecraft:set_title_text` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 117 | `minecraft:set_titles_animation` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
