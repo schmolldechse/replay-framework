@@ -237,7 +237,7 @@ test status.
 | 86 | `minecraft:server_data` | Server MOTD as a rich text component and an optional byte array containing the server icon; connection-specific server presentation | DROP_LOCAL to preserve the observer's server details | no |
 | 87 | `minecraft:set_action_bar_text` | Rich text component displayed temporarily above the hotbar as an action-bar message; carries no duration or clear operation | DROP_LOCAL to preserve the observer's action bar | no |
 | 88 | `minecraft:set_border_center` | Center X and Z as doubles; updates the shared world's border center without changing its size or other border settings | SEND | yes |
-| 89 | `minecraft:set_border_lerp_size` | Supplementary durable world or scene state | SEND | yes |
+| 89 | `minecraft:set_border_lerp_size` | Current and target border diameters with a remaining interpolation time; smoothly updates the shared world's border size | SEND | yes |
 | 90 | `minecraft:set_border_size` | Supplementary durable world or scene state | SEND | yes |
 | 91 | `minecraft:set_border_warning_delay` | Supplementary durable world or scene state | SEND | yes |
 | 92 | `minecraft:set_border_warning_distance` | Supplementary durable world or scene state | SEND | yes |

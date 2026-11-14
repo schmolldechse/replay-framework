@@ -24,7 +24,8 @@ public final class WorldPacketDefinitions {
                     new Id048LightUpdatePacketDefinition(),
                     new Id051MapItemDataPacketDefinition(),
                     new Id084SectionBlocksUpdatePacketDefinition(),
-                    new Id088SetBorderCenterPacketDefinition());
+                    new Id088SetBorderCenterPacketDefinition(),
+                    new Id089SetBorderLerpSizePacketDefinition());
 
     private WorldPacketDefinitions() {}
 
