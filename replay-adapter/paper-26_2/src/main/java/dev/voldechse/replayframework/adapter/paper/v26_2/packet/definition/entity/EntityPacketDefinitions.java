@@ -20,7 +20,8 @@ public final class EntityPacketDefinitions {
                     new Id083RotateHeadPacketDefinition(),
                     new Id099SetEntityDataPacketDefinition(),
                     new Id100SetEntityLinkPacketDefinition(),
-                    new Id101SetEntityMotionPacketDefinition());
+                    new Id101SetEntityMotionPacketDefinition(),
+                    new Id102SetEquipmentPacketDefinition());
 
     private EntityPacketDefinitions() {}
 

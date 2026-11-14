@@ -119,6 +119,7 @@ class PacketCoverageTest {
             stateful(0x63, "set_entity_data", PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES),
             stateful(0x64, "set_entity_link", PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES),
             stateful(0x65, "set_entity_motion", PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES),
+            stateful(0x66, "set_equipment", PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES),
             stateful(0x6A, "set_objective", PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
 
     private static final Map<String, ExpectedPacket> EXPECTED_BY_TYPE = IMPLEMENTED_PACKETS.stream()
