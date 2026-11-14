@@ -17,7 +17,8 @@ public final class PlayerPacketDefinitions {
                     new Id069PlayerInfoRemovePacketDefinition(),
                     new Id070PlayerInfoUpdatePacketDefinition(),
                     new Id071PlayerLookAtPacketDefinition(),
-                    new Id072PlayerPositionPacketDefinition());
+                    new Id072PlayerPositionPacketDefinition(),
+                    new Id073PlayerRotationPacketDefinition());
 
     private PlayerPacketDefinitions() {}
 
