@@ -26,7 +26,8 @@ public final class UiPacketDefinitions {
                     new Id063PlaceGhostRecipePacketDefinition(),
                     new Id074RecipeBookAddPacketDefinition(),
                     new Id075RecipeBookRemovePacketDefinition(),
-                    new Id076RecipeBookSettingsPacketDefinition());
+                    new Id076RecipeBookSettingsPacketDefinition(),
+                    new Id085SelectAdvancementsTabPacketDefinition());
 
     private UiPacketDefinitions() {}
 

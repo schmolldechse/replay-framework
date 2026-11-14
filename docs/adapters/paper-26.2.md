@@ -233,7 +233,7 @@ test status.
 | 82 | `minecraft:respawn` | Dimension type and key, world seed, current/previous game mode, debug and flat flags, optional last-death position, portal cooldown, sea level, and attribute/entity-data keep mask; respawn state for the receiving player | DROP_LOCAL to preserve the observer's world and player state | no |
 | 83 | `minecraft:rotate_head` | Entity ID and absolute head yaw angle in 1/256-turn steps; head orientation is independent of body rotation | REWRITE the entity ID into the playback identity space | yes |
 | 84 | `minecraft:section_blocks_update` | Packed section position, VarInt update count, then ordered VarLong records (`global block-state ID << 12 | local X << 8 | local Z << 4 | local Y`); each record changes one block using a global state and three 4-bit section-relative coordinates | SEND | yes |
-| 85 | `minecraft:select_advancements_tab` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
+| 85 | `minecraft:select_advancements_tab` | Optional advancement-tab identifier; switches tabs after a client selection or an advancement in another tab; an absent or unknown identifier selects the first available tab | DROP_LOCAL to preserve the observer's advancements view | no |
 | 86 | `minecraft:server_data` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 87 | `minecraft:set_action_bar_text` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 88 | `minecraft:set_border_center` | Supplementary durable world or scene state | SEND | yes |
