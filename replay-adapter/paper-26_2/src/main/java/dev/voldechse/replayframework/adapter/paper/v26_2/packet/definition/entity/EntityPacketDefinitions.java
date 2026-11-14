@@ -16,7 +16,8 @@ public final class EntityPacketDefinitions {
                     new Id055MoveMinecartAlongTrackPacketDefinition(),
                     new Id056MoveEntityRotPacketDefinition(),
                     new Id057MoveVehiclePacketDefinition(),
-                    new Id077RemoveEntitiesPacketDefinition());
+                    new Id077RemoveEntitiesPacketDefinition(),
+                    new Id083RotateHeadPacketDefinition());
 
     private EntityPacketDefinitions() {}
 

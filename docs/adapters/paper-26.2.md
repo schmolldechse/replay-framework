@@ -231,7 +231,7 @@ test status.
 | 80 | `minecraft:resource_pack_pop` | Optional UUID of a server-provided resource pack to remove; if absent, removes all server-provided packs and changes the receiving client's resource assets | BLOCKED | no |
 | 81 | `minecraft:resource_pack_push` | UUID, download URL, SHA-1 hash, required flag and optional prompt component; asks the receiving client to download and apply server resource assets | BLOCKED | no |
 | 82 | `minecraft:respawn` | Dimension type and key, world seed, current/previous game mode, debug and flat flags, optional last-death position, portal cooldown, sea level, and attribute/entity-data keep mask; respawn state for the receiving player | DROP_LOCAL to preserve the observer's world and player state | no |
-| 83 | `minecraft:rotate_head` | Essential scene state: scene presentation with playback-session identity rewriting | REWRITE | yes |
+| 83 | `minecraft:rotate_head` | Entity ID and absolute head yaw angle in 1/256-turn steps; head orientation is independent of body rotation | REWRITE the entity ID into the playback identity space | yes |
 | 84 | `minecraft:section_blocks_update` | Essential scene state: durable world or scene state | SEND | yes |
 | 85 | `minecraft:select_advancements_tab` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 86 | `minecraft:server_data` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
