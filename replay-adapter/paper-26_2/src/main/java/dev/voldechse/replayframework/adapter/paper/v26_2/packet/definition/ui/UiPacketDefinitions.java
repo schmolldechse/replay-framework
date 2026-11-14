@@ -34,7 +34,8 @@ public final class UiPacketDefinitions {
                     new Id108SetPlayerInventoryPacketDefinition(),
                     new Id112SetSubtitleTextPacketDefinition(),
                     new Id114SetTitleTextPacketDefinition(),
-                    new Id115SetTitlesAnimationPacketDefinition());
+                    new Id115SetTitlesAnimationPacketDefinition(),
+                    new Id122TabListPacketDefinition());
 
     private UiPacketDefinitions() {}
 

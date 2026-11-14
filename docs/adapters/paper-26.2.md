@@ -270,7 +270,7 @@ test status.
 | 119 | `minecraft:stop_sound` | Flags select an optional source category and sound identifier: stop all sounds, all sounds in a category, one sound in every category, or one sound in one category; preserve in order with preceding replayed audio | SEND | no |
 | 120 | `minecraft:store_cookie` | Namespaced cookie key and length-prefixed byte payload up to 5,120 bytes; writes recipient-owned persistent connection data that may be returned in later cookie requests | BLOCKED | no |
 | 121 | `minecraft:system_chat` | Trusted text component and overlay Boolean; includeChat and chatFilter control recording capture, while chat-history and action-bar changes stay local to the recorded connection | DROP_LOCAL* | no |
-| 122 | `minecraft:tab_list` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
+| 122 | `minecraft:tab_list` | Two trusted text components customize the player-list header and footer for the recorded connection; preserve the observer's own tab-list presentation | DROP_LOCAL | no |
 | 123 | `minecraft:tag_query` | Diagnostic or special-purpose packet without a safe playback contract | BLOCKED | no |
 | 124 | `minecraft:take_item_entity` | Scene presentation with playback-session identity rewriting | REWRITE | no |
 | 125 | `minecraft:teleport_entity` | Essential scene state: scene presentation with playback-session identity rewriting | REWRITE | yes |

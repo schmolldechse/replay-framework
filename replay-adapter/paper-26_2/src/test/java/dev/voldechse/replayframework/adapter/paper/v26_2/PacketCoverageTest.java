@@ -138,7 +138,8 @@ class PacketCoverageTest {
             control(0x76, "start_configuration"),
             ephemeral(0x77, "stop_sound", PacketDescriptor.PlaybackScope.SAFE),
             control(0x78, "store_cookie"),
-            configurable(0x79, "system_chat", PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
+            configurable(0x79, "system_chat", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
+            stateful(0x7A, "tab_list", PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
 
     private static final Map<String, ExpectedPacket> EXPECTED_BY_TYPE = IMPLEMENTED_PACKETS.stream()
             .collect(Collectors.toUnmodifiableMap(
