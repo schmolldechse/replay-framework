@@ -268,7 +268,7 @@ test status.
 | 116 | `minecraft:set_title_text` | Title text component for the receiving player's title overlay, presented with separately sent subtitle and animation timing; connection-local HUD state | DROP_LOCAL | no |
 | 117 | `minecraft:set_titles_animation` | Title overlay fade-in, stay, and fade-out durations as three fixed-width Int tick values; persists as the receiving client's title timing configuration | DROP_LOCAL | no |
 | 118 | `minecraft:sound_entity` | Entity-attached sound event (registry reference or inline identifier with optional fixed range), source category, VarInt entity ID, volume/pitch Floats, and variant seed; rewrite the source entity ID | REWRITE | no |
-| 119 | `minecraft:sound` | Ordered presentation or environment effect | SEND | no |
+| 119 | `minecraft:sound` | Sound event as a registry reference or inline identifier with optional fixed range, source category, signed Int X/Y/Z in eighth-block units, volume and pitch Floats, and variant seed; preserve exact fixed-point positions and event order | SEND | no |
 | 120 | `minecraft:start_configuration` | Transport, connection, or server control; never replay into an established connection | BLOCKED | no |
 | 121 | `minecraft:stop_sound` | Ordered presentation or environment effect | SEND | no |
 | 122 | `minecraft:store_cookie` | Transport, connection, or server control; never replay into an established connection | BLOCKED | no |
