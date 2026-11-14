@@ -20,7 +20,8 @@ public final class ConnectionPacketDefinitions {
                     new Id061PingPacketDefinition(),
                     new Id062PongResponsePacketDefinition(),
                     new Id080ResourcePackPopPacketDefinition(),
-                    new Id081ResourcePackPushPacketDefinition());
+                    new Id081ResourcePackPushPacketDefinition(),
+                    new Id118StartConfigurationPacketDefinition());
 
     private ConnectionPacketDefinitions() {}
 
