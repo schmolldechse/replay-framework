@@ -273,7 +273,7 @@ test status.
 | 121 | `minecraft:stop_sound` | Flags select an optional source category and sound identifier: stop all sounds, all sounds in a category, one sound in every category, or one sound in one category; preserve in order with preceding replayed audio | SEND | no |
 | 122 | `minecraft:store_cookie` | Namespaced cookie key and length-prefixed byte payload up to 5,120 bytes; writes recipient-owned persistent connection data that may be returned in later cookie requests | BLOCKED | no |
 | 123 | `minecraft:swing_animation` | Ordered scene effect: 26.3 swing animation; rewrite entity ID and retain hand/animation data | REWRITE | no |
-| 124 | `minecraft:system_chat` | Recorded connection chat and action-bar presentation retained according to capture policy but suppressed for neutral playback | DROP_LOCAL* | no |
+| 124 | `minecraft:system_chat` | Trusted text component and overlay Boolean; includeChat and chatFilter control recording capture, while chat-history and action-bar changes stay local to the recorded connection | DROP_LOCAL* | no |
 | 125 | `minecraft:tab_list` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 126 | `minecraft:tag_query` | Diagnostic or special-purpose packet without a safe playback contract | BLOCKED | no |
 | 127 | `minecraft:take_item_entity` | Scene presentation with playback-session identity rewriting | REWRITE | no |

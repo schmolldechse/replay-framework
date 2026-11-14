@@ -12,7 +12,8 @@ public final class ChatPacketDefinitions {
                     new Id023CustomChatCompletionsPacketDefinition(),
                     new Id031DeleteChatPacketDefinition(),
                     new Id033DisguisedChatPacketDefinition(),
-                    new Id065PlayerChatPacketDefinition());
+                    new Id065PlayerChatPacketDefinition(),
+                    new Id121SystemChatPacketDefinition());
 
     private ChatPacketDefinitions() {}
 
