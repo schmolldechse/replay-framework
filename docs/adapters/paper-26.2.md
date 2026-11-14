@@ -243,7 +243,7 @@ test status.
 | 92 | `minecraft:set_border_warning_distance` | Nonnegative VarInt distance in blocks; configures how far from the shared world border its distance warning appears | SEND | yes |
 | 93 | `minecraft:set_camera` | Entity ID selecting the entity followed by the receiving client's camera; changing it would take control of the observer's view | DROP_LOCAL | no |
 | 94 | `minecraft:set_chunk_cache_center` | Chunk X and Z coordinates as signed VarInts; centers the receiving client's chunk cache and view area | SEND | yes |
-| 95 | `minecraft:set_chunk_cache_radius` | Supplementary durable world or scene state | SEND | yes |
+| 95 | `minecraft:set_chunk_cache_radius` | Server-imposed view radius as a VarInt number of chunks; changes the receiving client's effective chunk view distance | SEND | yes |
 | 96 | `minecraft:set_cursor_item` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 97 | `minecraft:set_default_spawn_position` | Essential scene state: durable world or scene state | SEND | yes |
 | 98 | `minecraft:set_display_objective` | Recorded-viewer scoreboard display slot; preserve the observer sidebar | DROP_LOCAL | no |
