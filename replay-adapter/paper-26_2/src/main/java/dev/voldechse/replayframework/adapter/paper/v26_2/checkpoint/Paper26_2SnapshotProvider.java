@@ -29,7 +29,6 @@ import net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket;
 import net.minecraft.network.protocol.game.ClientboundSetEquipmentPacket;
 import net.minecraft.network.protocol.game.ClientboundSetPassengersPacket;
 import net.minecraft.network.protocol.game.ClientboundSetSimulationDistancePacket;
-import net.minecraft.network.protocol.game.ClientboundSetTimePacket;
 import net.minecraft.network.protocol.game.ClientboundUpdateMobEffectPacket;
 import net.minecraft.network.protocol.game.ClientboundUpdateAttributesPacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
@@ -459,7 +458,8 @@ public final class Paper26_2SnapshotProvider
                     worldKey,
                     "world-border"));
             packets.add(blueprint(
-                    new ClientboundSetTimePacket(level.getLevelData().getGameTime(), Map.of()),
+                    // Checkpoints need a full clock sync; live set_time packets may be deltas.
+                    level.getServer().clockManager().createFullSyncPacket(),
                     Paper26_2CheckpointEncoder.CheckpointPacketFamily.GLOBAL_STATE,
                     worldKey,
                     "time"));

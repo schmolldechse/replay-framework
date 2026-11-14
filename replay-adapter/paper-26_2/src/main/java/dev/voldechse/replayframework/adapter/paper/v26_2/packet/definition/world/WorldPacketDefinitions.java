@@ -32,7 +32,8 @@ public final class WorldPacketDefinitions {
                     new Id094SetChunkCacheCenterPacketDefinition(),
                     new Id095SetChunkCacheRadiusPacketDefinition(),
                     new Id097SetDefaultSpawnPositionPacketDefinition(),
-                    new Id111SetSimulationDistancePacketDefinition());
+                    new Id111SetSimulationDistancePacketDefinition(),
+                    new Id113SetTimePacketDefinition());
 
     private WorldPacketDefinitions() {}
 

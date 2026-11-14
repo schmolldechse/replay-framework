@@ -261,7 +261,7 @@ test status.
 | 110 | `minecraft:set_score` | Owner and objective UTF-8 strings with a signed score VarInt; optional per-score display component and independent optional blank, styled, or fixed number format; the owner is scoreboard text rather than an entity ID, and the score changes recorded-viewer scoreboard state | DROP_LOCAL | no |
 | 111 | `minecraft:set_simulation_distance` | Server simulation distance sent as a VarInt; the client uses it to determine when distant entity death animations pause | SEND | yes |
 | 112 | `minecraft:set_subtitle_text` | Text component staged as the subtitle for the next title; changes the receiving client's title HUD state | DROP_LOCAL | no |
-| 113 | `minecraft:set_time` | Essential scene state: durable world or scene state | SEND | yes |
+| 113 | `minecraft:set_time` | Fixed-width game-time long plus zero or more registry-keyed world-clock updates; each update carries clock ticks, partial tick, and rate, and normal packets may contain only a delta | SEND | yes |
 | 114 | `minecraft:set_title_text` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 115 | `minecraft:set_titles_animation` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 116 | `minecraft:sound_entity` | Ordered scene effect: sound attached to a rewritten entity ID | REWRITE | no |
