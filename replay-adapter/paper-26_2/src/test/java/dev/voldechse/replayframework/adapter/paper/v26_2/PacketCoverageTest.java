@@ -108,7 +108,8 @@ class PacketCoverageTest {
             stateful(0x58, "set_border_center", PacketDescriptor.PlaybackScope.SAFE),
             stateful(0x59, "set_border_lerp_size", PacketDescriptor.PlaybackScope.SAFE),
             stateful(0x5A, "set_border_size", PacketDescriptor.PlaybackScope.SAFE),
-            stateful(0x5B, "set_border_warning_delay", PacketDescriptor.PlaybackScope.SAFE));
+            stateful(0x5B, "set_border_warning_delay", PacketDescriptor.PlaybackScope.SAFE),
+            stateful(0x5C, "set_border_warning_distance", PacketDescriptor.PlaybackScope.SAFE));
 
     private static final Map<String, ExpectedPacket> EXPECTED_BY_TYPE = IMPLEMENTED_PACKETS.stream()
             .collect(Collectors.toUnmodifiableMap(

@@ -27,7 +27,8 @@ public final class WorldPacketDefinitions {
                     new Id088SetBorderCenterPacketDefinition(),
                     new Id089SetBorderLerpSizePacketDefinition(),
                     new Id090SetBorderSizePacketDefinition(),
-                    new Id091SetBorderWarningDelayPacketDefinition());
+                    new Id091SetBorderWarningDelayPacketDefinition(),
+                    new Id092SetBorderWarningDistancePacketDefinition());
 
     private WorldPacketDefinitions() {}
 
