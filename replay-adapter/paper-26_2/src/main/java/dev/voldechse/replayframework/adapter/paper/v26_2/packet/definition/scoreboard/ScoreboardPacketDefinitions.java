@@ -11,7 +11,8 @@ public final class ScoreboardPacketDefinitions {
             List.of(
                     new Id079ResetScorePacketDefinition(),
                     new Id098SetDisplayObjectivePacketDefinition(),
-                    new Id106SetObjectivePacketDefinition());
+                    new Id106SetObjectivePacketDefinition(),
+                    new Id109SetPlayerTeamPacketDefinition());
 
     private ScoreboardPacketDefinitions() {}
 
