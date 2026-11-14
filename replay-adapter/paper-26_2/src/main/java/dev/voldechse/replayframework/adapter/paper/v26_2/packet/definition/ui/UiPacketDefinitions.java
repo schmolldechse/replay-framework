@@ -30,7 +30,8 @@ public final class UiPacketDefinitions {
                     new Id085SelectAdvancementsTabPacketDefinition(),
                     new Id086ServerDataPacketDefinition(),
                     new Id087SetActionBarTextPacketDefinition(),
-                    new Id096SetCursorItemPacketDefinition());
+                    new Id096SetCursorItemPacketDefinition(),
+                    new Id108SetPlayerInventoryPacketDefinition());
 
     private UiPacketDefinitions() {}
 

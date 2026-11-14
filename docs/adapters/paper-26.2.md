@@ -256,7 +256,7 @@ test status.
 | 105 | `minecraft:set_held_slot` | Receiver-local hotbar selection as a VarInt (slot 0–8); retain in recordings but do not change the observer's selected item | DROP_LOCAL | no |
 | 106 | `minecraft:set_objective` | Objective name and method byte (add, remove, change); add/change also carry display text, integer/hearts render type, and optional blank/styled/fixed score-number format; mutates the recorded viewer's local scoreboard | DROP_LOCAL | no |
 | 107 | `minecraft:set_passengers` | Vehicle ID VarInt followed by the ordered VarInt array of direct passenger IDs; an empty array clears the vehicle's passengers; rewrite the vehicle and every passenger ID; checkpoint family `PASSENGERS` | REWRITE | yes |
-| 108 | `minecraft:set_player_inventory` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
+| 108 | `minecraft:set_player_inventory` | Player-inventory slot VarInt followed by an optional ItemStack with its data-component patch; the slot is independent of container window IDs and non-positive item counts decode as empty; retain the recorded update but preserve the observer's local inventory | DROP_LOCAL | no |
 | 109 | `minecraft:set_player_team` | Recorded-viewer team and name presentation; keep local to preserve observer state | DROP_LOCAL | no |
 | 110 | `minecraft:set_score` | Recorded-viewer scoreboard value; preserve the observer scoreboard | DROP_LOCAL | no |
 | 111 | `minecraft:set_simulation_distance` | Supplementary durable world or scene state | SEND | yes |
