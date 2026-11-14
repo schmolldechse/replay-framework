@@ -28,7 +28,8 @@ public final class WorldPacketDefinitions {
                     new Id089SetBorderLerpSizePacketDefinition(),
                     new Id090SetBorderSizePacketDefinition(),
                     new Id091SetBorderWarningDelayPacketDefinition(),
-                    new Id092SetBorderWarningDistancePacketDefinition());
+                    new Id092SetBorderWarningDistancePacketDefinition(),
+                    new Id094SetChunkCacheCenterPacketDefinition());
 
     private WorldPacketDefinitions() {}
 
