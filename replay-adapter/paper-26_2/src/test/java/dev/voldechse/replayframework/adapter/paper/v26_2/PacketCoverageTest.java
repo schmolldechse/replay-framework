@@ -156,7 +156,8 @@ class PacketCoverageTest {
             control(0x88, "custom_report_details"),
             stateful(0x89, "server_links", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
             stateful(0x8A, "waypoint", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
-            stateful(0x8B, "clear_dialog", PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
+            stateful(0x8B, "clear_dialog", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
+            stateful(0x8C, "show_dialog", PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
 
     private static final Map<String, ExpectedPacket> EXPECTED_BY_TYPE = IMPLEMENTED_PACKETS.stream()
             .collect(Collectors.toUnmodifiableMap(

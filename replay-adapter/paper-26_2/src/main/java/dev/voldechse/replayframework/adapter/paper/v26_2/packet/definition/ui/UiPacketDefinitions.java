@@ -39,7 +39,8 @@ public final class UiPacketDefinitions {
                     new Id133UpdateRecipesPacketDefinition(),
                     new Id137ServerLinksPacketDefinition(),
                     new Id138WaypointPacketDefinition(),
-                    new Id139ClearDialogPacketDefinition());
+                    new Id139ClearDialogPacketDefinition(),
+                    new Id140ShowDialogPacketDefinition());
 
     private UiPacketDefinitions() {}
 
