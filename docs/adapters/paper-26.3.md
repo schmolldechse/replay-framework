@@ -266,7 +266,7 @@ test status.
 | 114 | `minecraft:set_subtitle_text` | Text component staged as the subtitle for the next title; changes the receiving client's title HUD state | DROP_LOCAL | no |
 | 115 | `minecraft:set_time` | Fixed-width game-time long plus zero or more registry-keyed world-clock updates; each update carries clock ticks, partial tick, and rate, and normal packets may contain only a delta | SEND | yes |
 | 116 | `minecraft:set_title_text` | Title text component for the receiving player's title overlay, presented with separately sent subtitle and animation timing; connection-local HUD state | DROP_LOCAL | no |
-| 117 | `minecraft:set_titles_animation` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
+| 117 | `minecraft:set_titles_animation` | Title overlay fade-in, stay, and fade-out durations as three fixed-width Int tick values; persists as the receiving client's title timing configuration | DROP_LOCAL | no |
 | 118 | `minecraft:sound_entity` | Ordered scene effect: sound attached to a rewritten entity ID | REWRITE | no |
 | 119 | `minecraft:sound` | Ordered presentation or environment effect | SEND | no |
 | 120 | `minecraft:start_configuration` | Transport, connection, or server control; never replay into an established connection | BLOCKED | no |
