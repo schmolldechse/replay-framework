@@ -21,7 +21,8 @@ public final class PlayerPacketDefinitions {
                     new Id073PlayerRotationPacketDefinition(),
                     new Id082RespawnPacketDefinition(),
                     new Id093SetCameraPacketDefinition(),
-                    new Id103SetExperiencePacketDefinition());
+                    new Id103SetExperiencePacketDefinition(),
+                    new Id104SetHealthPacketDefinition());
 
     private PlayerPacketDefinitions() {}
 
