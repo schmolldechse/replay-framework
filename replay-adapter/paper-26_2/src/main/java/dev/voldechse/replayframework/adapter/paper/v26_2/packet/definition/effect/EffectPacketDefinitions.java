@@ -16,7 +16,8 @@ public final class EffectPacketDefinitions {
                     new Id034EntityEventPacketDefinition(),
                     new Id036ExplodePacketDefinition(),
                     new Id042HurtAnimationPacketDefinition(),
-                    new Id047LevelParticlesPacketDefinition());
+                    new Id047LevelParticlesPacketDefinition(),
+                    new Id078RemoveMobEffectPacketDefinition());
 
     private EffectPacketDefinitions() {}
 
