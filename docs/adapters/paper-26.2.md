@@ -222,7 +222,7 @@ test status.
 | 71 | `minecraft:player_look_at` | Rotates the receiving player's view from feet/eyes toward an absolute position or an entity ID and target anchor; entity mode retains an absolute-coordinate fallback; personal camera state | DROP_LOCAL to leave the observer's view unchanged | no |
 | 72 | `minecraft:player_position` | Teleport ID, position, delta movement, yaw/pitch and nine relative-position, rotation and velocity flags; server correction and confirmation state for the receiving player's own connection | DROP_LOCAL to preserve the observer's position, movement and connection state | no |
 | 73 | `minecraft:player_rotation` | Yaw and pitch angles with independent relative flags; server correction for the receiving player's own view rotation | DROP_LOCAL to preserve the observer's view | no |
-| 74 | `minecraft:recipe_book_add` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
+| 74 | `minecraft:recipe_book_add` | List of recipe display entries with registry-backed display/category data, optional group and crafting requirements, notification/highlight flags; replace or add to the receiving player's known recipe book | DROP_LOCAL to preserve the observer's recipe-book contents and notifications | no |
 | 75 | `minecraft:recipe_book_remove` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 76 | `minecraft:recipe_book_settings` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 77 | `minecraft:remove_entities` | Essential scene state: remove replay entities | REWRITE | yes |

@@ -23,7 +23,8 @@ public final class UiPacketDefinitions {
                     new Id058OpenBookPacketDefinition(),
                     new Id059OpenScreenPacketDefinition(),
                     new Id060OpenSignEditorPacketDefinition(),
-                    new Id063PlaceGhostRecipePacketDefinition());
+                    new Id063PlaceGhostRecipePacketDefinition(),
+                    new Id074RecipeBookAddPacketDefinition());
 
     private UiPacketDefinitions() {}
 
