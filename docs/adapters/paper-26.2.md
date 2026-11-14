@@ -287,6 +287,6 @@ test status.
 | 136 | `minecraft:custom_report_details` | Map of up to 32 UTF-8 detail keys (128 characters) and values (4,096 characters), included in later client crash or disconnect reports. Keep local to the source connection; block for the observer | BLOCKED | no |
 | 137 | `minecraft:server_links` | List of built-in or custom text labels with link strings, displayed in the pause-menu server-links view. Keep the recorded connection's menu local to preserve the observer's own links | DROP_LOCAL | no |
 | 138 | `minecraft:waypoint` | Track, update or untrack locator-bar markers by UUID or string identifier; includes icon style, optional RGB color, and empty, block-position, chunk-position or azimuth data. Preserve the observer's own HUD markers | DROP_LOCAL | no |
-| 139 | `minecraft:clear_dialog` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
+| 139 | `minecraft:clear_dialog` | Empty marker that closes the active server-shown dialog on the receiving client. Keep the observer's current dialog unchanged | DROP_LOCAL | no |
 | 140 | `minecraft:show_dialog` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 
