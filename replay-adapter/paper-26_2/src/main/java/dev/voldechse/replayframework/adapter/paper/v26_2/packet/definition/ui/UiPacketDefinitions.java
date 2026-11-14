@@ -37,7 +37,8 @@ public final class UiPacketDefinitions {
                     new Id115SetTitlesAnimationPacketDefinition(),
                     new Id122TabListPacketDefinition(),
                     new Id133UpdateRecipesPacketDefinition(),
-                    new Id137ServerLinksPacketDefinition());
+                    new Id137ServerLinksPacketDefinition(),
+                    new Id138WaypointPacketDefinition());
 
     private UiPacketDefinitions() {}
 

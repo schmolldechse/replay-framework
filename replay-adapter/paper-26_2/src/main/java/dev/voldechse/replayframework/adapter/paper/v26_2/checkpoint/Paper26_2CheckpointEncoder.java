@@ -412,7 +412,6 @@ public final class Paper26_2CheckpointEncoder implements CheckpointEncoder {
                     "play.clientbound.minecraft:teleport_entity",
                     "play.clientbound.minecraft:update_attributes",
                     "play.clientbound.minecraft:projectile_power",
-                    "play.clientbound.minecraft:waypoint",
                     "play.clientbound.minecraft:player_abilities",
                     "play.clientbound.minecraft:player_position",
                     "play.clientbound.minecraft:player_rotation",

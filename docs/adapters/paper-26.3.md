@@ -290,7 +290,7 @@ test status.
 | 138 | `minecraft:projectile_power` | Projectile entity ID VarInt and acceleration-power double; updates `AbstractHurtingProjectile` acceleration separately from motion. Rewrites the entity ID and restores this entity state in checkpoints | REWRITE | yes |
 | 139 | `minecraft:custom_report_details` | Map of up to 32 UTF-8 detail keys (128 characters) and values (4,096 characters), included in later client crash or disconnect reports. Keep local to the source connection; block for the observer | BLOCKED | no |
 | 140 | `minecraft:server_links` | List of built-in or custom text labels with link strings, displayed in the pause-menu server-links view. Keep the recorded connection's menu local to preserve the observer's own links | DROP_LOCAL | no |
-| 141 | `minecraft:waypoint` | Recorded-viewer waypoint presentation; keep local to preserve observer state | DROP_LOCAL | no |
+| 141 | `minecraft:waypoint` | Track, update or untrack locator-bar markers by UUID or string identifier; includes icon style, optional RGB color, and empty, block-position, chunk-position or azimuth data. Preserve the observer's own HUD markers | DROP_LOCAL | no |
 | 142 | `minecraft:clear_dialog` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 143 | `minecraft:show_dialog` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 
