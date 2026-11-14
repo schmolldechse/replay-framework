@@ -32,7 +32,8 @@ public final class UiPacketDefinitions {
                     new Id087SetActionBarTextPacketDefinition(),
                     new Id096SetCursorItemPacketDefinition(),
                     new Id108SetPlayerInventoryPacketDefinition(),
-                    new Id112SetSubtitleTextPacketDefinition());
+                    new Id112SetSubtitleTextPacketDefinition(),
+                    new Id114SetTitleTextPacketDefinition());
 
     private UiPacketDefinitions() {}
 
