@@ -251,7 +251,7 @@ test status.
 | 100 | `minecraft:set_entity_link` | Leash relationship between attached entity and holder; two fixed-width Int entity IDs, with destination `0` clearing the leash; rewrite both non-sentinel IDs | REWRITE | yes |
 | 101 | `minecraft:set_entity_motion` | Target entity VarInt and velocity as a variable-length low-precision `LpVec3`; updates that entity's current motion, including zero velocity | REWRITE | yes |
 | 102 | `minecraft:set_equipment` | Updates one or more equipment slots on an entity; ordered optional item stacks preserve item components and empty stacks clear slots | REWRITE | yes |
-| 103 | `minecraft:set_experience` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
+| 103 | `minecraft:set_experience` | Receiver-local experience HUD: progress Float, level VarInt, and total-experience VarInt; retain in recordings but do not replace the observer's own XP state | DROP_LOCAL | no |
 | 104 | `minecraft:set_health` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 105 | `minecraft:set_held_slot` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 106 | `minecraft:set_objective` | Objective name and method byte (add, remove, change); add/change also carry display text, integer/hearts render type, and optional blank/styled/fixed score-number format; mutates the recorded viewer's local scoreboard | DROP_LOCAL | no |
