@@ -217,7 +217,7 @@ test status.
 | 66 | `minecraft:player_combat_end` | Transient combat-tracker event with combat duration in ticks (VarInt); not checkpoint state | DROP_LOCAL to keep the recorded player's combat episode off the observer's connection | no |
 | 67 | `minecraft:player_combat_enter` | No payload; transient recorded-player combat-entry event, not checkpoint state | DROP_LOCAL to keep the recorded player's combat state off the observer's connection | no |
 | 68 | `minecraft:player_combat_kill` | Dying player's entity ID (VarInt) and trusted death-message component; victim-local death-screen event, with public death chat broadcast sent separately | DROP_LOCAL to keep the recorded victim's death screen off the observer's connection | no |
-| 69 | `minecraft:player_info_remove` | Essential scene state: remove only replay-owned player profiles | REWRITE | yes |
+| 69 | `minecraft:player_info_remove` | Length-prefixed list of profile UUIDs; removes listed profiles from the player list | Rewrite every UUID into the replay identity space so only replay profiles can be removed | yes |
 | 70 | `minecraft:player_info_update` | Essential scene state: isolate the player UUID, preserve the recorded profile name and properties, hide the replay profile from the tab list, and discard the recorded chat session | REWRITE | yes |
 | 71 | `minecraft:player_look_at` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 72 | `minecraft:player_position` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |

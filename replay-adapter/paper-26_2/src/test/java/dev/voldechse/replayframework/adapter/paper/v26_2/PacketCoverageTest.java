@@ -87,7 +87,8 @@ class PacketCoverageTest {
                         "play.clientbound.minecraft:player_chat",
                         "play.clientbound.minecraft:player_combat_end",
                         "play.clientbound.minecraft:player_combat_enter",
-                        "play.clientbound.minecraft:player_combat_kill"),
+                        "play.clientbound.minecraft:player_combat_kill",
+                        "play.clientbound.minecraft:player_info_remove"),
                 Paper26_2PacketCatalog.catalog().definitions().stream()
                         .map(definition -> definition.typeName())
                         .toList());
@@ -229,6 +230,8 @@ class PacketCoverageTest {
                         .equals("play.clientbound.minecraft:player_combat_enter");
                 boolean playerCombatKill = descriptor.typeName()
                         .equals("play.clientbound.minecraft:player_combat_kill");
+                boolean playerInfoRemove = descriptor.typeName()
+                        .equals("play.clientbound.minecraft:player_info_remove");
                 PacketDisposition expectedDisposition;
                 if (bundleDelimiter
                         || blockChangedAck
@@ -267,7 +270,8 @@ class PacketCoverageTest {
                         || levelChunkWithLight
                         || lightUpdate
                         || mapItemData
-                        || merchantOffers) {
+                        || merchantOffers
+                        || playerInfoRemove) {
                     expectedDisposition = PacketDisposition.STATEFUL;
                 } else if (animate
                         || blockDestruction
@@ -338,6 +342,7 @@ class PacketCoverageTest {
                                 || playerCombatEnd
                                 || playerCombatEnter
                                 || playerCombatKill
+                                || playerInfoRemove
                                 || moveMinecartAlongTrack
                                 || damageEvent
                                 || deleteChat
@@ -365,6 +370,7 @@ class PacketCoverageTest {
                                 || moveMinecartAlongTrack
                                 || entityPositionSync
                                 || forgetLevelChunk
+                                || playerInfoRemove
                                 || initializeBorder
                                 || levelChunkWithLight
                                 || lightUpdate,
@@ -382,7 +388,8 @@ class PacketCoverageTest {
                         || entityPositionSync
                         || explode
                         || hurtAnimation
-                        || levelParticles) {
+                        || levelParticles
+                        || playerInfoRemove) {
                     assertEquals(
                             dev.voldechse.replayframework.adapter.PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES,
                             descriptor.playbackScope());
@@ -501,6 +508,7 @@ class PacketCoverageTest {
                                 || playerCombatEnd
                                 || playerCombatEnter
                                 || playerCombatKill
+                                || playerInfoRemove
                                 || disconnect,
                         Paper26_2PacketRegistry.explicitlyClassifies(descriptor.typeName()));
             }
