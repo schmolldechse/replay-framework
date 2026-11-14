@@ -277,7 +277,7 @@ test status.
 | 126 | `minecraft:test_instance_block_status` | Status text component and optional integer Vec3i structure size for the recipient's open GameTest instance-block editor; depends on that editor's test context | BLOCKED | no |
 | 127 | `minecraft:ticking_state` | Client tick-rate float and frozen flag; changes the receiving client's processing cadence and can freeze it | BLOCKED | no |
 | 128 | `minecraft:ticking_step` | Tick-step count as VarInt; manually advances client processing only while the receiving client is frozen | BLOCKED | no |
-| 129 | `minecraft:transfer` | Transport, connection, or server control; never replay into an established connection | BLOCKED | no |
+| 129 | `minecraft:transfer` | Target host string and port VarInt; instructs the client to reconnect elsewhere and preserve stored cookies | BLOCKED | no |
 | 130 | `minecraft:update_advancements` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 131 | `minecraft:update_attributes` | Essential scene state: scene presentation with playback-session identity rewriting | REWRITE | yes |
 | 132 | `minecraft:update_mob_effect` | Essential scene state: scene presentation with playback-session identity rewriting | REWRITE | yes |

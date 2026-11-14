@@ -24,7 +24,8 @@ public final class ConnectionPacketDefinitions {
                     new Id118StartConfigurationPacketDefinition(),
                     new Id120StoreCookiePacketDefinition(),
                     new Id127TickingStatePacketDefinition(),
-                    new Id128TickingStepPacketDefinition());
+                    new Id128TickingStepPacketDefinition(),
+                    new Id129TransferPacketDefinition());
 
     private ConnectionPacketDefinitions() {}
 
