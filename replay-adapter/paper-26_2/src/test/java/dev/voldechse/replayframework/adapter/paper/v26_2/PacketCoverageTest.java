@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.PacketDisposition;
+import dev.voldechse.replayframework.adapter.paper.packet.PacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.v26_2.packet.Paper26_2PacketCatalog;
 import dev.voldechse.replayframework.format.PacketPhase;
 import java.util.List;
@@ -90,7 +91,8 @@ class PacketCoverageTest {
             ephemeral(0x47, "player_look_at", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
             stateful(0x48, "player_position", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
             stateful(0x49, "player_rotation", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
-            stateful(0x4A, "recipe_book_add", PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
+            stateful(0x4A, "recipe_book_add", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
+            stateful(0x4B, "recipe_book_remove", PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
 
     private static final Map<String, ExpectedPacket> EXPECTED_BY_TYPE = IMPLEMENTED_PACKETS.stream()
             .collect(Collectors.toUnmodifiableMap(
@@ -104,7 +106,7 @@ class PacketCoverageTest {
         var catalog = Paper26_2PacketCatalog.catalog();
         assertEquals(
                 IMPLEMENTED_PACKETS.stream().map(ExpectedPacket::typeName).toList(),
-                catalog.definitions().stream().map(definition -> definition.typeName()).toList());
+                catalog.definitions().stream().map(PacketDefinition::typeName).toList());
 
         var registry = Paper26_2PacketRegistry.discover();
         for (ExpectedPacket expected : IMPLEMENTED_PACKETS) {
