@@ -249,7 +249,7 @@ test status.
 | 98 | `minecraft:set_display_objective` | VarInt display slot and objective name (empty clears it); selects a player-list, sidebar, below-name, or team-colored sidebar objective, all part of the observer's local scoreboard presentation | DROP_LOCAL | no |
 | 99 | `minecraft:set_entity_data` | Target entity VarInt followed by sparse typed metadata entries ending at `0xFF`; updates that entity's synchronized appearance and state | REWRITE | yes |
 | 100 | `minecraft:set_entity_link` | Leash relationship between attached entity and holder; two fixed-width Int entity IDs, with destination `0` clearing the leash; rewrite both non-sentinel IDs | REWRITE | yes |
-| 101 | `minecraft:set_entity_motion` | Essential scene state: scene presentation with playback-session identity rewriting | REWRITE | yes |
+| 101 | `minecraft:set_entity_motion` | Target entity VarInt and velocity as a variable-length low-precision `LpVec3`; updates that entity's current motion, including zero velocity | REWRITE | yes |
 | 102 | `minecraft:set_equipment` | Essential scene state: scene presentation with playback-session identity rewriting | REWRITE | yes |
 | 103 | `minecraft:set_experience` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 104 | `minecraft:set_health` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
