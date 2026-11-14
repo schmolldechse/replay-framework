@@ -238,7 +238,7 @@ test status.
 | 87 | `minecraft:set_action_bar_text` | Rich text component displayed temporarily above the hotbar as an action-bar message; carries no duration or clear operation | DROP_LOCAL to preserve the observer's action bar | no |
 | 88 | `minecraft:set_border_center` | Center X and Z as doubles; updates the shared world's border center without changing its size or other border settings | SEND | yes |
 | 89 | `minecraft:set_border_lerp_size` | Current and target border diameters with a remaining interpolation time; smoothly updates the shared world's border size | SEND | yes |
-| 90 | `minecraft:set_border_size` | Supplementary durable world or scene state | SEND | yes |
+| 90 | `minecraft:set_border_size` | One new border diameter as a double; applies immediately without interpolation to the shared world border | SEND | yes |
 | 91 | `minecraft:set_border_warning_delay` | Supplementary durable world or scene state | SEND | yes |
 | 92 | `minecraft:set_border_warning_distance` | Supplementary durable world or scene state | SEND | yes |
 | 93 | `minecraft:set_camera` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
