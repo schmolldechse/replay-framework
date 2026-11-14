@@ -115,7 +115,8 @@ class PacketCoverageTest {
             stateful(0x5F, "set_chunk_cache_radius", PacketDescriptor.PlaybackScope.SAFE),
             stateful(0x60, "set_cursor_item", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
             stateful(0x61, "set_default_spawn_position", PacketDescriptor.PlaybackScope.SAFE),
-            stateful(0x62, "set_display_objective", PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
+            stateful(0x62, "set_display_objective", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
+            stateful(0x6A, "set_objective", PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
 
     private static final Map<String, ExpectedPacket> EXPECTED_BY_TYPE = IMPLEMENTED_PACKETS.stream()
             .collect(Collectors.toUnmodifiableMap(

@@ -254,7 +254,7 @@ test status.
 | 103 | `minecraft:set_experience` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 104 | `minecraft:set_health` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 105 | `minecraft:set_held_slot` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
-| 106 | `minecraft:set_objective` | Recorded-viewer scoreboard objective; keep local to preserve observer state | DROP_LOCAL | no |
+| 106 | `minecraft:set_objective` | Objective name and method byte (add, remove, change); add/change also carry display text, integer/hearts render type, and optional blank/styled/fixed score-number format; mutates the recorded viewer's local scoreboard | DROP_LOCAL | no |
 | 107 | `minecraft:set_passengers` | Essential scene state: vehicle and passengers; rewrite every entity ID | REWRITE | yes |
 | 108 | `minecraft:set_player_inventory` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 109 | `minecraft:set_player_team` | Recorded-viewer team and name presentation; keep local to preserve observer state | DROP_LOCAL | no |

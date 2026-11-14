@@ -10,7 +10,8 @@ public final class ScoreboardPacketDefinitions {
     private static final List<PacketDefinition<Paper26_2ReplayPacketRewriter>> DEFINITIONS =
             List.of(
                     new Id079ResetScorePacketDefinition(),
-                    new Id098SetDisplayObjectivePacketDefinition());
+                    new Id098SetDisplayObjectivePacketDefinition(),
+                    new Id106SetObjectivePacketDefinition());
 
     private ScoreboardPacketDefinitions() {}
 
