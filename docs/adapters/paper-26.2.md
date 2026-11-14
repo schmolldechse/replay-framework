@@ -223,7 +223,7 @@ test status.
 | 72 | `minecraft:player_position` | Teleport ID, position, delta movement, yaw/pitch and nine relative-position, rotation and velocity flags; server correction and confirmation state for the receiving player's own connection | DROP_LOCAL to preserve the observer's position, movement and connection state | no |
 | 73 | `minecraft:player_rotation` | Yaw and pitch angles with independent relative flags; server correction for the receiving player's own view rotation | DROP_LOCAL to preserve the observer's view | no |
 | 74 | `minecraft:recipe_book_add` | List of recipe display entries with registry-backed display/category data, optional group and crafting requirements, notification/highlight flags; replace or add to the receiving player's known recipe book | DROP_LOCAL to preserve the observer's recipe-book contents and notifications | no |
-| 75 | `minecraft:recipe_book_remove` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
+| 75 | `minecraft:recipe_book_remove` | Variable list of recipe display IDs to remove from the receiving player's known recipe book and highlights | DROP_LOCAL to preserve the observer's recipe-book contents | no |
 | 76 | `minecraft:recipe_book_settings` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 77 | `minecraft:remove_entities` | Essential scene state: remove replay entities | REWRITE | yes |
 | 78 | `minecraft:remove_mob_effect` | Essential scene state: scene presentation with playback-session identity rewriting | REWRITE | yes |

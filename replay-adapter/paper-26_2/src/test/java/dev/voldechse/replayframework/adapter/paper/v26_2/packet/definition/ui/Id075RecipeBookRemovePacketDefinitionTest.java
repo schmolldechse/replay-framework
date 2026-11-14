@@ -1,0 +1,405 @@
+package dev.voldechse.replayframework.adapter.paper.v26_2.packet.definition.ui;
+
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
+import dev.voldechse.replayframework.adapter.PacketDescriptor;
+import dev.voldechse.replayframework.adapter.PacketDisposition;
+import dev.voldechse.replayframework.adapter.codec.PacketCodec;
+import dev.voldechse.replayframework.adapter.paper.packet.PacketRewriteResult;
+import dev.voldechse.replayframework.adapter.paper.v26_2.Paper26_2PacketRegistry;
+import dev.voldechse.replayframework.adapter.paper.v26_2.packet.Paper26_2PacketCatalog;
+import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
+import dev.voldechse.replayframework.adapter.playback.PlaybackIdentityContext;
+import dev.voldechse.replayframework.format.PacketPhase;
+import dev.voldechse.replayframework.format.RawPacketFrame;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.ProtocolInfo;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.VarInt;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.game.ClientboundRecipeBookRemovePacket;
+import net.minecraft.network.protocol.game.GameProtocols;
+import net.minecraft.world.item.crafting.display.RecipeDisplayId;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+
+final class Id075RecipeBookRemovePacketDefinitionTest {
+
+    private static final int PACKET_ID = 0x4B;
+    private static final String TYPE_NAME = "play.clientbound.minecraft:recipe_book_remove";
+    private static final UUID OBSERVER_ID =
+            UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final UUID SESSION_ID =
+            UUID.fromString("00000000-0000-0000-0000-000000000002");
+    private static final int[] RECIPE_DISPLAY_IDS = {
+        0,
+        1,
+        127,
+        128,
+        255,
+        16_383,
+        16_384,
+        Integer.MAX_VALUE,
+        -1,
+        Integer.MIN_VALUE
+    };
+
+    @BeforeAll
+    static void bootstrapMinecraftRegistries() {
+        net.minecraft.SharedConstants.tryDetectVersion();
+        net.minecraft.server.Bootstrap.bootStrap();
+    }
+
+    @Test
+    void classifiesAndRegistersRecipeRemovalsAsViewerLocalState() {
+        var definition = new Id075RecipeBookRemovePacketDefinition();
+
+        assertEquals(75, definition.packetId());
+        assertEquals(PACKET_ID, Id075RecipeBookRemovePacketDefinition.PACKET_ID);
+        assertEquals(
+                "minecraft:recipe_book_remove",
+                Id075RecipeBookRemovePacketDefinition.IDENTIFIER);
+        assertEquals(TYPE_NAME, definition.typeName());
+        assertEquals(PacketDisposition.STATEFUL, definition.classification().disposition());
+        assertTrue(definition.classification().captureByDefault());
+        assertTrue(definition.classification().replayable());
+        assertFalse(definition.classification().checkpointRelevant());
+        assertEquals(
+                PacketDescriptor.PlaybackScope.VIEWER_LOCAL,
+                definition.classification().playbackScope());
+
+        var domainMatches = UiPacketDefinitions.definitions().stream()
+                .filter(candidate -> TYPE_NAME.equals(candidate.typeName()))
+                .toList();
+        var catalogMatches = Paper26_2PacketCatalog.catalog().definitions().stream()
+                .filter(candidate -> TYPE_NAME.equals(candidate.typeName()))
+                .toList();
+        assertEquals(1, domainMatches.size());
+        assertInstanceOf(Id075RecipeBookRemovePacketDefinition.class, domainMatches.getFirst());
+        assertEquals(1, catalogMatches.size());
+        assertInstanceOf(Id075RecipeBookRemovePacketDefinition.class, catalogMatches.getFirst());
+
+        var descriptor = Paper26_2PacketRegistry.discover()
+                .find(PacketPhase.PLAY, PacketDescriptor.Direction.CLIENTBOUND, PACKET_ID)
+                .orElseThrow();
+        assertEquals(TYPE_NAME, descriptor.typeName());
+        assertEquals(PacketDisposition.STATEFUL, descriptor.disposition());
+        assertTrue(descriptor.captureByDefault());
+        assertTrue(descriptor.replayable());
+        assertFalse(descriptor.checkpointRelevant());
+        assertEquals(PacketDescriptor.PlaybackScope.VIEWER_LOCAL, descriptor.playbackScope());
+        assertTrue(Paper26_2PacketCatalog.explicitlyClassifies(TYPE_NAME));
+    }
+
+    @Test
+    void nativeCodecRoundTripsListAndRecipeDisplayIdVarIntBoundaries() {
+        ProtocolInfo<?> protocol = protocol();
+        ClientboundRecipeBookRemovePacket boundaryPacket = packet(RECIPE_DISPLAY_IDS);
+        ClientboundRecipeBookRemovePacket decodedBoundaryPacket =
+                assertNativeRoundTrip(protocol, boundaryPacket);
+        assertEquals(boundaryPacket.recipes(), decodedBoundaryPacket.recipes());
+
+        for (int listSize : List.of(0, 1, 127, 128, 255)) {
+            List<RecipeDisplayId> recipeIds = new ArrayList<>(listSize);
+            for (int index = 0; index < listSize; index++) {
+                recipeIds.add(new RecipeDisplayId(
+                        RECIPE_DISPLAY_IDS[index % RECIPE_DISPLAY_IDS.length]));
+            }
+            assertEquals(
+                    recipeIds,
+                    assertNativeRoundTrip(
+                                    protocol,
+                                    new ClientboundRecipeBookRemovePacket(recipeIds))
+                            .recipes());
+        }
+    }
+
+    @Test
+    void nativeDecoderPreservesOrderDuplicatesAndFollowingPacketBytes() {
+        ProtocolInfo<?> protocol = protocol();
+        ClientboundRecipeBookRemovePacket expected = packet(
+                128, 0, 128, Integer.MAX_VALUE, 0, -1, Integer.MIN_VALUE);
+        ByteBuf encoded = encodePacket(protocol, expected);
+        try {
+            encoded.writeByte(0x7A);
+            ClientboundRecipeBookRemovePacket decoded = assertInstanceOf(
+                    ClientboundRecipeBookRemovePacket.class, decode(protocol, encoded));
+            assertEquals(expected.recipes(), decoded.recipes());
+            assertEquals(0x7A, encoded.readUnsignedByte());
+            assertFalse(encoded.isReadable());
+        } finally {
+            encoded.release();
+        }
+    }
+
+    @Test
+    void nativeCodecRejectsNegativeLengthAndEveryTruncatedListPrefix() {
+        ProtocolInfo<?> protocol = protocol();
+        assertMalformed(protocol, new byte[] {(byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, 0x0F});
+        assertMalformed(protocol, new byte[] {1, (byte) 0x80});
+
+        ByteBuf encoded = encodePacket(protocol, packet(RECIPE_DISPLAY_IDS));
+        try {
+            ByteBuf body = encoded.duplicate();
+            assertEquals(PACKET_ID, VarInt.read(body));
+            byte[] bodyBytes = bytes(body);
+            for (int length = 0; length < bodyBytes.length; length++) {
+                assertMalformed(protocol, java.util.Arrays.copyOf(bodyBytes, length));
+            }
+        } finally {
+            encoded.release();
+        }
+    }
+
+    @Test
+    void dropsValidListsAndMalformedPayloadsBeforeCodecUse() {
+        var definition = new Id075RecipeBookRemovePacketDefinition();
+        AtomicInteger decodes = new AtomicInteger();
+        AtomicInteger encodes = new AtomicInteger();
+        PacketCodec<Object> codec = failingCodec(decodes, encodes);
+        ProtocolInfo<?> protocol = protocol();
+
+        for (ClientboundRecipeBookRemovePacket packet : List.of(
+                packet(), packet(0), packet(127, 128, Integer.MAX_VALUE),
+                packet(-1, Integer.MIN_VALUE))) {
+            assertDropBeforeCodec(definition, codec, nativePayload(protocol, packet));
+        }
+        for (byte[] malformed : List.of(
+                new byte[0],
+                new byte[] {(byte) 0x80},
+                new byte[] {1},
+                new byte[] {2, 0},
+                new byte[] {1, (byte) 0x80},
+                new byte[] {(byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, 0x0F})) {
+            assertDropBeforeCodec(definition, codec, malformed);
+        }
+
+        assertEquals(0, decodes.get());
+        assertEquals(0, encodes.get());
+    }
+
+    @Test
+    void directRewriteDropsRecordedRecipeBookRemovals() {
+        PacketRewriteResult result = new Id075RecipeBookRemovePacketDefinition()
+                .rewrite(new Object(), descriptor(), rewriter());
+
+        assertEquals(PacketRewriteResult.Decision.DROP_LOCAL, result.decision());
+        assertTrue(result.packet().isEmpty());
+        assertEquals(
+                "recorded connection state does not belong to the observer",
+                result.reason());
+    }
+
+    @Test
+    void rejectsDescriptorMismatchesBeforeApplyingViewerLocalPolicy() {
+        var definition = new Id075RecipeBookRemovePacketDefinition();
+        PacketCodec<Object> codec = failingCodec(new AtomicInteger(), new AtomicInteger());
+        List<PacketDescriptor> mismatches = List.of(
+                descriptor("play.clientbound.minecraft:other", PACKET_ID,
+                        PacketPhase.PLAY, PacketDescriptor.Direction.CLIENTBOUND, true,
+                        PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
+                descriptor(TYPE_NAME, PACKET_ID + 1,
+                        PacketPhase.PLAY, PacketDescriptor.Direction.CLIENTBOUND, true,
+                        PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
+                descriptor(TYPE_NAME, PACKET_ID,
+                        PacketPhase.CONFIGURATION, PacketDescriptor.Direction.CLIENTBOUND, true,
+                        PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
+                descriptor(TYPE_NAME, PACKET_ID,
+                        PacketPhase.PLAY, PacketDescriptor.Direction.SERVERBOUND, false,
+                        PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
+                descriptor(TYPE_NAME, PACKET_ID,
+                        PacketPhase.PLAY, PacketDescriptor.Direction.CLIENTBOUND, false,
+                        PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
+                descriptor(TYPE_NAME, PACKET_ID,
+                        PacketPhase.PLAY, PacketDescriptor.Direction.CLIENTBOUND, true,
+                        PacketDescriptor.PlaybackScope.SAFE));
+
+        for (PacketDescriptor mismatch : mismatches) {
+            assertThrows(IncompatibleAdapterException.class, () -> definition.handlePlayback(
+                    frame(new byte[0]), mismatch, codec, rewriter()));
+            assertThrows(IncompatibleAdapterException.class,
+                    () -> definition.rewrite(new Object(), mismatch, rewriter()));
+        }
+    }
+
+    private static void assertDropBeforeCodec(
+            Id075RecipeBookRemovePacketDefinition definition,
+            PacketCodec<Object> codec,
+            byte[] payload) {
+        PacketRewriteResult result = definition.handlePlayback(
+                frame(payload), descriptor(), codec, rewriter());
+
+        assertEquals(PacketRewriteResult.Decision.DROP_LOCAL, result.decision());
+        assertTrue(result.packet().isEmpty());
+        assertEquals(
+                "recorded connection state does not belong to the observer",
+                result.reason());
+    }
+
+    private static ClientboundRecipeBookRemovePacket packet(int... recipeDisplayIds) {
+        return new ClientboundRecipeBookRemovePacket(java.util.Arrays.stream(recipeDisplayIds)
+                .mapToObj(RecipeDisplayId::new)
+                .toList());
+    }
+
+    private static ClientboundRecipeBookRemovePacket assertNativeRoundTrip(
+            ProtocolInfo<?> protocol, ClientboundRecipeBookRemovePacket expected) {
+        ByteBuf encoded = encodePacket(protocol, expected);
+        try {
+            byte[] originalWire = bytes(encoded);
+            ByteBuf wire = encoded.duplicate();
+            assertEquals(PACKET_ID, VarInt.read(wire));
+            assertEquals(expected.recipes().size(), VarInt.read(wire));
+            for (RecipeDisplayId id : expected.recipes()) {
+                assertEquals(id.index(), VarInt.read(wire));
+            }
+            assertFalse(wire.isReadable());
+
+            ClientboundRecipeBookRemovePacket decoded = assertInstanceOf(
+                    ClientboundRecipeBookRemovePacket.class, decode(protocol, encoded));
+            assertEquals(expected.recipes(), decoded.recipes());
+            assertFalse(encoded.isReadable());
+
+            ByteBuf reencoded = encodePacket(protocol, decoded);
+            try {
+                assertArrayEquals(originalWire, bytes(reencoded));
+            } finally {
+                reencoded.release();
+            }
+            return decoded;
+        } finally {
+            encoded.release();
+        }
+    }
+
+    private static byte[] nativePayload(
+            ProtocolInfo<?> protocol, ClientboundRecipeBookRemovePacket packet) {
+        ByteBuf encoded = encodePacket(protocol, packet);
+        try {
+            assertEquals(PACKET_ID, VarInt.read(encoded));
+            return bytes(encoded);
+        } finally {
+            encoded.release();
+        }
+    }
+
+    private static ByteBuf encodePacket(ProtocolInfo<?> protocol, Packet<?> packet) {
+        ByteBuf buffer = Unpooled.buffer();
+        try {
+            encode(protocol, buffer, packet);
+            return buffer;
+        } catch (RuntimeException | Error failure) {
+            buffer.release();
+            throw failure;
+        }
+    }
+
+    private static ClientboundRecipeBookRemovePacket decode(
+            ProtocolInfo<?> protocol, ByteBuf buffer) {
+        return assertInstanceOf(
+                ClientboundRecipeBookRemovePacket.class,
+                decodePacket(protocol, buffer));
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static Packet<?> decodePacket(ProtocolInfo<?> protocol, ByteBuf buffer) {
+        return (Packet<?>) ((StreamCodec) protocol.codec()).decode(buffer);
+    }
+
+    private static byte[] bytes(ByteBuf buffer) {
+        byte[] bytes = new byte[buffer.readableBytes()];
+        buffer.getBytes(buffer.readerIndex(), bytes);
+        return bytes;
+    }
+
+    private static ProtocolInfo<?> protocol() {
+        return GameProtocols.CLIENTBOUND_TEMPLATE.bind(
+                RegistryFriendlyByteBuf.decorator(
+                        RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY)));
+    }
+
+    private static Paper26_2ReplayPacketRewriter rewriter() {
+        return new Paper26_2ReplayPacketRewriter(
+                new PlaybackIdentityContext(OBSERVER_ID, SESSION_ID),
+                Set.of(OBSERVER_ID),
+                Set.of(999));
+    }
+
+    private static PacketDescriptor descriptor() {
+        return descriptor(TYPE_NAME, PACKET_ID, PacketPhase.PLAY,
+                PacketDescriptor.Direction.CLIENTBOUND, true,
+                PacketDescriptor.PlaybackScope.VIEWER_LOCAL);
+    }
+
+    private static PacketDescriptor descriptor(
+            String typeName,
+            int packetId,
+            PacketPhase phase,
+            PacketDescriptor.Direction direction,
+            boolean replayable,
+            PacketDescriptor.PlaybackScope scope) {
+        return new PacketDescriptor(
+                typeName,
+                phase,
+                direction,
+                packetId,
+                PacketDisposition.STATEFUL,
+                direction == PacketDescriptor.Direction.CLIENTBOUND,
+                replayable,
+                false,
+                "paper-26.2/" + typeName,
+                scope);
+    }
+
+    private static RawPacketFrame frame(byte[] payload) {
+        return new RawPacketFrame(0L, 0L, 0, PacketPhase.PLAY, PACKET_ID, payload);
+    }
+
+    private static PacketCodec<Object> failingCodec(
+            AtomicInteger decodes, AtomicInteger encodes) {
+        return new PacketCodec<>() {
+            @Override
+            public EncodedPacket encode(Object packet) {
+                encodes.incrementAndGet();
+                throw new AssertionError("viewer-local recipe removals must not encode");
+            }
+
+            @Override
+            public Object decode(RawPacketFrame ignored) {
+                decodes.incrementAndGet();
+                throw new AssertionError("viewer-local recipe removals must not decode");
+            }
+        };
+    }
+
+    private static void assertMalformed(ProtocolInfo<?> protocol, byte[] packetBody) {
+        ByteBuf input = Unpooled.buffer();
+        try {
+            VarInt.write(input, PACKET_ID);
+            input.writeBytes(packetBody);
+            assertThrows(RuntimeException.class, () -> decode(protocol, input));
+        } finally {
+            input.release();
+        }
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static void encode(ProtocolInfo<?> protocol, ByteBuf buffer, Packet<?> packet) {
+        ((StreamCodec) protocol.codec()).encode(buffer, packet);
+    }
+}

@@ -24,7 +24,8 @@ public final class UiPacketDefinitions {
                     new Id059OpenScreenPacketDefinition(),
                     new Id060OpenSignEditorPacketDefinition(),
                     new Id063PlaceGhostRecipePacketDefinition(),
-                    new Id074RecipeBookAddPacketDefinition());
+                    new Id074RecipeBookAddPacketDefinition(),
+                    new Id075RecipeBookRemovePacketDefinition());
 
     private UiPacketDefinitions() {}
 
