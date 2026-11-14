@@ -1,517 +1,207 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.PacketDisposition;
 import dev.voldechse.replayframework.adapter.paper.v26_2.packet.Paper26_2PacketCatalog;
 import dev.voldechse.replayframework.format.PacketPhase;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 
-/** Verifies explicit coverage while packet implementations are added incrementally. */
+/** Checks the adapter's implemented packet manifest and fallback policy as a whole. */
 class PacketCoverageTest {
 
+    private static final List<ExpectedPacket> IMPLEMENTED_PACKETS = List.of(
+            control(0x00, "bundle_delimiter"),
+            stateful(0x01, "add_entity", PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES),
+            ephemeral(0x02, "animate", PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES),
+            stateful(0x03, "award_stats", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
+            control(0x04, "block_changed_ack"),
+            ephemeral(0x05, "block_destruction", PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES),
+            stateful(0x06, "block_entity_data", PacketDescriptor.PlaybackScope.SAFE),
+            ephemeral(0x07, "block_event", PacketDescriptor.PlaybackScope.SAFE),
+            stateful(0x08, "block_update", PacketDescriptor.PlaybackScope.SAFE),
+            stateful(0x09, "boss_event", PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES),
+            stateful(0x0A, "change_difficulty", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
+            control(0x0B, "chunk_batch_finished"),
+            control(0x0C, "chunk_batch_start"),
+            stateful(0x0D, "chunks_biomes", PacketDescriptor.PlaybackScope.SAFE),
+            stateful(0x0E, "clear_titles", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
+            ephemeral(0x0F, "command_suggestions", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
+            stateful(0x10, "commands", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
+            stateful(0x11, "container_close", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
+            stateful(0x12, "container_set_content", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
+            stateful(0x13, "container_set_data", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
+            stateful(0x14, "container_set_slot", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
+            control(0x15, "cookie_request"),
+            stateful(0x16, "cooldown", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
+            stateful(0x17, "custom_chat_completions", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
+            configurable(0x18, "custom_payload", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
+            ephemeral(0x19, "damage_event", PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES),
+            control(0x1A, "debug/block_value"),
+            control(0x1B, "debug/chunk_value"),
+            control(0x1C, "debug/entity_value"),
+            control(0x1D, "debug/event"),
+            control(0x1E, "debug_sample"),
+            ephemeral(0x1F, "delete_chat", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
+            control(0x20, "disconnect"),
+            ephemeral(0x21, "disguised_chat", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
+            ephemeral(0x22, "entity_event", PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES),
+            stateful(0x23, "entity_position_sync", PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES),
+            ephemeral(0x24, "explode", PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES),
+            stateful(0x25, "forget_level_chunk", PacketDescriptor.PlaybackScope.SAFE),
+            ephemeral(0x26, "game_event", PacketDescriptor.PlaybackScope.SAFE),
+            stateful(0x27, "game_rule_values", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
+            control(0x28, "game_test_highlight_pos"),
+            stateful(0x29, "mount_screen_open", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
+            ephemeral(0x2A, "hurt_animation", PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES),
+            stateful(0x2B, "initialize_border", PacketDescriptor.PlaybackScope.SAFE),
+            control(0x2C, "keep_alive"),
+            stateful(0x2D, "level_chunk_with_light", PacketDescriptor.PlaybackScope.SAFE),
+            ephemeral(0x2E, "level_event", PacketDescriptor.PlaybackScope.SAFE),
+            ephemeral(0x2F, "level_particles", PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES),
+            stateful(0x30, "light_update", PacketDescriptor.PlaybackScope.SAFE),
+            control(0x31, "login"),
+            ephemeral(0x32, "low_disk_space_warning", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
+            stateful(0x33, "map_item_data", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
+            stateful(0x34, "merchant_offers", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
+            ephemeral(0x35, "move_entity_pos", PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES),
+            ephemeral(0x36, "move_entity_pos_rot", PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES),
+            stateful(0x37, "move_minecart_along_track", PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES),
+            ephemeral(0x38, "move_entity_rot", PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES),
+            ephemeral(0x39, "move_vehicle", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
+            ephemeral(0x3A, "open_book", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
+            ephemeral(0x3B, "open_screen", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
+            ephemeral(0x3C, "open_sign_editor", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
+            control(0x3D, "ping"),
+            control(0x3E, "pong_response"),
+            ephemeral(0x3F, "place_ghost_recipe", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
+            stateful(0x40, "player_abilities", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
+            configurable(0x41, "player_chat", PacketDescriptor.PlaybackScope.SAFE),
+            ephemeral(0x42, "player_combat_end", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
+            ephemeral(0x43, "player_combat_enter", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
+            ephemeral(0x44, "player_combat_kill", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
+            stateful(0x45, "player_info_remove", PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES));
+
+    private static final Map<String, ExpectedPacket> EXPECTED_BY_TYPE = IMPLEMENTED_PACKETS.stream()
+            .collect(Collectors.toUnmodifiableMap(
+                    ExpectedPacket::typeName, Function.identity()));
+
     @Test
-    void classifiesOnlyImplementedPacketsExplicitly() {
+    void matchesTheCatalogAndRegistryAgainstTheImplementedPacketManifest() {
         net.minecraft.SharedConstants.tryDetectVersion();
         net.minecraft.server.Bootstrap.bootStrap();
 
+        var catalog = Paper26_2PacketCatalog.catalog();
         assertEquals(
-                java.util.List.of(
-                        "play.clientbound.minecraft:bundle_delimiter",
-                        "play.clientbound.minecraft:add_entity",
-                        "play.clientbound.minecraft:animate",
-                        "play.clientbound.minecraft:award_stats",
-                        "play.clientbound.minecraft:block_changed_ack",
-                        "play.clientbound.minecraft:block_destruction",
-                        "play.clientbound.minecraft:block_entity_data",
-                        "play.clientbound.minecraft:block_event",
-                        "play.clientbound.minecraft:block_update",
-                        "play.clientbound.minecraft:boss_event",
-                        "play.clientbound.minecraft:change_difficulty",
-                        "play.clientbound.minecraft:chunk_batch_finished",
-                        "play.clientbound.minecraft:chunk_batch_start",
-                        "play.clientbound.minecraft:chunks_biomes",
-                        "play.clientbound.minecraft:clear_titles",
-                        "play.clientbound.minecraft:command_suggestions",
-                        "play.clientbound.minecraft:commands",
-                        "play.clientbound.minecraft:container_close",
-                        "play.clientbound.minecraft:container_set_content",
-                        "play.clientbound.minecraft:container_set_data",
-                        "play.clientbound.minecraft:container_set_slot",
-                        "play.clientbound.minecraft:cookie_request",
-                        "play.clientbound.minecraft:cooldown",
-                        "play.clientbound.minecraft:custom_chat_completions",
-                        "play.clientbound.minecraft:custom_payload",
-                        "play.clientbound.minecraft:damage_event",
-                        "play.clientbound.minecraft:debug/block_value",
-                        "play.clientbound.minecraft:debug/chunk_value",
-                        "play.clientbound.minecraft:debug/entity_value",
-                        "play.clientbound.minecraft:debug/event",
-                        "play.clientbound.minecraft:debug_sample",
-                        "play.clientbound.minecraft:delete_chat",
-                        "play.clientbound.minecraft:disconnect",
-                        "play.clientbound.minecraft:disguised_chat",
-                        "play.clientbound.minecraft:entity_event",
-                        "play.clientbound.minecraft:entity_position_sync",
-                        "play.clientbound.minecraft:explode",
-                        "play.clientbound.minecraft:forget_level_chunk",
-                        "play.clientbound.minecraft:game_event",
-                        "play.clientbound.minecraft:game_rule_values",
-                        "play.clientbound.minecraft:game_test_highlight_pos",
-                        "play.clientbound.minecraft:mount_screen_open",
-                        "play.clientbound.minecraft:hurt_animation",
-                        "play.clientbound.minecraft:initialize_border",
-                        "play.clientbound.minecraft:keep_alive",
-                        "play.clientbound.minecraft:level_chunk_with_light",
-                        "play.clientbound.minecraft:level_event",
-                        "play.clientbound.minecraft:level_particles",
-                        "play.clientbound.minecraft:light_update",
-                        "play.clientbound.minecraft:login",
-                        "play.clientbound.minecraft:low_disk_space_warning",
-                        "play.clientbound.minecraft:map_item_data",
-                        "play.clientbound.minecraft:merchant_offers",
-                        "play.clientbound.minecraft:move_entity_pos",
-                        "play.clientbound.minecraft:move_entity_pos_rot",
-                        "play.clientbound.minecraft:move_minecart_along_track",
-                        "play.clientbound.minecraft:move_entity_rot",
-                        "play.clientbound.minecraft:move_vehicle",
-                        "play.clientbound.minecraft:open_book",
-                        "play.clientbound.minecraft:open_screen",
-                        "play.clientbound.minecraft:open_sign_editor",
-                        "play.clientbound.minecraft:ping",
-                        "play.clientbound.minecraft:pong_response",
-                        "play.clientbound.minecraft:place_ghost_recipe",
-                        "play.clientbound.minecraft:player_abilities",
-                        "play.clientbound.minecraft:player_chat",
-                        "play.clientbound.minecraft:player_combat_end",
-                        "play.clientbound.minecraft:player_combat_enter",
-                        "play.clientbound.minecraft:player_combat_kill",
-                        "play.clientbound.minecraft:player_info_remove"),
-                Paper26_2PacketCatalog.catalog().definitions().stream()
-                        .map(definition -> definition.typeName())
-                        .toList());
+                IMPLEMENTED_PACKETS.stream().map(ExpectedPacket::typeName).toList(),
+                catalog.definitions().stream().map(definition -> definition.typeName()).toList());
+
         var registry = Paper26_2PacketRegistry.discover();
+        for (ExpectedPacket expected : IMPLEMENTED_PACKETS) {
+            var descriptor = registry.find(
+                            PacketPhase.PLAY,
+                            PacketDescriptor.Direction.CLIENTBOUND,
+                            expected.packetId())
+                    .orElseThrow();
+            assertEquals(expected.typeName(), descriptor.typeName());
+        }
+
         for (var descriptor : registry.descriptors()) {
-            if (descriptor.phase() == PacketPhase.PLAY) {
-                boolean bundleDelimiter =
-                        descriptor.typeName().equals("play.clientbound.minecraft:bundle_delimiter");
-                boolean addEntity =
-                        descriptor.typeName().equals("play.clientbound.minecraft:add_entity");
-                boolean animate =
-                        descriptor.typeName().equals("play.clientbound.minecraft:animate");
-                boolean awardStats =
-                        descriptor.typeName().equals("play.clientbound.minecraft:award_stats");
-                boolean blockChangedAck =
-                        descriptor.typeName().equals("play.clientbound.minecraft:block_changed_ack");
-                boolean blockDestruction =
-                        descriptor.typeName().equals("play.clientbound.minecraft:block_destruction");
-                boolean blockEntityData =
-                        descriptor.typeName().equals("play.clientbound.minecraft:block_entity_data");
-                boolean blockEvent =
-                        descriptor.typeName().equals("play.clientbound.minecraft:block_event");
-                boolean blockUpdate =
-                        descriptor.typeName().equals("play.clientbound.minecraft:block_update");
-                boolean bossEvent =
-                        descriptor.typeName().equals("play.clientbound.minecraft:boss_event");
-                boolean changeDifficulty =
-                        descriptor.typeName().equals("play.clientbound.minecraft:change_difficulty");
-                boolean chunkBatchFinished = descriptor.typeName()
-                        .equals("play.clientbound.minecraft:chunk_batch_finished");
-                boolean chunkBatchStart =
-                        descriptor.typeName().equals("play.clientbound.minecraft:chunk_batch_start");
-                boolean chunksBiomes =
-                        descriptor.typeName().equals("play.clientbound.minecraft:chunks_biomes");
-                boolean clearTitles =
-                        descriptor.typeName().equals("play.clientbound.minecraft:clear_titles");
-                boolean commandSuggestions = descriptor.typeName()
-                        .equals("play.clientbound.minecraft:command_suggestions");
-                boolean commands =
-                        descriptor.typeName().equals("play.clientbound.minecraft:commands");
-                boolean containerPacket = java.util.Set.of(
-                                "play.clientbound.minecraft:container_close",
-                                "play.clientbound.minecraft:container_set_content",
-                                "play.clientbound.minecraft:container_set_data",
-                                "play.clientbound.minecraft:container_set_slot")
-                        .contains(descriptor.typeName());
-                boolean cookieRequest =
-                        descriptor.typeName().equals("play.clientbound.minecraft:cookie_request");
-                boolean cooldown =
-                        descriptor.typeName().equals("play.clientbound.minecraft:cooldown");
-                boolean customChatCompletions = descriptor.typeName()
-                        .equals("play.clientbound.minecraft:custom_chat_completions");
-                boolean customPayload =
-                        descriptor.typeName().equals("play.clientbound.minecraft:custom_payload");
-                boolean damageEvent =
-                        descriptor.typeName().equals("play.clientbound.minecraft:damage_event");
-                boolean debugBlockValue = descriptor.typeName()
-                        .equals("play.clientbound.minecraft:debug/block_value");
-                boolean debugChunkValue = descriptor.typeName()
-                        .equals("play.clientbound.minecraft:debug/chunk_value");
-                boolean debugEntityValue = descriptor.typeName()
-                        .equals("play.clientbound.minecraft:debug/entity_value");
-                boolean debugEvent =
-                        descriptor.typeName().equals("play.clientbound.minecraft:debug/event");
-                boolean debugSample =
-                        descriptor.typeName().equals("play.clientbound.minecraft:debug_sample");
-                boolean deleteChat =
-                        descriptor.typeName().equals("play.clientbound.minecraft:delete_chat");
-                boolean disconnect =
-                        descriptor.typeName().equals("play.clientbound.minecraft:disconnect");
-                boolean disguisedChat =
-                        descriptor.typeName().equals("play.clientbound.minecraft:disguised_chat");
-                boolean entityEvent =
-                        descriptor.typeName().equals("play.clientbound.minecraft:entity_event");
-                boolean entityPositionSync = descriptor.typeName()
-                        .equals("play.clientbound.minecraft:entity_position_sync");
-                boolean explode =
-                        descriptor.typeName().equals("play.clientbound.minecraft:explode");
-                boolean forgetLevelChunk = descriptor.typeName()
-                        .equals("play.clientbound.minecraft:forget_level_chunk");
-                boolean gameEvent =
-                        descriptor.typeName().equals("play.clientbound.minecraft:game_event");
-                boolean gameRuleValues = descriptor.typeName()
-                        .equals("play.clientbound.minecraft:game_rule_values");
-                boolean gameTestHighlightPos = descriptor.typeName()
-                        .equals("play.clientbound.minecraft:game_test_highlight_pos");
-                boolean hurtAnimation =
-                        descriptor.typeName().equals("play.clientbound.minecraft:hurt_animation");
-                boolean mountScreenOpen = descriptor.typeName()
-                        .equals("play.clientbound.minecraft:mount_screen_open");
-                boolean initializeBorder = descriptor.typeName()
-                        .equals("play.clientbound.minecraft:initialize_border");
-                boolean keepAlive = descriptor.typeName()
-                        .equals("play.clientbound.minecraft:keep_alive");
-                boolean levelChunkWithLight = descriptor.typeName()
-                        .equals("play.clientbound.minecraft:level_chunk_with_light");
-                boolean levelEvent =
-                        descriptor.typeName().equals("play.clientbound.minecraft:level_event");
-                boolean levelParticles = descriptor.typeName()
-                        .equals("play.clientbound.minecraft:level_particles");
-                boolean lightUpdate =
-                        descriptor.typeName().equals("play.clientbound.minecraft:light_update");
-                boolean login = descriptor.typeName().equals("play.clientbound.minecraft:login");
-                boolean lowDiskSpaceWarning = descriptor.typeName()
-                        .equals("play.clientbound.minecraft:low_disk_space_warning");
-                boolean mapItemData = descriptor.typeName()
-                        .equals("play.clientbound.minecraft:map_item_data");
-                boolean merchantOffers = descriptor.typeName()
-                        .equals("play.clientbound.minecraft:merchant_offers");
-                boolean moveEntityPos = descriptor.typeName()
-                        .equals("play.clientbound.minecraft:move_entity_pos");
-                boolean moveEntityPosRot = descriptor.typeName()
-                        .equals("play.clientbound.minecraft:move_entity_pos_rot");
-                boolean moveMinecartAlongTrack = descriptor.typeName()
-                        .equals("play.clientbound.minecraft:move_minecart_along_track");
-                boolean moveEntityRot = descriptor.typeName()
-                        .equals("play.clientbound.minecraft:move_entity_rot");
-                boolean moveVehicle = descriptor.typeName()
-                        .equals("play.clientbound.minecraft:move_vehicle");
-                boolean openBook = descriptor.typeName()
-                        .equals("play.clientbound.minecraft:open_book");
-                boolean openScreen = descriptor.typeName()
-                        .equals("play.clientbound.minecraft:open_screen");
-                boolean openSignEditor = descriptor.typeName()
-                        .equals("play.clientbound.minecraft:open_sign_editor");
-                boolean ping = descriptor.typeName()
-                        .equals("play.clientbound.minecraft:ping");
-                boolean pongResponse = descriptor.typeName()
-                        .equals("play.clientbound.minecraft:pong_response");
-                boolean placeGhostRecipe = descriptor.typeName()
-                        .equals("play.clientbound.minecraft:place_ghost_recipe");
-                boolean playerAbilities = descriptor.typeName()
-                        .equals("play.clientbound.minecraft:player_abilities");
-                boolean playerChat = descriptor.typeName()
-                        .equals("play.clientbound.minecraft:player_chat");
-                boolean playerCombatEnd = descriptor.typeName()
-                        .equals("play.clientbound.minecraft:player_combat_end");
-                boolean playerCombatEnter = descriptor.typeName()
-                        .equals("play.clientbound.minecraft:player_combat_enter");
-                boolean playerCombatKill = descriptor.typeName()
-                        .equals("play.clientbound.minecraft:player_combat_kill");
-                boolean playerInfoRemove = descriptor.typeName()
-                        .equals("play.clientbound.minecraft:player_info_remove");
-                PacketDisposition expectedDisposition;
-                if (bundleDelimiter
-                        || blockChangedAck
-                        || chunkBatchFinished
-                        || chunkBatchStart
-                        || cookieRequest
-                        || debugBlockValue
-                        || debugChunkValue
-                        || debugEntityValue
-                        || debugEvent
-                        || debugSample
-                        || gameTestHighlightPos
-                        || keepAlive
-                        || ping
-                        || pongResponse
-                        || login
-                        || disconnect) {
-                    expectedDisposition = PacketDisposition.CONTROL;
-                } else if (addEntity
-                        || blockEntityData
-                        || blockUpdate
-                        || bossEvent
-                        || changeDifficulty
-                        || chunksBiomes
-                        || clearTitles
-                        || commands
-                        || containerPacket
-                        || cooldown
-                        || customChatCompletions
-                        || entityPositionSync
-                        || moveMinecartAlongTrack
-                        || forgetLevelChunk
-                        || gameRuleValues
-                        || mountScreenOpen
-                        || initializeBorder
-                        || levelChunkWithLight
-                        || lightUpdate
-                        || mapItemData
-                        || merchantOffers
-                        || playerInfoRemove) {
-                    expectedDisposition = PacketDisposition.STATEFUL;
-                } else if (animate
-                        || blockDestruction
-                        || blockEvent
-                        || commandSuggestions
-                        || damageEvent
-                        || deleteChat
-                        || disguisedChat
-                        || entityEvent
-                        || moveEntityPos
-                        || moveEntityPosRot
-                        || moveEntityRot
-                        || moveVehicle
-                        || openBook
-                        || openScreen
-                        || openSignEditor
-                        || playerCombatEnd
-                        || playerCombatEnter
-                        || playerCombatKill
-                        || placeGhostRecipe
-                        || explode
-                        || hurtAnimation
-                        || gameEvent
-                        || levelEvent
-                        || levelParticles
-                        || lowDiskSpaceWarning) {
-                    expectedDisposition = PacketDisposition.EPHEMERAL;
-                } else if (customPayload || playerChat) {
-                    expectedDisposition = PacketDisposition.CONFIGURABLE;
-                } else if (awardStats || playerAbilities) {
-                    expectedDisposition = PacketDisposition.STATEFUL;
-                } else {
-                    expectedDisposition = PacketDisposition.UNSUPPORTED;
-                }
-                assertEquals(expectedDisposition, descriptor.disposition());
-                assertTrue(descriptor.captureByDefault());
-                assertEquals(
-                        addEntity
-                                || animate
-                                || awardStats
-                                || blockDestruction
-                                || blockEntityData
-                                || blockEvent
-                                || blockUpdate
-                                || bossEvent
-                                || changeDifficulty
-                                || chunksBiomes
-                                || clearTitles
-                                || commandSuggestions
-                                || commands
-                                || containerPacket
-                                || cooldown
-                                || customChatCompletions
-                                || customPayload
-                                || lowDiskSpaceWarning
-                                || mapItemData
-                                || merchantOffers
-                                || placeGhostRecipe
-                                || moveEntityPos
-                                || moveEntityPosRot
-                                || moveEntityRot
-                                || moveVehicle
-                                || openBook
-                                || openScreen
-                                || openSignEditor
-                                || playerAbilities
-                                || playerChat
-                                || playerCombatEnd
-                                || playerCombatEnter
-                                || playerCombatKill
-                                || playerInfoRemove
-                                || moveMinecartAlongTrack
-                                || damageEvent
-                                || deleteChat
-                                || disguisedChat
-                                || entityEvent
-                                || entityPositionSync
-                                || explode
-                                || forgetLevelChunk
-                                || gameEvent
-                                || gameRuleValues
-                                || hurtAnimation
-                                || mountScreenOpen
-                                || initializeBorder
-                                || levelChunkWithLight
-                                || levelEvent
-                                || levelParticles
-                                || lightUpdate,
-                        descriptor.replayable());
-                assertEquals(
-                        addEntity
-                                || blockEntityData
-                                || blockUpdate
-                                || bossEvent
-                                || chunksBiomes
-                                || moveMinecartAlongTrack
-                                || entityPositionSync
-                                || forgetLevelChunk
-                                || playerInfoRemove
-                                || initializeBorder
-                                || levelChunkWithLight
-                                || lightUpdate,
-                        descriptor.checkpointRelevant());
-                if (addEntity
-                        || animate
-                        || blockDestruction
-                        || bossEvent
-                        || damageEvent
-                        || entityEvent
-                        || moveEntityPos
-                        || moveEntityPosRot
-                        || moveEntityRot
-                        || moveMinecartAlongTrack
-                        || entityPositionSync
-                        || explode
-                        || hurtAnimation
-                        || levelParticles
-                        || playerInfoRemove) {
-                    assertEquals(
-                            dev.voldechse.replayframework.adapter.PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES,
-                            descriptor.playbackScope());
-                } else if (awardStats
-                        || changeDifficulty
-                        || clearTitles
-                        || commandSuggestions
-                        || commands
-                        || containerPacket
-                        || cooldown
-                        || customChatCompletions
-                        || customPayload
-                        || lowDiskSpaceWarning
-                        || placeGhostRecipe
-                        || playerAbilities
-                        || moveVehicle
-                        || openBook
-                        || openScreen
-                        || openSignEditor
-                        || playerCombatEnd
-                        || playerCombatEnter
-                        || playerCombatKill
-                        || mapItemData
-                        || merchantOffers
-                        || deleteChat
-                        || disguisedChat
-                        || gameRuleValues
-                        || mountScreenOpen) {
-                    assertEquals(
-                            dev.voldechse.replayframework.adapter.PacketDescriptor.PlaybackScope.VIEWER_LOCAL,
-                            descriptor.playbackScope());
-                } else if (blockEntityData
-                        || blockEvent
-                        || blockUpdate
-                        || chunksBiomes
-                        || forgetLevelChunk
-                        || gameEvent
-                        || levelChunkWithLight
-                        || levelEvent
-                        || lightUpdate
-                        || initializeBorder
-                        || playerChat) {
-                    assertEquals(
-                            dev.voldechse.replayframework.adapter.PacketDescriptor.PlaybackScope.SAFE,
-                            descriptor.playbackScope());
-                } else {
-                    assertFalse(descriptor.replayable());
-                    assertFalse(descriptor.checkpointRelevant());
-                    assertEquals(
-                            dev.voldechse.replayframework.adapter.PacketDescriptor.PlaybackScope.UNSAFE,
-                            descriptor.playbackScope());
-                }
-                assertEquals(
-                        bundleDelimiter
-                                || addEntity
-                                || animate
-                                || awardStats
-                                || blockChangedAck
-                                || blockDestruction
-                                || blockEntityData
-                                || blockEvent
-                                || blockUpdate
-                                || bossEvent
-                                || changeDifficulty
-                                || chunkBatchFinished
-                                || chunkBatchStart
-                                || chunksBiomes
-                                || clearTitles
-                                || commandSuggestions
-                                || commands
-                                || containerPacket
-                                || cookieRequest
-                                || cooldown
-                                || customChatCompletions
-                                || customPayload
-                                || playerChat
-                                || damageEvent
-                                || debugBlockValue
-                                || debugChunkValue
-                                || debugEntityValue
-                                || debugEvent
-                                || debugSample
-                                || deleteChat
-                                || disguisedChat
-                                || entityEvent
-                                || entityPositionSync
-                                || explode
-                                || forgetLevelChunk
-                                || gameEvent
-                                || gameRuleValues
-                                || gameTestHighlightPos
-                                || hurtAnimation
-                                || mountScreenOpen
-                                || initializeBorder
-                                || keepAlive
-                                || levelChunkWithLight
-                                || levelEvent
-                                || levelParticles
-                                || lightUpdate
-                                || login
-                                || lowDiskSpaceWarning
-                                || mapItemData
-                                || merchantOffers
-                                || moveEntityPos
-                                || moveEntityPosRot
-                                || moveEntityRot
-                                || moveMinecartAlongTrack
-                                || moveVehicle
-                                || openBook
-                                || openScreen
-                                || openSignEditor
-                                || ping
-                                || pongResponse
-                                || placeGhostRecipe
-                                || playerAbilities
-                                || playerCombatEnd
-                                || playerCombatEnter
-                                || playerCombatKill
-                                || playerInfoRemove
-                                || disconnect,
-                        Paper26_2PacketRegistry.explicitlyClassifies(descriptor.typeName()));
+            if (descriptor.phase() != PacketPhase.PLAY) {
+                continue;
             }
+
+            ExpectedPacket expected = EXPECTED_BY_TYPE.get(descriptor.typeName());
+            assertEquals(
+                    expected != null,
+                    Paper26_2PacketRegistry.explicitlyClassifies(descriptor.typeName()));
+            if (expected == null) {
+                expected = unsupported(descriptor.packetId(), descriptor.typeName());
+            } else {
+                assertEquals(expected.packetId(), descriptor.packetId());
+            }
+
+            assertEquals(expected.disposition(), descriptor.disposition(), descriptor.typeName());
+            assertEquals(expected.captureByDefault(), descriptor.captureByDefault(), descriptor.typeName());
+            assertEquals(expected.replayable(), descriptor.replayable(), descriptor.typeName());
+            assertEquals(expected.checkpointRelevant(), descriptor.checkpointRelevant(), descriptor.typeName());
+            assertEquals(expected.playbackScope(), descriptor.playbackScope(), descriptor.typeName());
         }
     }
+
+    private static ExpectedPacket control(int packetId, String identifier) {
+        return new ExpectedPacket(
+                packetId,
+                typeName(identifier),
+                PacketDisposition.CONTROL,
+                true,
+                false,
+                false,
+                PacketDescriptor.PlaybackScope.UNSAFE);
+    }
+
+    private static ExpectedPacket stateful(
+            int packetId, String identifier, PacketDescriptor.PlaybackScope scope) {
+        return new ExpectedPacket(
+                packetId,
+                typeName(identifier),
+                PacketDisposition.STATEFUL,
+                true,
+                true,
+                scope != PacketDescriptor.PlaybackScope.VIEWER_LOCAL,
+                scope);
+    }
+
+    private static ExpectedPacket ephemeral(
+            int packetId, String identifier, PacketDescriptor.PlaybackScope scope) {
+        return new ExpectedPacket(
+                packetId,
+                typeName(identifier),
+                PacketDisposition.EPHEMERAL,
+                true,
+                true,
+                false,
+                scope);
+    }
+
+    private static ExpectedPacket configurable(
+            int packetId, String identifier, PacketDescriptor.PlaybackScope scope) {
+        return new ExpectedPacket(
+                packetId,
+                typeName(identifier),
+                PacketDisposition.CONFIGURABLE,
+                true,
+                true,
+                false,
+                scope);
+    }
+
+    private static ExpectedPacket unsupported(int packetId, String typeName) {
+        return new ExpectedPacket(
+                packetId,
+                typeName,
+                PacketDisposition.UNSUPPORTED,
+                true,
+                false,
+                false,
+                PacketDescriptor.PlaybackScope.UNSAFE);
+    }
+
+    private static String typeName(String identifier) {
+        return "play.clientbound.minecraft:" + identifier;
+    }
+
+    private record ExpectedPacket(
+            int packetId,
+            String typeName,
+            PacketDisposition disposition,
+            boolean captureByDefault,
+            boolean replayable,
+            boolean checkpointRelevant,
+            PacketDescriptor.PlaybackScope playbackScope) {}
 }
