@@ -29,7 +29,8 @@ public final class UiPacketDefinitions {
                     new Id076RecipeBookSettingsPacketDefinition(),
                     new Id085SelectAdvancementsTabPacketDefinition(),
                     new Id086ServerDataPacketDefinition(),
-                    new Id087SetActionBarTextPacketDefinition());
+                    new Id087SetActionBarTextPacketDefinition(),
+                    new Id096SetCursorItemPacketDefinition());
 
     private UiPacketDefinitions() {}
 
