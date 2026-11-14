@@ -14,7 +14,8 @@ public final class PlayerPacketDefinitions {
                     new Id066PlayerCombatEndPacketDefinition(),
                     new Id067PlayerCombatEnterPacketDefinition(),
                     new Id068PlayerCombatKillPacketDefinition(),
-                    new Id069PlayerInfoRemovePacketDefinition());
+                    new Id069PlayerInfoRemovePacketDefinition(),
+                    new Id070PlayerInfoUpdatePacketDefinition());
 
     private PlayerPacketDefinitions() {}
 
