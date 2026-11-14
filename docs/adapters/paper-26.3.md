@@ -270,7 +270,7 @@ test status.
 | 118 | `minecraft:sound_entity` | Entity-attached sound event (registry reference or inline identifier with optional fixed range), source category, VarInt entity ID, volume/pitch Floats, and variant seed; rewrite the source entity ID | REWRITE | no |
 | 119 | `minecraft:sound` | Sound event as a registry reference or inline identifier with optional fixed range, source category, signed Int X/Y/Z in eighth-block units, volume and pitch Floats, and variant seed; preserve exact fixed-point positions and event order | SEND | no |
 | 120 | `minecraft:start_configuration` | Transport, connection, or server control; never replay into an established connection | BLOCKED | no |
-| 121 | `minecraft:stop_sound` | Ordered presentation or environment effect | SEND | no |
+| 121 | `minecraft:stop_sound` | Flags select an optional source category and sound identifier: stop all sounds, all sounds in a category, one sound in every category, or one sound in one category; preserve in order with preceding replayed audio | SEND | no |
 | 122 | `minecraft:store_cookie` | Transport, connection, or server control; never replay into an established connection | BLOCKED | no |
 | 123 | `minecraft:swing_animation` | Ordered scene effect: 26.3 swing animation; rewrite entity ID and retain hand/animation data | REWRITE | no |
 | 124 | `minecraft:system_chat` | Recorded connection chat and action-bar presentation retained according to capture policy but suppressed for neutral playback | DROP_LOCAL* | no |
