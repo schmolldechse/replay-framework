@@ -23,7 +23,8 @@ public final class ConnectionPacketDefinitions {
                     new Id081ResourcePackPushPacketDefinition(),
                     new Id118StartConfigurationPacketDefinition(),
                     new Id120StoreCookiePacketDefinition(),
-                    new Id127TickingStatePacketDefinition());
+                    new Id127TickingStatePacketDefinition(),
+                    new Id128TickingStepPacketDefinition());
 
     private ConnectionPacketDefinitions() {}
 

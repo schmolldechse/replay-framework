@@ -144,7 +144,8 @@ class PacketCoverageTest {
             ephemeral(0x7C, "take_item_entity", PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES),
             stateful(0x7D, "teleport_entity", PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES),
             control(0x7E, "test_instance_block_status"),
-            control(0x7F, "ticking_state"));
+            control(0x7F, "ticking_state"),
+            control(0x80, "ticking_step"));
 
     private static final Map<String, ExpectedPacket> EXPECTED_BY_TYPE = IMPLEMENTED_PACKETS.stream()
             .collect(Collectors.toUnmodifiableMap(
