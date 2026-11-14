@@ -12,7 +12,8 @@ public final class ScoreboardPacketDefinitions {
                     new Id079ResetScorePacketDefinition(),
                     new Id098SetDisplayObjectivePacketDefinition(),
                     new Id106SetObjectivePacketDefinition(),
-                    new Id109SetPlayerTeamPacketDefinition());
+                    new Id109SetPlayerTeamPacketDefinition(),
+                    new Id110SetScorePacketDefinition());
 
     private ScoreboardPacketDefinitions() {}
 
