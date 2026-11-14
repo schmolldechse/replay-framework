@@ -21,7 +21,8 @@ public final class EntityPacketDefinitions {
                     new Id099SetEntityDataPacketDefinition(),
                     new Id100SetEntityLinkPacketDefinition(),
                     new Id101SetEntityMotionPacketDefinition(),
-                    new Id102SetEquipmentPacketDefinition());
+                    new Id102SetEquipmentPacketDefinition(),
+                    new Id107SetPassengersPacketDefinition());
 
     private EntityPacketDefinitions() {}
 
