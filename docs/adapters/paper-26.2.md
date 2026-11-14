@@ -259,7 +259,7 @@ test status.
 | 108 | `minecraft:set_player_inventory` | Player-inventory slot VarInt followed by an optional ItemStack with its data-component patch; the slot is independent of container window IDs and non-positive item counts decode as empty; retain the recorded update but preserve the observer's local inventory | DROP_LOCAL | no |
 | 109 | `minecraft:set_player_team` | Team name and method byte create, remove, update, add members, or remove members; create/update include display name, styled member prefix and suffix, name-tag visibility, collision rule, optional team color, and friendly-fire/invisibility flags; create/add/remove-member modes include player-name collections; team and member presentation are viewer-local | DROP_LOCAL | no |
 | 110 | `minecraft:set_score` | Owner and objective UTF-8 strings with a signed score VarInt; optional per-score display component and independent optional blank, styled, or fixed number format; the owner is scoreboard text rather than an entity ID, and the score changes recorded-viewer scoreboard state | DROP_LOCAL | no |
-| 111 | `minecraft:set_simulation_distance` | Supplementary durable world or scene state | SEND | yes |
+| 111 | `minecraft:set_simulation_distance` | Server simulation distance sent as a VarInt; the client uses it to determine when distant entity death animations pause | SEND | yes |
 | 112 | `minecraft:set_subtitle_text` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 113 | `minecraft:set_time` | Essential scene state: durable world or scene state | SEND | yes |
 | 114 | `minecraft:set_title_text` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |

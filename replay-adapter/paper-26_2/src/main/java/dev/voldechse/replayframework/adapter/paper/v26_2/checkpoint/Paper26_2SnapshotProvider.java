@@ -28,6 +28,7 @@ import net.minecraft.network.protocol.game.ClientboundSetDefaultSpawnPositionPac
 import net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket;
 import net.minecraft.network.protocol.game.ClientboundSetEquipmentPacket;
 import net.minecraft.network.protocol.game.ClientboundSetPassengersPacket;
+import net.minecraft.network.protocol.game.ClientboundSetSimulationDistancePacket;
 import net.minecraft.network.protocol.game.ClientboundSetTimePacket;
 import net.minecraft.network.protocol.game.ClientboundUpdateMobEffectPacket;
 import net.minecraft.network.protocol.game.ClientboundUpdateAttributesPacket;
@@ -462,6 +463,13 @@ public final class Paper26_2SnapshotProvider
                     Paper26_2CheckpointEncoder.CheckpointPacketFamily.GLOBAL_STATE,
                     worldKey,
                     "time"));
+            // PlayerList owns one server-wide value; include it in every world's scoped state.
+            packets.add(blueprint(
+                    new ClientboundSetSimulationDistancePacket(
+                            level.getServer().getPlayerList().getSimulationDistance()),
+                    Paper26_2CheckpointEncoder.CheckpointPacketFamily.GLOBAL_STATE,
+                    worldKey,
+                    "simulation-distance"));
         }
 
         private void addEntityPackets(
