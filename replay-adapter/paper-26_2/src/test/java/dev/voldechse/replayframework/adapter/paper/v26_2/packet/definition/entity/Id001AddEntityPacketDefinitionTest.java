@@ -81,6 +81,7 @@ final class Id001AddEntityPacketDefinitionTest {
 
         assertEquals(PacketRewriteResult.Decision.SEND, result.decision());
         assertEquals(context.mapEntityId(41), rewritten.getId());
+        assertEquals(type, context.recordedEntityType(41).orElseThrow());
         assertEquals(context.mapUuid(RECORDED_ID), rewritten.getUUID());
         assertNotEquals(41, rewritten.getId());
         assertNotEquals(RECORDED_ID, rewritten.getUUID());

@@ -7,10 +7,13 @@ import dev.voldechse.replayframework.adapter.paper.playback.ReplayIdentityMap;
 import dev.voldechse.replayframework.adapter.paper.v26_2.packet.Paper26_2PacketCatalog;
 import dev.voldechse.replayframework.adapter.playback.PlaybackIdentityContext;
 import dev.voldechse.replayframework.format.RawPacketFrame;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import net.minecraft.world.entity.EntityType;
 
 /**
  * Version-local dispatch boundary that routes recorded frames through the
@@ -19,6 +22,7 @@ import java.util.UUID;
 public final class Paper26_2ReplayPacketRewriter {
 
     private final ReplayIdentityMap identities;
+    private final Map<Integer, EntityType<?>> recordedEntityTypes = new HashMap<>();
 
     public Paper26_2ReplayPacketRewriter(
             PlaybackIdentityContext context,
@@ -66,11 +70,31 @@ public final class Paper26_2ReplayPacketRewriter {
         return identities.mapEntityId(recordedId);
     }
 
-    void clear() {
-        identities.clear();
+    /** Records the Paper entity type needed to interpret type-dependent metadata values. */
+    public void trackEntityType(int recordedId, EntityType<?> entityType) {
+        recordedEntityTypes.put(recordedId, Objects.requireNonNull(entityType, "entityType"));
     }
 
-    void resetView() {}
+    /** Returns the recorded type of an entity whose spawn packet was replayed. */
+    public Optional<EntityType<?>> recordedEntityType(int recordedId) {
+        return Optional.ofNullable(recordedEntityTypes.get(recordedId));
+    }
+
+    /** Removes type information when the corresponding recorded entity despawns. */
+    public void forgetEntityType(int recordedId) {
+        recordedEntityTypes.remove(recordedId);
+    }
+
+    void clear() {
+        identities.clear();
+        recordedEntityTypes.clear();
+    }
+
+    void resetView() {
+        // Keep deterministic ID mappings for this playback session, but forget metadata types
+        // because the next checkpoint snapshot rebuilds the viewer's entity set from scratch.
+        recordedEntityTypes.clear();
+    }
 
     private static RewriteResult toRewriteResult(PacketRewriteResult result) {
         return switch (result.decision()) {

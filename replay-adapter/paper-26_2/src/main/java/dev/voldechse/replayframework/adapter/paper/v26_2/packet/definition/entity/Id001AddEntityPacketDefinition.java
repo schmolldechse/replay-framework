@@ -72,6 +72,7 @@ final class Id001AddEntityPacketDefinition extends RebuildingPacketDefinition<
     protected ValueRewriteResult<Value> rewrite(
             Value value,
             Paper26_2ReplayPacketRewriter context) {
+        context.trackEntityType(value.entityId(), value.entityType());
         return ValueRewriteResult.send(new Value(
                 context.mapEntityId(value.entityId()),
                 context.mapUuid(value.entityUuid()),

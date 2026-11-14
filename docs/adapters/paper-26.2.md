@@ -247,7 +247,7 @@ test status.
 | 96 | `minecraft:set_cursor_item` | Optional Slot containing the cursor ItemStack and its data components; sets the receiving player's cursor independently of a container | DROP_LOCAL | no |
 | 97 | `minecraft:set_default_spawn_position` | Dimension key, packed block position, yaw and pitch; sets that dimension's default spawn destination and compass target | SEND | yes |
 | 98 | `minecraft:set_display_objective` | VarInt display slot and objective name (empty clears it); selects a player-list, sidebar, below-name, or team-colored sidebar objective, all part of the observer's local scoreboard presentation | DROP_LOCAL | no |
-| 99 | `minecraft:set_entity_data` | Essential scene state: synchronized entity metadata | REWRITE | yes |
+| 99 | `minecraft:set_entity_data` | Target entity VarInt followed by sparse typed metadata entries ending at `0xFF`; updates that entity's synchronized appearance and state | REWRITE | yes |
 | 100 | `minecraft:set_entity_link` | Essential scene state: leash link; rewrite both entity IDs and preserve unlink sentinel 0 | REWRITE | yes |
 | 101 | `minecraft:set_entity_motion` | Essential scene state: scene presentation with playback-session identity rewriting | REWRITE | yes |
 | 102 | `minecraft:set_equipment` | Essential scene state: scene presentation with playback-session identity rewriting | REWRITE | yes |

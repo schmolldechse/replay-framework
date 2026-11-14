@@ -17,7 +17,8 @@ public final class EntityPacketDefinitions {
                     new Id056MoveEntityRotPacketDefinition(),
                     new Id057MoveVehiclePacketDefinition(),
                     new Id077RemoveEntitiesPacketDefinition(),
-                    new Id083RotateHeadPacketDefinition());
+                    new Id083RotateHeadPacketDefinition(),
+                    new Id099SetEntityDataPacketDefinition());
 
     private EntityPacketDefinitions() {}
 

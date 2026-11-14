@@ -36,9 +36,11 @@ final class Id077RemoveEntitiesPacketDefinition extends RebuildingPacketDefiniti
     protected ValueRewriteResult<Value> rewrite(
             Value value,
             Paper26_2ReplayPacketRewriter context) {
-        return ValueRewriteResult.send(new Value(value.entityIds().stream()
+        List<Integer> rewrittenIds = value.entityIds().stream()
                 .map(context::mapEntityId)
-                .toList()));
+                .toList();
+        value.entityIds().forEach(context::forgetEntityType);
+        return ValueRewriteResult.send(new Value(rewrittenIds));
     }
 
     @Override

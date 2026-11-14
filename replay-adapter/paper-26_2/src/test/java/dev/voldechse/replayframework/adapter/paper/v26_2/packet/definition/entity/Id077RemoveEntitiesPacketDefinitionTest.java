@@ -34,6 +34,7 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientboundRemoveEntitiesPacket;
 import net.minecraft.network.protocol.game.GameProtocols;
+import net.minecraft.world.entity.EntityTypes;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -100,6 +101,7 @@ final class Id077RemoveEntitiesPacketDefinitionTest {
     void mapsEveryTargetIdAndPreservesListOrderDuplicatesAndUnusualValues() {
         var definition = new Id077RemoveEntitiesPacketDefinition();
         var context = rewriter();
+        context.trackEntityType(7, EntityTypes.FROG);
         int[] recordedIds = {
             Integer.MIN_VALUE, -1, 7, 7, 128, Integer.MAX_VALUE
         };
@@ -116,6 +118,7 @@ final class Id077RemoveEntitiesPacketDefinitionTest {
         assertEquals(expectedIds, rewritten.entityIds());
         assertEquals(expectedIds, entityIds(definition.rebuild(rewritten)));
         assertEquals(expectedIds.get(2), expectedIds.get(3));
+        assertTrue(context.recordedEntityType(7).isEmpty());
         for (int index = 0; index < recordedIds.length; index++) {
             assertNotEquals(recordedIds[index], expectedIds.get(index));
         }

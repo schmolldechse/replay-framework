@@ -1,6 +1,7 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.playback;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -83,6 +84,23 @@ final class Paper26_2ReplayPacketRewriterTest {
                 rewriter.encode(
                                 rewrittenAnimation, animationDescriptor, animationCodec)
                         .packetId());
+    }
+
+    @Test
+    void viewResetClearsTrackedEntityTypesBeforeTheNextSnapshotIsReplayed() {
+        Paper26_2ReplayPacketRewriter rewriter = new Paper26_2ReplayPacketRewriter(
+                new PlaybackIdentityContext(OBSERVER_ID, SESSION_ID),
+                Set.of(OBSERVER_ID),
+                Set.of(1000));
+        EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.getValue(
+                Identifier.parse("minecraft:armor_stand"));
+        int mappedId = rewriter.mapEntityId(17);
+        rewriter.trackEntityType(17, type);
+
+        rewriter.resetView();
+
+        assertFalse(rewriter.recordedEntityType(17).isPresent());
+        assertEquals(mappedId, rewriter.mapEntityId(17));
     }
 
     @Test
