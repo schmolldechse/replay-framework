@@ -96,7 +96,8 @@ class PacketCoverageTest {
             stateful(0x4C, "recipe_book_settings", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
             stateful(0x4D, "remove_entities", PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES),
             stateful(0x4E, "remove_mob_effect", PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES),
-            stateful(0x4F, "reset_score", PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
+            stateful(0x4F, "reset_score", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
+            control(0x50, "resource_pack_pop"));
 
     private static final Map<String, ExpectedPacket> EXPECTED_BY_TYPE = IMPLEMENTED_PACKETS.stream()
             .collect(Collectors.toUnmodifiableMap(

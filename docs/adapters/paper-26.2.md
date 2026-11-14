@@ -228,7 +228,7 @@ test status.
 | 77 | `minecraft:remove_entities` | Ordered list of entity IDs to destroy in the client scene; target IDs are translated into the playback identity namespace | REWRITE | yes |
 | 78 | `minecraft:remove_mob_effect` | Removes one registry-backed status effect from the target entity; target entity identity is translated into the playback identity namespace | REWRITE | yes |
 | 79 | `minecraft:reset_score` | Owner string with optional objective: remove that score, or every score for the owner when absent; recorded-viewer scoreboard state | DROP_LOCAL to preserve the observer's scoreboard | no |
-| 80 | `minecraft:resource_pack_pop` | Transport, connection, or server control; never replay into an established connection | BLOCKED | no |
+| 80 | `minecraft:resource_pack_pop` | Optional UUID of a server-provided resource pack to remove; if absent, removes all server-provided packs and changes the receiving client's resource assets | BLOCKED | no |
 | 81 | `minecraft:resource_pack_push` | Transport, connection, or server control; never replay into an established connection | BLOCKED | no |
 | 82 | `minecraft:respawn` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
 | 83 | `minecraft:rotate_head` | Essential scene state: scene presentation with playback-session identity rewriting | REWRITE | yes |

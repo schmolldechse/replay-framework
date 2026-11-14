@@ -18,7 +18,8 @@ public final class ConnectionPacketDefinitions {
                     new Id044KeepAlivePacketDefinition(),
                     new Id049LoginPacketDefinition(),
                     new Id061PingPacketDefinition(),
-                    new Id062PongResponsePacketDefinition());
+                    new Id062PongResponsePacketDefinition(),
+                    new Id080ResourcePackPopPacketDefinition());
 
     private ConnectionPacketDefinitions() {}
 
