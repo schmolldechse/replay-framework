@@ -25,7 +25,8 @@ public final class ConnectionPacketDefinitions {
                     new Id120StoreCookiePacketDefinition(),
                     new Id127TickingStatePacketDefinition(),
                     new Id128TickingStepPacketDefinition(),
-                    new Id129TransferPacketDefinition());
+                    new Id129TransferPacketDefinition(),
+                    new Id136CustomReportDetailsPacketDefinition());
 
     private ConnectionPacketDefinitions() {}
 
