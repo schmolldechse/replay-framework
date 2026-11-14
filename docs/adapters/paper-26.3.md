@@ -285,7 +285,7 @@ test status.
 | 133 | `minecraft:update_advancements` | Reset flag, added advancement definitions, removed advancement identifiers, per-advancement criterion progress with completion times, and advancement-screen visibility; belongs to the recorded player's progression UI | DROP_LOCAL | no |
 | 134 | `minecraft:update_attributes` | Entity ID VarInt followed by at most 128 ordered attribute snapshots; each carries a registry attribute, base-value double, and modifier list (identifier, amount double, operation). Rewrites the entity identity and restores entity attributes in checkpoints | REWRITE | yes |
 | 135 | `minecraft:update_mob_effect` | Entity ID VarInt, registry-backed effect, amplifier and duration VarInts, plus ambient, particle, icon, and blend flags. Active effects belong to their entity and are restored in running-effect checkpoints | REWRITE | yes |
-| 136 | `minecraft:update_recipes` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
+| 136 | `minecraft:update_recipes` | Recipe-property-set map (registry keys and item sets) plus stonecutter input ingredients and slot-display options; recipe objects are omitted from the wire display entries. Connection-local recipe synchronization; drop for the neutral observer | DROP_LOCAL | no |
 | 137 | `minecraft:update_tags` | Registry tags; requires compatible server and datapack registries | SEND | yes |
 | 138 | `minecraft:projectile_power` | Scene presentation with playback-session identity rewriting | REWRITE | yes |
 | 139 | `minecraft:custom_report_details` | Transport, connection, or server control; never replay into an established connection | BLOCKED | no |
