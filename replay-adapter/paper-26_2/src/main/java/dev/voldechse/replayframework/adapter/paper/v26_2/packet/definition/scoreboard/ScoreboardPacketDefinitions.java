@@ -8,7 +8,9 @@ import java.util.List;
 public final class ScoreboardPacketDefinitions {
 
     private static final List<PacketDefinition<Paper26_2ReplayPacketRewriter>> DEFINITIONS =
-            List.of(new Id079ResetScorePacketDefinition());
+            List.of(
+                    new Id079ResetScorePacketDefinition(),
+                    new Id098SetDisplayObjectivePacketDefinition());
 
     private ScoreboardPacketDefinitions() {}
 
