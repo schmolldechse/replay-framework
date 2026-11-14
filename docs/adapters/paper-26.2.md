@@ -253,7 +253,7 @@ test status.
 | 102 | `minecraft:set_equipment` | Updates one or more equipment slots on an entity; ordered optional item stacks preserve item components and empty stacks clear slots | REWRITE | yes |
 | 103 | `minecraft:set_experience` | Receiver-local experience HUD: progress Float, level VarInt, and total-experience VarInt; retain in recordings but do not replace the observer's own XP state | DROP_LOCAL | no |
 | 104 | `minecraft:set_health` | Receiver-local vitals: health Float, food VarInt, and saturation Float; retain for recording completeness but leave the observer's own health and hunger state unchanged | DROP_LOCAL | no |
-| 105 | `minecraft:set_held_slot` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
+| 105 | `minecraft:set_held_slot` | Receiver-local hotbar selection as a VarInt (slot 0–8); retain in recordings but do not change the observer's selected item | DROP_LOCAL | no |
 | 106 | `minecraft:set_objective` | Objective name and method byte (add, remove, change); add/change also carry display text, integer/hearts render type, and optional blank/styled/fixed score-number format; mutates the recorded viewer's local scoreboard | DROP_LOCAL | no |
 | 107 | `minecraft:set_passengers` | Essential scene state: vehicle and passengers; rewrite every entity ID | REWRITE | yes |
 | 108 | `minecraft:set_player_inventory` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
