@@ -20,7 +20,8 @@ public final class EffectPacketDefinitions {
                     new Id078RemoveMobEffectPacketDefinition(),
                     new Id116SoundEntityPacketDefinition(),
                     new Id117SoundPacketDefinition(),
-                    new Id119StopSoundPacketDefinition());
+                    new Id119StopSoundPacketDefinition(),
+                    new Id124TakeItemEntityPacketDefinition());
 
     private EffectPacketDefinitions() {}
 
