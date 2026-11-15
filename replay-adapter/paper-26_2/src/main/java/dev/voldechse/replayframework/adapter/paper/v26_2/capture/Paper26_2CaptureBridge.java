@@ -66,6 +66,9 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
         @Override
         public void onUserDisconnect(UserDisconnectEvent event) {
             UUID connectionId = event.getUser().getUUID();
+            if (connectionId == null) {
+                return;
+            }
             captureState.removeConnection(connectionId);
             if (playerStateCapture != null) {
                 playerStateCapture.remove(connectionId);
