@@ -27,7 +27,12 @@ public record ReplayManifest(
         long durationNanos,
         List<ArtifactFile> files) {
 
-    public static final int CURRENT_FORMAT_REVISION = 3;
+    /**
+     * Must equal the adapter format revision: recording, finalization and
+     * playback all compare the adapter descriptor revision with this value.
+     * Revision 4 is the packet-definition pipeline payload format.
+     */
+    public static final int CURRENT_FORMAT_REVISION = 4;
 
     /** Validates and canonicalizes the replay manifest. */
     public ReplayManifest {

@@ -38,6 +38,9 @@ import java.util.concurrent.Executor;
  * transition.</p>
  */
 final class ReplayFinalizer implements RecordingCoordinator.FinalizationHandler {
+    private static final System.Logger LOGGER =
+            System.getLogger(ReplayFinalizer.class.getName());
+
 
     private final ReplayRepository replayRepository;
     private final ReplayArtifactPublisher artifactPublisher;
@@ -399,6 +402,7 @@ final class ReplayFinalizer implements RecordingCoordinator.FinalizationHandler 
             String stage,
             Throwable cause) {
         String description = diagnostic(session, stage, cause);
+        LOGGER.log(System.Logger.Level.ERROR, description + ", code=" + code, cause);
         transitionToFailed(session.replayId(), code, description)
                 .whenCompleteAsync((ignored, transitionFailure) -> {
                     session.markFinalizerFailed(code, description);

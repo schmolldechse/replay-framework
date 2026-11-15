@@ -104,7 +104,7 @@ class ReplayManifestCodecTest {
                 + "\"adapterId\":\"paper-26.2\","
                 + "\"protocolVersion\":775,"
                 + "\"registryFingerprint\":\"registry\","
-                + "\"formatRevision\":3,"
+                + "\"formatRevision\":4,"
                 + "\"durationNanos\":0,"
                 + "\"files\":[]"
                 + "}";
@@ -112,7 +112,7 @@ class ReplayManifestCodecTest {
         assertEquals(validJson, new String(codec.encode(codec.decode(validJson.getBytes(StandardCharsets.UTF_8))), StandardCharsets.UTF_8));
         assertThrows(
                 CorruptReplayArtifactException.class,
-                () -> codec.decode(validJson.replace("\"formatRevision\":3", "\"formatRevision\":2")
+                () -> codec.decode(validJson.replace("\"formatRevision\":4", "\"formatRevision\":3")
                         .getBytes(StandardCharsets.UTF_8)));
         assertThrows(
                 CorruptReplayArtifactException.class,
