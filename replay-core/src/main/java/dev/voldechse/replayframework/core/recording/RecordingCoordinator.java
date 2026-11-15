@@ -43,6 +43,9 @@ import java.util.function.Function;
  * packets until the catalog transition to RECORDING succeeds.</p>
  */
 public final class RecordingCoordinator {
+    private static final System.Logger LOGGER =
+            System.getLogger(RecordingCoordinator.class.getName());
+
     private final ReplayAdapter adapter;
     private final CaptureRouter captureRouter;
     private final ReplayRepository replayRepository;
@@ -259,6 +262,11 @@ public final class RecordingCoordinator {
     void onAdapterFailure(Throwable failure) {
         Objects.requireNonNull(failure, "failure");
         adapterFailed.set(true);
+        // The catalog only stores the exception class; the console is the one
+        // place where the full cause of a capture-integrity failure is visible.
+        LOGGER.log(System.Logger.Level.ERROR,
+                "Replay capture adapter failed; active recordings fail and new ones are rejected",
+                failure);
         for (DefaultRecordingSession session : sessions.values()) {
             failSession(session, session.status(), ReplayFailureCode.ADAPTER_ERROR,
                     "adapter capture failure", failure);
@@ -706,6 +714,7 @@ public final class RecordingCoordinator {
         if (!session.markWriterFailed(code, description)) {
             return;
         }
+        LOGGER.log(System.Logger.Level.ERROR, description + ", code=" + code, cause);
         publishFailure(session, expected, code);
         sessions.remove(session.id(), session);
         diagnostics.recordingFinished(session.id());
@@ -729,6 +738,7 @@ public final class RecordingCoordinator {
         if (!session.markFailed(code, description)) {
             return;
         }
+        LOGGER.log(System.Logger.Level.ERROR, description + ", code=" + code, cause);
         publishFailure(session, expectedStatus, code);
         sessions.remove(session.id(), session);
         diagnostics.recordingFinished(session.id());

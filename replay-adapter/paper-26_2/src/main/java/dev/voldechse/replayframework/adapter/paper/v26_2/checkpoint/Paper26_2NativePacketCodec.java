@@ -147,10 +147,14 @@ public final class Paper26_2NativePacketCodec
                         .orElseThrow(() -> incompatible(
                                 "synthetic state packet ID is not registered: " + packetId,
                                 null));
+                // Sampled self-entity state is STATEFUL (position, head rotation,
+                // equipment); the sampled arm swing is the EPHEMERAL animate packet.
                 if (!descriptor.replayable()
-                        || descriptor.disposition() != PacketDisposition.STATEFUL) {
+                        || (descriptor.disposition() != PacketDisposition.STATEFUL
+                                && descriptor.disposition() != PacketDisposition.EPHEMERAL)) {
                     throw incompatible(
-                            "synthetic packet is not replayable state: " + descriptor.typeName(),
+                            "synthetic packet is not replayable entity state: "
+                                    + descriptor.typeName(),
                             null);
                 }
                 byte[] payload = new byte[buffer.readableBytes()];

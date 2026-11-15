@@ -87,6 +87,38 @@ final class Paper26_2NativePacketCodecTest {
     }
 
     @Test
+    void encodesSampledArmSwingAsEphemeralAnimateAndRejectsControlPackets() {
+        Paper26_2PacketRegistry registry = Paper26_2PacketRegistry.discover();
+        Paper26_2NativePacketCodec codec = Paper26_2NativePacketCodec.forTesting(
+                registry,
+                GameProtocols.CLIENTBOUND_TEMPLATE.bind(
+                        net.minecraft.network.RegistryFriendlyByteBuf.decorator(RegistryAccess.EMPTY)));
+        var buffer = new net.minecraft.network.FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        final net.minecraft.network.protocol.game.ClientboundAnimatePacket swing;
+        try {
+            buffer.writeVarInt(42);
+            buffer.writeByte(
+                    net.minecraft.network.protocol.game.ClientboundAnimatePacket.SWING_MAIN_HAND);
+            swing = net.minecraft.network.protocol.game.ClientboundAnimatePacket.STREAM_CODEC
+                    .decode(buffer);
+        } finally {
+            buffer.release();
+        }
+
+        var encoded = codec.encodeState(swing);
+
+        assertEquals(0x02, encoded.packetId());
+        assertEquals("play.clientbound.minecraft:animate", encoded.descriptor().typeName());
+        assertEquals(
+                dev.voldechse.replayframework.adapter.PacketDisposition.EPHEMERAL,
+                encoded.descriptor().disposition());
+        // CONFIGURABLE chat is never sampled entity state.
+        assertThrows(IncompatibleAdapterException.class, () -> codec.encodeState(
+                new net.minecraft.network.protocol.game.ClientboundSystemChatPacket(
+                        net.minecraft.network.chat.Component.literal("chat"), false)));
+    }
+
+    @Test
     void rejectsDescriptorMismatchAndClosedCodec() {
         Paper26_2PacketRegistry registry = Paper26_2PacketRegistry.discover();
         Paper26_2NativePacketCodec codec = Paper26_2NativePacketCodec.forTesting(
