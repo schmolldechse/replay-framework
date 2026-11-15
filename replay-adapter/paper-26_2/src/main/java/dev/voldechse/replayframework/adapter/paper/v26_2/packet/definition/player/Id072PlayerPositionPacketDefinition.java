@@ -27,4 +27,5 @@ final class Id072PlayerPositionPacketDefinition
                 PacketClassification.stateful(
                         PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
     }
+
 }

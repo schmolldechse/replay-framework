@@ -1,13 +1,17 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.definition.entity;
 
 import com.mojang.datafixers.util.Pair;
+import dev.voldechse.replayframework.adapter.CaptureContext;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.paper.packet.PacketClassification;
+import dev.voldechse.replayframework.adapter.paper.packet.PacketCaptureState;
 import dev.voldechse.replayframework.adapter.paper.packet.RebuildingPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.packet.ValueRewriteResult;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
+import dev.voldechse.replayframework.adapter.paper.v26_2.packet.Paper26_2CaptureContexts;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 import net.minecraft.network.protocol.game.ClientboundSetEquipmentPacket;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ItemStack;
@@ -34,6 +38,40 @@ final class Id102SetEquipmentPacketDefinition extends RebuildingPacketDefinition
                 PacketClassification.stateful(
                         PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES),
                 ClientboundSetEquipmentPacket.class);
+    }
+
+    @Override
+    public java.util.Optional<
+            dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily> checkpointFamily() {
+        return java.util.Optional.of(
+                dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily.EQUIPMENT);
+    }
+
+
+    @Override
+    public boolean deduplicateRecipientCopies() {
+        return true;
+    }
+
+    @Override
+    public CaptureContext captureContext(
+            Object decodedPacket,
+            PacketDescriptor descriptor,
+            UUID connectionId,
+            PacketCaptureState state,
+            long serverTick) {
+        CaptureContext base = super.captureContext(
+                decodedPacket, descriptor, connectionId, state, serverTick);
+        return Paper26_2CaptureContexts.atEntity(
+                base, state, connectionId,
+                ClientboundSetEquipmentPacket.class.cast(decodedPacket).getEntity());
+    }
+
+    @Override
+    public boolean suppressesRecipientState(
+            Object decodedPacket, PacketCaptureState state, long serverTick) {
+        return state.equipmentIsAuthoritative(
+                ClientboundSetEquipmentPacket.class.cast(decodedPacket).getEntity());
     }
 
     @Override

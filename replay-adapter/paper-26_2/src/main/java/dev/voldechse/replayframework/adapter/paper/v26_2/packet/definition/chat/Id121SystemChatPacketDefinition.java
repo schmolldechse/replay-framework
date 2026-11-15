@@ -1,9 +1,12 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.definition.chat;
 
+import dev.voldechse.replayframework.adapter.CaptureContext;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.paper.packet.PacketClassification;
 import dev.voldechse.replayframework.adapter.paper.packet.PacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
+import dev.voldechse.replayframework.adapter.paper.packet.PacketCaptureState;
+import net.minecraft.network.protocol.game.ClientboundSystemChatPacket;
 
 /**
  * Capture-policy contract for {@code minecraft:system_chat}.
@@ -22,5 +25,20 @@ final class Id121SystemChatPacketDefinition
                 PACKET_ID,
                 IDENTIFIER,
                 PacketClassification.configurable(PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
+    }
+
+    @Override
+    public CaptureContext captureContext(
+            Object decodedPacket,
+            PacketDescriptor descriptor,
+            java.util.UUID connectionId,
+            PacketCaptureState state,
+            long serverTick) {
+        CaptureContext base = super.captureContext(
+                decodedPacket, descriptor, connectionId, state, serverTick);
+        String text = ClientboundSystemChatPacket.class.cast(decodedPacket)
+                .content().getString();
+        return dev.voldechse.replayframework.adapter.paper.v26_2.packet.Paper26_2CaptureContexts
+                .withChat(base, text);
     }
 }

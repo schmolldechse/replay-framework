@@ -29,6 +29,13 @@ final class Id055MoveMinecartAlongTrackPacketDefinition extends RebuildingPacket
     }
 
     @Override
+    public java.util.Optional<
+            dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily> checkpointFamily() {
+        return java.util.Optional.of(
+                dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily.ENTITY_METADATA);
+    }
+
+    @Override
     protected Value read(ClientboundMoveMinecartPacket packet) {
         return new Value(packet.entityId(), packet.lerpSteps());
     }

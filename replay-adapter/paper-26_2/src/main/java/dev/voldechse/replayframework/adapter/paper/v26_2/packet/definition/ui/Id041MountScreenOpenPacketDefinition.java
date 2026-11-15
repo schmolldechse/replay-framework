@@ -27,4 +27,5 @@ final class Id041MountScreenOpenPacketDefinition
                 IDENTIFIER,
                 PacketClassification.stateful(PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
     }
+
 }

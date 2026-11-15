@@ -26,4 +26,5 @@ final class Id064PlayerAbilitiesPacketDefinition
                 PacketClassification.stateful(
                         PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
     }
+
 }

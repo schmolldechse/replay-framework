@@ -69,10 +69,19 @@ public final class Paper26_2SnapshotProvider
     public Paper26_2SnapshotProvider(
             JavaPlugin owner,
             Supplier<CheckpointEncoder.CapturePoint> capturePointSource) {
+        this(owner, capturePointSource, (entityId, worldKey, x, y, z) -> {});
+    }
+
+    /** Creates a provider that seeds packet-relative positions from checkpoint entities. */
+    public Paper26_2SnapshotProvider(
+            JavaPlugin owner,
+            Supplier<CheckpointEncoder.CapturePoint> capturePointSource,
+            EntityPositionSeeder entityPositionSeeder) {
         Objects.requireNonNull(owner, "owner");
         Server server = Objects.requireNonNull(owner.getServer(), "owner.server");
         this.scheduler = new BukkitMainThreadScheduler(owner, server);
-        this.worldAccess = new LivePaper26_2WorldAccess(server);
+        this.worldAccess = new LivePaper26_2WorldAccess(
+                server, Objects.requireNonNull(entityPositionSeeder, "entityPositionSeeder"));
         this.capturePointSource = capturePointSource == null
                 ? () -> new CheckpointEncoder.CapturePoint(
                         System.nanoTime(), server.getCurrentTick(), Integer.MAX_VALUE)
@@ -292,6 +301,11 @@ public final class Paper26_2SnapshotProvider
                 List<ScopedChunk> chunks);
     }
 
+    @FunctionalInterface
+    public interface EntityPositionSeeder {
+        void seed(int entityId, String worldKey, double x, double y, double z);
+    }
+
     record ChunkCoordinate(int x, int z) {
         private static final Comparator<ChunkCoordinate> ORDER = Comparator
                 .comparingInt(ChunkCoordinate::x)
@@ -363,9 +377,11 @@ public final class Paper26_2SnapshotProvider
 
     private static final class LivePaper26_2WorldAccess implements Paper26_2WorldAccess {
         private final Server server;
+        private final EntityPositionSeeder entityPositionSeeder;
 
-        private LivePaper26_2WorldAccess(Server server) {
+        private LivePaper26_2WorldAccess(Server server, EntityPositionSeeder entityPositionSeeder) {
             this.server = server;
+            this.entityPositionSeeder = entityPositionSeeder;
         }
 
         @Override
@@ -487,6 +503,8 @@ public final class Paper26_2SnapshotProvider
                 if (!chunks.contains(coordinate)) {
                     continue;
                 }
+                entityPositionSeeder.seed(
+                        entity.getId(), worldKey, entity.getX(), entity.getY(), entity.getZ());
                 if (entity instanceof ServerPlayer player) {
                     players.add(player);
                 }

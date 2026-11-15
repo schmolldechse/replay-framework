@@ -1,15 +1,19 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.definition.effect;
 
+import dev.voldechse.replayframework.adapter.CaptureContext;
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.paper.packet.PacketClassification;
+import dev.voldechse.replayframework.adapter.paper.packet.PacketCaptureState;
 import dev.voldechse.replayframework.adapter.paper.packet.RebuildingPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.packet.ValueRewriteResult;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
+import dev.voldechse.replayframework.adapter.paper.v26_2.packet.Paper26_2CaptureContexts;
 import io.netty.buffer.Unpooled;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.protocol.game.ClientboundEntityEventPacket;
 import net.minecraft.world.entity.EntityEvent;
+import java.util.UUID;
 
 /**
  * Complete read/rewrite/rebuild contract for {@code minecraft:entity_event}.
@@ -36,6 +40,33 @@ final class Id034EntityEventPacketDefinition extends RebuildingPacketDefinition<
                 PacketClassification.ephemeral(
                         PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES),
                 ClientboundEntityEventPacket.class);
+    }
+
+
+    @Override
+    public boolean deduplicateRecipientCopies() {
+        return true;
+    }
+
+    @Override
+    public CaptureContext captureContext(
+            Object decodedPacket,
+            PacketDescriptor descriptor,
+            UUID connectionId,
+            PacketCaptureState state,
+            long serverTick) {
+        CaptureContext base = super.captureContext(
+                decodedPacket, descriptor, connectionId, state, serverTick);
+        return Paper26_2CaptureContexts.atEntity(
+                base, state, connectionId,
+                read(ClientboundEntityEventPacket.class.cast(decodedPacket)).entityId());
+    }
+
+    @Override
+    public boolean suppressesRecipientState(
+            Object decodedPacket, PacketCaptureState state, long serverTick) {
+        Value value = read(ClientboundEntityEventPacket.class.cast(decodedPacket));
+        return value.eventStatus() == 55 && state.equipmentIsAuthoritative(value.entityId());
     }
 
     @Override

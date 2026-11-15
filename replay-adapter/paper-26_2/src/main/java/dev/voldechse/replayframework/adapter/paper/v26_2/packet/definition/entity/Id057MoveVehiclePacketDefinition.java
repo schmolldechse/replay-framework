@@ -25,4 +25,5 @@ final class Id057MoveVehiclePacketDefinition
                 PacketClassification.ephemeral(
                         PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
     }
+
 }

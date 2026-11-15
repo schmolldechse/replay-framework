@@ -29,4 +29,5 @@ final class Id020ContainerSetSlotPacketDefinition
                 PacketClassification.stateful(
                         PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
     }
+
 }

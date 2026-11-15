@@ -30,6 +30,13 @@ final class Id107SetPassengersPacketDefinition extends RebuildingPacketDefinitio
     }
 
     @Override
+    public java.util.Optional<
+            dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily> checkpointFamily() {
+        return java.util.Optional.of(
+                dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily.PASSENGERS);
+    }
+
+    @Override
     protected Value read(ClientboundSetPassengersPacket packet) {
         return new Value(packet.getVehicle(), packet.getPassengers());
     }

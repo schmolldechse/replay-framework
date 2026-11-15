@@ -1,10 +1,12 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.definition.world;
 
+import dev.voldechse.replayframework.adapter.CaptureContext;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.paper.packet.PacketClassification;
 import dev.voldechse.replayframework.adapter.paper.packet.RebuildingPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.packet.ValueRewriteResult;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
+import dev.voldechse.replayframework.adapter.paper.v26_2.packet.Paper26_2CaptureContexts;
 import java.util.Objects;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -33,6 +35,29 @@ final class Id006BlockEntityDataPacketDefinition extends RebuildingPacketDefinit
                 IDENTIFIER,
                 PacketClassification.stateful(PacketDescriptor.PlaybackScope.SAFE),
                 ClientboundBlockEntityDataPacket.class);
+    }
+
+    @Override
+    public java.util.Optional<
+            dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily> checkpointFamily() {
+        return java.util.Optional.of(
+                dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily.BLOCK_ENTITY);
+    }
+
+    @Override
+    public CaptureContext captureContext(
+            Object decodedPacket,
+            PacketDescriptor descriptor,
+            java.util.UUID connectionId,
+            dev.voldechse.replayframework.adapter.paper.packet.PacketCaptureState state,
+            long serverTick) {
+        CaptureContext base = super.captureContext(
+                decodedPacket, descriptor, connectionId, state, serverTick);
+        return Paper26_2CaptureContexts.atBlockPosition(
+                base, new dev.voldechse.replayframework.api.recording.BlockPosition(
+                        ClientboundBlockEntityDataPacket.class.cast(decodedPacket).getPos().getX(),
+                        ClientboundBlockEntityDataPacket.class.cast(decodedPacket).getPos().getY(),
+                        ClientboundBlockEntityDataPacket.class.cast(decodedPacket).getPos().getZ()));
     }
 
     @Override

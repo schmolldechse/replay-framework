@@ -328,117 +328,15 @@ public final class Paper26_2CheckpointEncoder implements CheckpointEncoder {
         }
     }
 
-    /**
-     * Returns the checkpoint family for one stable Paper descriptor name.
-     *
-     * <p>This switch is deliberately explicit. A newly classified stateful
-     * packet must fail adapter activation until a safe generator is assigned.</p>
-     */
+    /** Returns the checkpoint family declared by the matching packet definition. */
     public static CheckpointPacketFamily familyFor(String descriptorTypeName) {
         Objects.requireNonNull(descriptorTypeName, "descriptorTypeName");
-        return switch (descriptorTypeName) {
-            case "play.clientbound.minecraft:login",
-                    "play.clientbound.minecraft:respawn",
-                    "play.clientbound.minecraft:set_default_spawn_position" ->
-                    CheckpointPacketFamily.DIMENSION_SPAWN;
-
-            case "play.clientbound.minecraft:chunks_biomes",
-                    "play.clientbound.minecraft:level_chunk_with_light",
-                    "play.clientbound.minecraft:light_update",
-                    "play.clientbound.minecraft:forget_level_chunk" ->
-                    CheckpointPacketFamily.CHUNK_LIGHT;
-
-            case "play.clientbound.minecraft:block_entity_data",
-                    "play.clientbound.minecraft:block_update",
-                    "play.clientbound.minecraft:section_blocks_update" ->
-                    CheckpointPacketFamily.BLOCK_ENTITY;
-
-            case "play.clientbound.minecraft:change_difficulty",
-                    "play.clientbound.minecraft:game_rule_values",
-                    "play.clientbound.minecraft:initialize_border",
-                    "play.clientbound.minecraft:set_border_center",
-                    "play.clientbound.minecraft:set_border_lerp_size",
-                    "play.clientbound.minecraft:set_border_size",
-                    "play.clientbound.minecraft:set_border_warning_delay",
-                    "play.clientbound.minecraft:set_border_warning_distance",
-                    "play.clientbound.minecraft:set_time",
-                    "play.clientbound.minecraft:commands",
-                    "play.clientbound.minecraft:custom_chat_completions",
-                    "play.clientbound.minecraft:merchant_offers",
-                    "play.clientbound.minecraft:mount_screen_open",
-                    "play.clientbound.minecraft:open_screen",
-                    "play.clientbound.minecraft:place_ghost_recipe",
-                    "play.clientbound.minecraft:recipe_book_add",
-                    "play.clientbound.minecraft:recipe_book_remove",
-                    "play.clientbound.minecraft:recipe_book_settings",
-                    "play.clientbound.minecraft:set_cursor_item",
-                    "play.clientbound.minecraft:set_held_slot",
-                    "play.clientbound.minecraft:set_player_inventory",
-                    "play.clientbound.minecraft:player_info_remove",
-                    "play.clientbound.minecraft:player_info_update",
-                    "play.clientbound.minecraft:set_objective",
-                    "play.clientbound.minecraft:set_display_objective",
-                    "play.clientbound.minecraft:set_player_team",
-                    "play.clientbound.minecraft:set_score",
-                    "play.clientbound.minecraft:reset_score",
-                    "play.clientbound.minecraft:boss_event",
-                    "play.clientbound.minecraft:tab_list",
-                    "play.clientbound.minecraft:update_advancements",
-                    "play.clientbound.minecraft:update_recipes",
-                    "play.clientbound.minecraft:update_tags",
-                    "play.clientbound.minecraft:map_item_data",
-                    "play.clientbound.minecraft:set_chunk_cache_center",
-                    "play.clientbound.minecraft:set_chunk_cache_radius",
-                    "play.clientbound.minecraft:set_simulation_distance",
-                    "play.clientbound.minecraft:award_stats" ->
-                    CheckpointPacketFamily.GLOBAL_STATE;
-
-            case "play.clientbound.minecraft:add_entity" ->
-                    CheckpointPacketFamily.ENTITY_SPAWN;
-
-            case "play.clientbound.minecraft:entity_position_sync",
-                    "play.clientbound.minecraft:move_entity_pos",
-                    "play.clientbound.minecraft:move_entity_pos_rot",
-                    "play.clientbound.minecraft:move_entity_rot",
-                    "play.clientbound.minecraft:move_minecart_along_track",
-                    "play.clientbound.minecraft:move_vehicle",
-                    "play.clientbound.minecraft:remove_entities",
-                    "play.clientbound.minecraft:rotate_head",
-                    "play.clientbound.minecraft:set_camera",
-                    "play.clientbound.minecraft:set_entity_data",
-                    "play.clientbound.minecraft:set_entity_motion",
-                    "play.clientbound.minecraft:set_experience",
-                    "play.clientbound.minecraft:set_health",
-                    "play.clientbound.minecraft:teleport_entity",
-                    "play.clientbound.minecraft:update_attributes",
-                    "play.clientbound.minecraft:projectile_power",
-                    "play.clientbound.minecraft:player_abilities",
-                    "play.clientbound.minecraft:player_position",
-                    "play.clientbound.minecraft:player_rotation",
-                    "play.clientbound.minecraft:cooldown",
-                    "play.clientbound.minecraft:container_close",
-                    "play.clientbound.minecraft:container_set_content",
-                    "play.clientbound.minecraft:container_set_data",
-                    "play.clientbound.minecraft:container_set_slot" ->
-                    CheckpointPacketFamily.ENTITY_METADATA;
-
-            case "play.clientbound.minecraft:set_equipment" ->
-                    CheckpointPacketFamily.EQUIPMENT;
-
-            case "play.clientbound.minecraft:set_entity_link",
-                    "play.clientbound.minecraft:set_passengers" ->
-                    CheckpointPacketFamily.PASSENGERS;
-
-            case "play.clientbound.minecraft:update_mob_effect",
-                    "play.clientbound.minecraft:remove_mob_effect" ->
-                    CheckpointPacketFamily.RUNNING_EFFECT;
-
-            case "play.clientbound.minecraft:block_changed_ack" ->
-                    throw incompatible(
-                            "block_changed_ack is not a reconstructible checkpoint state", null);
-            default -> throw incompatible(
-                    "no checkpoint generator for descriptor " + descriptorTypeName, null);
-        };
+        var definition = dev.voldechse.replayframework.adapter.paper.v26_2.packet
+                .Paper26_2PacketCatalog.catalog().require(descriptorTypeName);
+        return definition.checkpointFamily()
+                .map(family -> CheckpointPacketFamily.valueOf(family.name()))
+                .orElseThrow(() -> incompatible(
+                        "no checkpoint family for descriptor " + descriptorTypeName, null));
     }
 
     private static IncompatibleAdapterException incompatible(String message, Throwable cause) {

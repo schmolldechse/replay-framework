@@ -28,4 +28,5 @@ final class Id051MapItemDataPacketDefinition
                 PacketClassification.stateful(
                         PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
     }
+
 }

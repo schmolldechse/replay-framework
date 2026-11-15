@@ -25,4 +25,5 @@ final class Id093SetCameraPacketDefinition
                 IDENTIFIER,
                 PacketClassification.stateful(PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
     }
+
 }

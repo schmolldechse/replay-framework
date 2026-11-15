@@ -34,6 +34,13 @@ final class Id088SetBorderCenterPacketDefinition extends RebuildingPacketDefinit
     }
 
     @Override
+    public java.util.Optional<
+            dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily> checkpointFamily() {
+        return java.util.Optional.of(
+                dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily.GLOBAL_STATE);
+    }
+
+    @Override
     protected Value read(ClientboundSetBorderCenterPacket packet) {
         return new Value(packet.getNewCenterX(), packet.getNewCenterZ());
     }

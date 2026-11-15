@@ -38,6 +38,13 @@ final class Id131UpdateAttributesPacketDefinition extends RebuildingPacketDefini
     }
 
     @Override
+    public java.util.Optional<
+            dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily> checkpointFamily() {
+        return java.util.Optional.of(
+                dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily.ENTITY_METADATA);
+    }
+
+    @Override
     protected Value read(ClientboundUpdateAttributesPacket packet) {
         return new Value(
                 packet.getEntityId(),

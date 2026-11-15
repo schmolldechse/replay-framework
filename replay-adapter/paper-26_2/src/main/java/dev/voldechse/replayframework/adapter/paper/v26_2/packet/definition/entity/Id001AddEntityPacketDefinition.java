@@ -1,14 +1,19 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.definition.entity;
 
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
+import dev.voldechse.replayframework.adapter.CaptureContext;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.paper.packet.PacketClassification;
+import dev.voldechse.replayframework.adapter.paper.packet.PacketCaptureState;
 import dev.voldechse.replayframework.adapter.paper.packet.RebuildingPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.packet.ValueRewriteResult;
+import dev.voldechse.replayframework.adapter.paper.v26_2.packet.Paper26_2CaptureContexts;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.Optional;
+import net.kyori.adventure.key.Key;
 import net.minecraft.network.protocol.game.ClientboundAddEntityPacket;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EntityTypes;
@@ -50,6 +55,37 @@ final class Id001AddEntityPacketDefinition extends RebuildingPacketDefinition<
                 PacketClassification.stateful(
                         PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES),
                 ClientboundAddEntityPacket.class);
+    }
+
+    @Override
+    public java.util.Optional<
+            dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily> checkpointFamily() {
+        return java.util.Optional.of(
+                dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily.ENTITY_SPAWN);
+    }
+
+
+    @Override
+    public boolean deduplicateRecipientCopies() {
+        return true;
+    }
+
+    @Override
+    public CaptureContext captureContext(
+            Object decodedPacket,
+            PacketDescriptor descriptor,
+            UUID connectionId,
+            PacketCaptureState state,
+            long serverTick) {
+        CaptureContext base = super.captureContext(
+                decodedPacket, descriptor, connectionId, state, serverTick);
+        Value value = read(ClientboundAddEntityPacket.class.cast(decodedPacket));
+        Optional<Key> world = base.world();
+        world.ifPresent(key -> state.entityPosition(
+                connectionId, value.entityId(), key.toString(), value.x(), value.y(), value.z()));
+        return world.<CaptureContext>map(key -> Paper26_2CaptureContexts.atPosition(
+                        base, key, value.x(), value.y(), value.z()))
+                .orElse(base);
     }
 
     @Override

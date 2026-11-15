@@ -26,4 +26,5 @@ final class Id104SetHealthPacketDefinition
                 PacketClassification.stateful(
                         PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
     }
+
 }

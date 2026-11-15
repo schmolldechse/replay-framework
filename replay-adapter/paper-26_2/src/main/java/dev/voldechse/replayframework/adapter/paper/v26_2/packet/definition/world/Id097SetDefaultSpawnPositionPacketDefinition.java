@@ -33,6 +33,13 @@ final class Id097SetDefaultSpawnPositionPacketDefinition extends RebuildingPacke
     }
 
     @Override
+    public java.util.Optional<
+            dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily> checkpointFamily() {
+        return java.util.Optional.of(
+                dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily.DIMENSION_SPAWN);
+    }
+
+    @Override
     protected Value read(ClientboundSetDefaultSpawnPositionPacket packet) {
         return new Value(packet.respawnData());
     }

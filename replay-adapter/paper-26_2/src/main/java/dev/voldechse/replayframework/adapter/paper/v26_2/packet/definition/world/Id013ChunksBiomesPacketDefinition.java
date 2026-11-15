@@ -39,6 +39,13 @@ final class Id013ChunksBiomesPacketDefinition extends RebuildingPacketDefinition
     }
 
     @Override
+    public java.util.Optional<
+            dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily> checkpointFamily() {
+        return java.util.Optional.of(
+                dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily.CHUNK_LIGHT);
+    }
+
+    @Override
     protected Value read(ClientboundChunksBiomesPacket packet) {
         return new Value(packet.chunkBiomeData().stream()
                 .map(chunk -> new ChunkBiomeValue(chunk.pos(), chunk.buffer()))

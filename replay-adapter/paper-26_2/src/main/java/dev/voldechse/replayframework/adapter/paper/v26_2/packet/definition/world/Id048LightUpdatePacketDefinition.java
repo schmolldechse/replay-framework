@@ -40,6 +40,13 @@ final class Id048LightUpdatePacketDefinition extends RebuildingPacketDefinition<
     }
 
     @Override
+    public java.util.Optional<
+            dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily> checkpointFamily() {
+        return java.util.Optional.of(
+                dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily.CHUNK_LIGHT);
+    }
+
+    @Override
     protected Value read(ClientboundLightUpdatePacket packet) {
         ClientboundLightUpdatePacketData light = packet.getLightData();
         return new Value(

@@ -25,4 +25,5 @@ final class Id108SetPlayerInventoryPacketDefinition
                 IDENTIFIER,
                 PacketClassification.stateful(PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
     }
+
 }

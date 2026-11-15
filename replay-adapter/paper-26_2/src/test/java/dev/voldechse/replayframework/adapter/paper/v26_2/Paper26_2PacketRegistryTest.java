@@ -61,7 +61,7 @@ final class Paper26_2PacketRegistryTest {
     }
 
     @Test
-    void unknownPlayPacketTypeRemainsCapturableButUnsupported() {
+    void unknownPlayPacketTypeFailsTheCompleteCatalogInvariant() {
         Paper26_2ProtocolIntrospector.ProtocolSnapshot snapshot =
                 new Paper26_2ProtocolIntrospector().inspect();
         List<Paper26_2ProtocolIntrospector.PacketType> packets =
@@ -73,17 +73,10 @@ final class Paper26_2PacketRegistryTest {
                 Integer.MAX_VALUE,
                 "paper-26.2/play.clientbound.synthetic.unknown"));
 
-        Paper26_2PacketRegistry registry = Paper26_2PacketRegistry.fromSnapshot(
-                new Paper26_2ProtocolIntrospector.ProtocolSnapshot(
-                        snapshot.minecraftVersion(), snapshot.protocolVersion(), packets));
-        PacketDescriptor descriptor = registry.descriptors().stream()
-                .filter(value -> value.packetId() == Integer.MAX_VALUE)
-                .findFirst()
-                .orElseThrow();
-
-        assertEquals(PacketDisposition.UNSUPPORTED, descriptor.disposition());
-        assertTrue(descriptor.captureByDefault());
-        assertFalse(descriptor.replayable());
+        assertThrows(IncompatibleAdapterException.class, () ->
+                Paper26_2PacketRegistry.fromSnapshot(
+                        new Paper26_2ProtocolIntrospector.ProtocolSnapshot(
+                                snapshot.minecraftVersion(), snapshot.protocolVersion(), packets)));
     }
 
     @Test

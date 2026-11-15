@@ -26,4 +26,5 @@ final class Id098SetDisplayObjectivePacketDefinition
                 IDENTIFIER,
                 PacketClassification.stateful(PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
     }
+
 }

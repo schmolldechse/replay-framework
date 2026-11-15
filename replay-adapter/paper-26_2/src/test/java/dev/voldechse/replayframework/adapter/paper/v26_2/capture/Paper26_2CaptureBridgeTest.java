@@ -2,14 +2,19 @@ package dev.voldechse.replayframework.adapter.paper.v26_2.capture;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.PacketDisposition;
+import dev.voldechse.replayframework.adapter.paper.packet.PacketDefinition;
+import dev.voldechse.replayframework.adapter.paper.v26_2.packet.Paper26_2PacketCatalog;
 import dev.voldechse.replayframework.api.recording.BlockPosition;
 import dev.voldechse.replayframework.format.PacketPhase;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import java.util.Optional;
+import java.util.UUID;
 import net.kyori.adventure.key.Key;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -19,14 +24,22 @@ import net.minecraft.network.protocol.game.ClientboundBlockEventPacket;
 import net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntityTypes;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 class Paper26_2CaptureBridgeTest {
 
+    @BeforeAll
+    static void bootstrapPaperRegistries() {
+        net.minecraft.SharedConstants.tryDetectVersion();
+        net.minecraft.server.Bootstrap.bootStrap();
+        net.minecraft.server.Bootstrap.validate();
+    }
+
     @Test
     void extractsTheExactBlockUpdatePositionForSpatialCapture() {
         PacketDescriptor descriptor = new PacketDescriptor(
-                "minecraft:block_update",
+                "play.clientbound.minecraft:block_update",
                 PacketPhase.PLAY,
                 PacketDescriptor.Direction.CLIENTBOUND,
                 8,
@@ -38,10 +51,10 @@ class Paper26_2CaptureBridgeTest {
                 PacketDescriptor.PlaybackScope.SAFE);
         BlockPos position = new BlockPos(-33_554_432, 2_047, 33_554_431);
 
-        var context = new PaperConnectionAccessor().captureContext(
+        var context = captureContext(
                 new ClientboundBlockUpdatePacket(position, Blocks.WATER.defaultBlockState()),
                 descriptor,
-                Optional.of(Key.key("minecraft:overworld")));
+                Key.key("minecraft:overworld"));
 
         assertEquals(
                 Optional.of(new BlockPosition(-33_554_432, 2_047, 33_554_431)),
@@ -51,7 +64,7 @@ class Paper26_2CaptureBridgeTest {
     @Test
     void extractsTheExactBlockEventPositionForSpatialCapture() {
         PacketDescriptor descriptor = new PacketDescriptor(
-                "minecraft:block_event",
+                "play.clientbound.minecraft:block_event",
                 PacketPhase.PLAY,
                 PacketDescriptor.Direction.CLIENTBOUND,
                 7,
@@ -63,10 +76,10 @@ class Paper26_2CaptureBridgeTest {
                 PacketDescriptor.PlaybackScope.SAFE);
         BlockPos position = new BlockPos(33_554_431, -2_048, -33_554_432);
 
-        var context = new PaperConnectionAccessor().captureContext(
+        var context = captureContext(
                 new ClientboundBlockEventPacket(position, Blocks.NOTE_BLOCK, 0, 24),
                 descriptor,
-                Optional.of(Key.key("minecraft:overworld")));
+                Key.key("minecraft:overworld"));
 
         assertEquals(
                 Optional.of(new BlockPosition(33_554_431, -2_048, -33_554_432)),
@@ -76,7 +89,7 @@ class Paper26_2CaptureBridgeTest {
     @Test
     void extractsTheExactBlockEntityPositionForSpatialCapture() {
         PacketDescriptor descriptor = new PacketDescriptor(
-                "minecraft:block_entity_data",
+                "play.clientbound.minecraft:block_entity_data",
                 PacketPhase.PLAY,
                 PacketDescriptor.Direction.CLIENTBOUND,
                 6,
@@ -88,11 +101,11 @@ class Paper26_2CaptureBridgeTest {
                 PacketDescriptor.PlaybackScope.SAFE);
         BlockPos position = new BlockPos(33_554_431, 2_047, -33_554_432);
 
-        var context = new PaperConnectionAccessor().captureContext(
+        var context = captureContext(
                 new ClientboundBlockEntityDataPacket(
                         position, BlockEntityTypes.CHEST, new CompoundTag()),
                 descriptor,
-                Optional.of(Key.key("minecraft:overworld")));
+                Key.key("minecraft:overworld"));
 
         assertEquals(
                 Optional.of(new BlockPosition(33_554_431, 2_047, -33_554_432)),
@@ -102,7 +115,7 @@ class Paper26_2CaptureBridgeTest {
     @Test
     void extractsTheExactBlockDestructionPositionForSpatialCapture() {
         PacketDescriptor descriptor = new PacketDescriptor(
-                "minecraft:block_destruction",
+                "play.clientbound.minecraft:block_destruction",
                 PacketPhase.PLAY,
                 PacketDescriptor.Direction.CLIENTBOUND,
                 5,
@@ -114,12 +127,22 @@ class Paper26_2CaptureBridgeTest {
                 PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES);
         BlockPos position = new BlockPos(-33_554_432, -2_048, 33_554_431);
 
-        var context = new PaperConnectionAccessor().captureContext(
+        var context = captureContext(
                 new ClientboundBlockDestructionPacket(41, position, 9),
                 descriptor,
-                Optional.of(Key.key("minecraft:overworld")));
+                Key.key("minecraft:overworld"));
 
         assertEquals(Optional.of(new BlockPosition(-33_554_432, -2_048, 33_554_431)), context.position());
+    }
+
+    private static dev.voldechse.replayframework.adapter.CaptureContext captureContext(
+            Object packet, PacketDescriptor descriptor, Key world) {
+        UUID connectionId = UUID.randomUUID();
+        var state = new Paper26_2AuthoritativeStateIndex();
+        state.world(connectionId, world.toString());
+        PacketDefinition<?> definition = Paper26_2PacketCatalog.catalog()
+                .require(descriptor.typeName());
+        return definition.captureContext(packet, descriptor, connectionId, state, 0L);
     }
 
     @Test
@@ -141,6 +164,22 @@ class Paper26_2CaptureBridgeTest {
         } finally {
             buffer.release();
         }
+    }
+
+    @Test
+    void deduplicatesRecipientCopiesWithoutDroppingRepeatedSameConnectionUpdates() {
+        Paper26_2CaptureBridge.PacketCopyDeduplicator deduplicator =
+                new Paper26_2CaptureBridge.PacketCopyDeduplicator();
+        UUID firstConnection = UUID.randomUUID();
+        UUID secondConnection = UUID.randomUUID();
+        Key world = Key.key("minecraft:overworld");
+        byte[] identicalMovement = new byte[] {1, 2, 3};
+
+        assertTrue(deduplicator.first(20L, 53, world, firstConnection, identicalMovement));
+        assertFalse(deduplicator.first(20L, 53, world, secondConnection, identicalMovement));
+        assertTrue(deduplicator.first(20L, 53, world, firstConnection, identicalMovement));
+        assertFalse(deduplicator.first(20L, 53, world, secondConnection, identicalMovement));
+        assertTrue(deduplicator.first(21L, 53, world, firstConnection, identicalMovement));
     }
 }
 

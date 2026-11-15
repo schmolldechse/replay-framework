@@ -30,6 +30,13 @@ final class Id135ProjectilePowerPacketDefinition extends RebuildingPacketDefinit
     }
 
     @Override
+    public java.util.Optional<
+            dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily> checkpointFamily() {
+        return java.util.Optional.of(
+                dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily.ENTITY_METADATA);
+    }
+
+    @Override
     protected Value read(ClientboundProjectilePowerPacket packet) {
         return new Value(packet.getId(), packet.getAccelerationPower());
     }

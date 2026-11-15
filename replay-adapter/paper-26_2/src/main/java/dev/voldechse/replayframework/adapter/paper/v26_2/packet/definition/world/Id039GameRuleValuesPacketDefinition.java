@@ -28,4 +28,5 @@ final class Id039GameRuleValuesPacketDefinition
                 IDENTIFIER,
                 PacketClassification.stateful(PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
     }
+
 }

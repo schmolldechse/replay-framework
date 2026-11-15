@@ -28,6 +28,13 @@ final class Id100SetEntityLinkPacketDefinition extends RebuildingPacketDefinitio
     }
 
     @Override
+    public java.util.Optional<
+            dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily> checkpointFamily() {
+        return java.util.Optional.of(
+                dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily.PASSENGERS);
+    }
+
+    @Override
     protected Value read(ClientboundSetEntityLinkPacket packet) {
         return new Value(packet.getSourceId(), packet.getDestId());
     }

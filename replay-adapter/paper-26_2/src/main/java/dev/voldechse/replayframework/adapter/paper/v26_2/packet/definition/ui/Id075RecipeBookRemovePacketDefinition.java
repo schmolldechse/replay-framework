@@ -26,4 +26,5 @@ final class Id075RecipeBookRemovePacketDefinition
                 PacketClassification.stateful(
                         PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
     }
+
 }

@@ -35,6 +35,13 @@ final class Id069PlayerInfoRemovePacketDefinition extends RebuildingPacketDefini
     }
 
     @Override
+    public java.util.Optional<
+            dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily> checkpointFamily() {
+        return java.util.Optional.of(
+                dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily.GLOBAL_STATE);
+    }
+
+    @Override
     protected Value read(ClientboundPlayerInfoRemovePacket packet) {
         return new Value(packet.profileIds());
     }

@@ -25,4 +25,5 @@ final class Id059OpenScreenPacketDefinition
                 PacketClassification.ephemeral(
                         PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
     }
+
 }

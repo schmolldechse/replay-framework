@@ -1,11 +1,13 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.definition.effect;
 
+import dev.voldechse.replayframework.adapter.CaptureContext;
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.paper.packet.PacketClassification;
 import dev.voldechse.replayframework.adapter.paper.packet.RebuildingPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.packet.ValueRewriteResult;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
+import dev.voldechse.replayframework.adapter.paper.v26_2.packet.Paper26_2CaptureContexts;
 import java.util.Objects;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.game.ClientboundBlockDestructionPacket;
@@ -34,6 +36,21 @@ final class Id005BlockDestructionPacketDefinition extends RebuildingPacketDefini
                 PacketClassification.ephemeral(
                         PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES),
                 ClientboundBlockDestructionPacket.class);
+    }
+
+    @Override
+    public CaptureContext captureContext(
+            Object decodedPacket,
+            PacketDescriptor descriptor,
+            java.util.UUID connectionId,
+            dev.voldechse.replayframework.adapter.paper.packet.PacketCaptureState state,
+            long serverTick) {
+        CaptureContext base = super.captureContext(
+                decodedPacket, descriptor, connectionId, state, serverTick);
+        BlockPos position = ClientboundBlockDestructionPacket.class.cast(decodedPacket).getPos();
+        return Paper26_2CaptureContexts.atBlockPosition(base,
+                new dev.voldechse.replayframework.api.recording.BlockPosition(
+                        position.getX(), position.getY(), position.getZ()));
     }
 
     @Override

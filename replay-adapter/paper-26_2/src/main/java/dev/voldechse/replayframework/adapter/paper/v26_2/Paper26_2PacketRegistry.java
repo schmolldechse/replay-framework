@@ -78,7 +78,10 @@ public final class Paper26_2PacketRegistry implements PacketRegistry {
         }
         var definition = Paper26_2PacketCatalog.catalog().find(packet.typeName());
         if (definition.isEmpty()) {
-            return PacketClassification.unsupported();
+            throw incompatible(
+                    "Paper PLAY clientbound packet has no explicit definition: "
+                            + packet.typeName(),
+                    null);
         }
         var explicitDefinition = definition.orElseThrow();
         if (explicitDefinition.packetId() != packet.packetId()) {

@@ -24,4 +24,5 @@ final class Id130UpdateAdvancementsPacketDefinition
                 IDENTIFIER,
                 PacketClassification.stateful(PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
     }
+
 }

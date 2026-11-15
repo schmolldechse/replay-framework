@@ -162,9 +162,8 @@ final class Id082RespawnPacketDefinitionTest {
         assertTrue(descriptor.replayable());
         assertFalse(descriptor.checkpointRelevant());
         assertEquals(PacketDescriptor.PlaybackScope.VIEWER_LOCAL, descriptor.playbackScope());
-        assertEquals(
-                Paper26_2CheckpointEncoder.CheckpointPacketFamily.DIMENSION_SPAWN,
-                Paper26_2CheckpointEncoder.familyFor(TYPE_NAME));
+        assertThrows(IncompatibleAdapterException.class,
+                () -> Paper26_2CheckpointEncoder.familyFor(TYPE_NAME));
     }
 
     @Test

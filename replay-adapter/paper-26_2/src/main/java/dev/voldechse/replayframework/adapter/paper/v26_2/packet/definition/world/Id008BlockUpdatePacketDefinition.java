@@ -1,11 +1,13 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.definition.world;
 
+import dev.voldechse.replayframework.adapter.CaptureContext;
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.paper.packet.PacketClassification;
 import dev.voldechse.replayframework.adapter.paper.packet.RebuildingPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.packet.ValueRewriteResult;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
+import dev.voldechse.replayframework.adapter.paper.v26_2.packet.Paper26_2CaptureContexts;
 import java.util.Objects;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket;
@@ -38,6 +40,26 @@ final class Id008BlockUpdatePacketDefinition extends RebuildingPacketDefinition<
     }
 
     @Override
+    public java.util.Optional<
+            dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily> checkpointFamily() {
+        return java.util.Optional.of(
+                dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily.BLOCK_ENTITY);
+    }
+
+    @Override
+    public CaptureContext captureContext(
+            Object decodedPacket,
+            PacketDescriptor descriptor,
+            java.util.UUID connectionId,
+            dev.voldechse.replayframework.adapter.paper.packet.PacketCaptureState state,
+            long serverTick) {
+        CaptureContext base = super.captureContext(
+                decodedPacket, descriptor, connectionId, state, serverTick);
+        return Paper26_2CaptureContexts.atBlockPosition(
+                base, toApiPosition(ClientboundBlockUpdatePacket.class.cast(decodedPacket).getPos()));
+    }
+
+    @Override
     protected Value read(ClientboundBlockUpdatePacket packet) {
         return new Value(packet.getPos(), packet.getBlockState());
     }
@@ -66,5 +88,11 @@ final class Id008BlockUpdatePacketDefinition extends RebuildingPacketDefinition<
                         "block_update state is not in the global block-state palette");
             }
         }
+    }
+
+    private static dev.voldechse.replayframework.api.recording.BlockPosition toApiPosition(
+            BlockPos position) {
+        return new dev.voldechse.replayframework.api.recording.BlockPosition(
+                position.getX(), position.getY(), position.getZ());
     }
 }

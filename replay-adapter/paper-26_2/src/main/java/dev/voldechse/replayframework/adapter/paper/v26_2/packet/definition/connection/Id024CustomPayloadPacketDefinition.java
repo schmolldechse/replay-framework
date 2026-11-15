@@ -1,9 +1,11 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.definition.connection;
 
+import dev.voldechse.replayframework.adapter.CaptureContext;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.paper.packet.PacketClassification;
 import dev.voldechse.replayframework.adapter.paper.packet.PacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
+import dev.voldechse.replayframework.adapter.paper.packet.PacketCaptureState;
 
 /**
  * Viewer-local contract for {@code minecraft:custom_payload}.
@@ -28,5 +30,23 @@ final class Id024CustomPayloadPacketDefinition
                 IDENTIFIER,
                 PacketClassification.configurable(
                         PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
+    }
+
+    @Override
+    public CaptureContext captureContext(
+            Object decodedPacket,
+            PacketDescriptor descriptor,
+            java.util.UUID connectionId,
+            PacketCaptureState state,
+            long serverTick) {
+        CaptureContext base = super.captureContext(
+                decodedPacket, descriptor, connectionId, state, serverTick);
+        net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket packet =
+                net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket.class
+                        .cast(decodedPacket);
+        net.minecraft.resources.Identifier identifier = packet.payload().type().id();
+        return dev.voldechse.replayframework.adapter.paper.v26_2.packet.Paper26_2CaptureContexts
+                .withCustomPayloadChannel(base,
+                        net.kyori.adventure.key.Key.key(identifier.toString()));
     }
 }

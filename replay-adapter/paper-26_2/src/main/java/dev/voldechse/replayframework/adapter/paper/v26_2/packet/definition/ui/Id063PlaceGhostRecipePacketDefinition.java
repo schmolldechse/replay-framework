@@ -25,4 +25,5 @@ final class Id063PlaceGhostRecipePacketDefinition
                 PacketClassification.ephemeral(
                         PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
     }
+
 }

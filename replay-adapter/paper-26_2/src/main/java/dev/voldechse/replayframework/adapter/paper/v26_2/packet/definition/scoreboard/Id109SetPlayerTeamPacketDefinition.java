@@ -25,4 +25,5 @@ final class Id109SetPlayerTeamPacketDefinition
                 IDENTIFIER,
                 PacketClassification.stateful(PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
     }
+
 }

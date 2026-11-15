@@ -2,8 +2,13 @@ package dev.voldechse.replayframework.adapter.paper.v26_2.packet.definition.play
 
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.paper.packet.PacketClassification;
+import dev.voldechse.replayframework.adapter.paper.packet.PacketCaptureState;
 import dev.voldechse.replayframework.adapter.paper.packet.PacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
+import dev.voldechse.replayframework.adapter.CaptureContext;
+import java.util.UUID;
+import net.kyori.adventure.key.Key;
+import net.minecraft.network.protocol.game.ClientboundRespawnPacket;
 
 /**
  * Replay policy for {@code minecraft:respawn}.
@@ -27,4 +32,18 @@ final class Id082RespawnPacketDefinition
                 PacketClassification.stateful(
                         PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
     }
+
+    @Override
+    public CaptureContext captureContext(
+            Object decodedPacket,
+            PacketDescriptor descriptor,
+            UUID connectionId,
+            PacketCaptureState state,
+            long serverTick) {
+        ClientboundRespawnPacket packet = ClientboundRespawnPacket.class.cast(decodedPacket);
+        Key world = Key.key(packet.commonPlayerSpawnInfo().dimension().identifier().toString());
+        state.world(connectionId, world.toString());
+        return super.captureContext(decodedPacket, descriptor, connectionId, state, serverTick);
+    }
+
 }

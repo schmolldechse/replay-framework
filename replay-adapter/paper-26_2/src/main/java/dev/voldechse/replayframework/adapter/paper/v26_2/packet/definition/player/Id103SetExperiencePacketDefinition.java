@@ -26,4 +26,5 @@ final class Id103SetExperiencePacketDefinition
                 PacketClassification.stateful(
                         PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
     }
+
 }

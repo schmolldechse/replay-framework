@@ -14,7 +14,7 @@ import dev.voldechse.replayframework.adapter.PacketDisposition;
 import dev.voldechse.replayframework.adapter.codec.PacketCodec;
 import dev.voldechse.replayframework.adapter.paper.packet.PacketRewriteResult;
 import dev.voldechse.replayframework.adapter.paper.v26_2.Paper26_2PacketRegistry;
-import dev.voldechse.replayframework.adapter.paper.v26_2.capture.PaperConnectionAccessor;
+import dev.voldechse.replayframework.adapter.paper.v26_2.capture.Paper26_2CaptureTestState;
 import dev.voldechse.replayframework.adapter.paper.v26_2.packet.Paper26_2PacketCatalog;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
 import dev.voldechse.replayframework.adapter.playback.PlaybackIdentityContext;
@@ -341,39 +341,44 @@ final class Id065PlayerChatPacketDefinitionTest {
 
     @Test
     void captureContextUsesUnsignedDisplayOrFilteredSignedBodySafely() {
-        PaperConnectionAccessor accessor = new PaperConnectionAccessor();
         PacketDescriptor descriptor = descriptor();
 
         ClientboundPlayerChatPacket unsigned = packet(
                 1, SENDER, 1, null, "signed source", Instant.EPOCH, 0, List.of(),
                 Component.literal("display text"), FilterMask.PASS_THROUGH, Optional.empty());
         assertEquals(Optional.of("display text"),
-                accessor.captureContext(unsigned, descriptor, Optional.empty()).normalizedChat());
+                captureContext(unsigned, descriptor).normalizedChat());
 
         ClientboundPlayerChatPacket passThrough = packet(
                 2, SENDER, 2, null, "signed source", Instant.EPOCH, 0, List.of(),
                 null, FilterMask.PASS_THROUGH, Optional.empty());
         assertEquals(Optional.of("signed source"),
-                accessor.captureContext(passThrough, descriptor, Optional.empty()).normalizedChat());
+                captureContext(passThrough, descriptor).normalizedChat());
 
         FilterMask partial = partialMask(0, 4);
         ClientboundPlayerChatPacket filtered = packet(
                 3, SENDER, 3, null, "signed source", Instant.EPOCH, 0, List.of(),
                 null, partial, Optional.empty());
         assertEquals(Optional.of(partial.apply("signed source")),
-                accessor.captureContext(filtered, descriptor, Optional.empty()).normalizedChat());
+                captureContext(filtered, descriptor).normalizedChat());
 
         ClientboundPlayerChatPacket hidden = packet(
                 4, SENDER, 4, null, "filtered", Instant.EPOCH, 0, List.of(),
                 null, FilterMask.FULLY_FILTERED, Optional.empty());
         assertEquals(Optional.of(""),
-                accessor.captureContext(hidden, descriptor, Optional.empty()).normalizedChat());
+                captureContext(hidden, descriptor).normalizedChat());
 
         ClientboundPlayerChatPacket hiddenWithUnsignedText = packet(
                 5, SENDER, 5, null, "filtered", Instant.EPOCH, 0, List.of(),
                 Component.literal("must stay hidden"), FilterMask.FULLY_FILTERED, Optional.empty());
-        assertEquals(Optional.of(""), accessor.captureContext(
-                hiddenWithUnsignedText, descriptor, Optional.empty()).normalizedChat());
+        assertEquals(Optional.of(""),
+                captureContext(hiddenWithUnsignedText, descriptor).normalizedChat());
+    }
+
+    private static dev.voldechse.replayframework.adapter.CaptureContext captureContext(
+            Object packet, PacketDescriptor descriptor) {
+        return new Id065PlayerChatPacketDefinition().captureContext(
+                packet, descriptor, null, Paper26_2CaptureTestState.create(), 0L);
     }
 
     private static ClientboundPlayerChatPacket packet(

@@ -25,4 +25,5 @@ final class Id105SetHeldSlotPacketDefinition
                 PacketClassification.stateful(
                         PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
     }
+
 }

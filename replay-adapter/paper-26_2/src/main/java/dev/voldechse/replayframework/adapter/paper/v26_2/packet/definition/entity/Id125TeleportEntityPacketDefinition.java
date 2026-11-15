@@ -1,17 +1,22 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.definition.entity;
 
+import dev.voldechse.replayframework.adapter.CaptureContext;
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.paper.packet.PacketClassification;
+import dev.voldechse.replayframework.adapter.paper.packet.PacketCaptureState;
 import dev.voldechse.replayframework.adapter.paper.packet.RebuildingPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.packet.ValueRewriteResult;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
+import dev.voldechse.replayframework.adapter.paper.v26_2.packet.Paper26_2CaptureContexts;
 import java.util.Objects;
 import java.util.Set;
+import net.kyori.adventure.key.Key;
 import net.minecraft.network.protocol.game.ClientboundTeleportEntityPacket;
 import net.minecraft.world.entity.PositionMoveRotation;
 import net.minecraft.world.entity.Relative;
 import net.minecraft.world.phys.Vec3;
+import java.util.UUID;
 
 /** Complete read/rewrite/rebuild contract for {@code minecraft:teleport_entity}. */
 final class Id125TeleportEntityPacketDefinition extends RebuildingPacketDefinition<
@@ -29,6 +34,57 @@ final class Id125TeleportEntityPacketDefinition extends RebuildingPacketDefiniti
                 PacketClassification.stateful(
                         PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES),
                 ClientboundTeleportEntityPacket.class);
+    }
+
+    @Override
+    public java.util.Optional<
+            dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily> checkpointFamily() {
+        return java.util.Optional.of(
+                dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily.ENTITY_METADATA);
+    }
+
+
+    @Override
+    public boolean deduplicateRecipientCopies() {
+        return true;
+    }
+
+    @Override
+    public CaptureContext captureContext(
+            Object decodedPacket,
+            PacketDescriptor descriptor,
+            UUID connectionId,
+            PacketCaptureState state,
+            long serverTick) {
+        CaptureContext base = super.captureContext(
+                decodedPacket, descriptor, connectionId, state, serverTick);
+        Value value = read(ClientboundTeleportEntityPacket.class.cast(decodedPacket));
+        Vec3 position = value.change().position();
+        var previous = state.entityPosition(connectionId, value.entityId()).orElse(null);
+        boolean relativeX = value.relatives().contains(Relative.X);
+        boolean relativeY = value.relatives().contains(Relative.Y);
+        boolean relativeZ = value.relatives().contains(Relative.Z);
+        if (previous == null && (relativeX || relativeY || relativeZ)) {
+            return base;
+        }
+        double x = relativeX ? previous.x() + position.x : position.x;
+        double y = relativeY ? previous.y() + position.y : position.y;
+        double z = relativeZ ? previous.z() + position.z : position.z;
+        var world = previous == null
+                ? state.world(connectionId).orElseGet(() -> base.world().map(Key::toString).orElse(null))
+                : previous.world();
+        if (world == null) {
+            return base;
+        }
+        state.entityPosition(connectionId, value.entityId(), world, x, y, z);
+        return Paper26_2CaptureContexts.atPosition(base, Key.key(world), x, y, z);
+    }
+
+    @Override
+    public boolean suppressesRecipientState(
+            Object decodedPacket, PacketCaptureState state, long serverTick) {
+        return state.movementIsAuthoritative(
+                ClientboundTeleportEntityPacket.class.cast(decodedPacket).id());
     }
 
     @Override

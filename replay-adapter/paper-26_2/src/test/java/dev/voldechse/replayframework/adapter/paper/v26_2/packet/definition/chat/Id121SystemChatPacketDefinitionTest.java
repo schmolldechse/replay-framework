@@ -11,7 +11,7 @@ import dev.voldechse.replayframework.adapter.PacketDisposition;
 import dev.voldechse.replayframework.adapter.codec.PacketCodec;
 import dev.voldechse.replayframework.adapter.paper.packet.PacketRewriteResult;
 import dev.voldechse.replayframework.adapter.paper.v26_2.Paper26_2PacketRegistry;
-import dev.voldechse.replayframework.adapter.paper.v26_2.capture.PaperConnectionAccessor;
+import dev.voldechse.replayframework.adapter.paper.v26_2.capture.Paper26_2CaptureTestState;
 import dev.voldechse.replayframework.adapter.paper.v26_2.packet.Paper26_2PacketCatalog;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
 import dev.voldechse.replayframework.adapter.playback.PlaybackIdentityContext;
@@ -154,8 +154,9 @@ final class Id121SystemChatPacketDefinitionTest {
                     assertEquals(overlay, decoded.overlay());
                     assertFalse(encoded.isReadable());
 
-                    CaptureContext context = new PaperConnectionAccessor().captureContext(
-                            decoded, descriptor(), Optional.empty());
+                    CaptureContext context = new Id121SystemChatPacketDefinition().captureContext(
+                            decoded, descriptor(), null,
+                            Paper26_2CaptureTestState.create(), 0L);
                     assertEquals(Optional.of(component.getString()), context.normalizedChat());
                     assertEquals(Optional.of(PacketDisposition.CONFIGURABLE), context.disposition());
                 } finally {

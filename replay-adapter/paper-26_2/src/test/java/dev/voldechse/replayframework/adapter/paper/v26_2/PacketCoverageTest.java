@@ -1,6 +1,7 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.PacketDisposition;
@@ -169,6 +170,7 @@ class PacketCoverageTest {
         net.minecraft.server.Bootstrap.bootStrap();
 
         var catalog = Paper26_2PacketCatalog.catalog();
+        assertEquals(141, catalog.definitions().size());
         assertEquals(
                 IMPLEMENTED_PACKETS.stream().map(ExpectedPacket::typeName).toList(),
                 catalog.definitions().stream().map(PacketDefinition::typeName).toList());
@@ -189,13 +191,14 @@ class PacketCoverageTest {
             }
 
             ExpectedPacket expected = EXPECTED_BY_TYPE.get(descriptor.typeName());
-            assertEquals(
-                    expected != null,
-                    Paper26_2PacketRegistry.explicitlyClassifies(descriptor.typeName()));
-            if (expected == null) {
-                expected = unsupported(descriptor.packetId(), descriptor.typeName());
-            } else {
-                assertEquals(expected.packetId(), descriptor.packetId());
+            assertTrue(expected != null, "unexpected live PLAY packet: " + descriptor.typeName());
+            var definition = catalog.require(descriptor.typeName());
+            assertEquals(expected.packetId(), descriptor.packetId());
+            assertEquals(descriptor.packetId(), definition.packetId());
+            assertTrue(Paper26_2PacketRegistry.explicitlyClassifies(descriptor.typeName()));
+            if (descriptor.checkpointRelevant()) {
+                assertTrue(definition.checkpointFamily().isPresent(),
+                        "checkpoint family missing for " + descriptor.typeName());
             }
 
             assertEquals(expected.disposition(), descriptor.disposition(), descriptor.typeName());
@@ -204,6 +207,17 @@ class PacketCoverageTest {
             assertEquals(expected.checkpointRelevant(), descriptor.checkpointRelevant(), descriptor.typeName());
             assertEquals(expected.playbackScope(), descriptor.playbackScope(), descriptor.typeName());
         }
+
+        List<String> nonCheckpointPacketsWithCheckpointFamily = registry.descriptors().stream()
+                .filter(descriptor -> descriptor.phase() == PacketPhase.PLAY)
+                .filter(descriptor -> !descriptor.checkpointRelevant())
+                .filter(descriptor -> catalog.require(descriptor.typeName())
+                        .checkpointFamily().isPresent())
+                .map(PacketDescriptor::typeName)
+                .toList();
+        assertTrue(nonCheckpointPacketsWithCheckpointFamily.isEmpty(),
+                "non-checkpoint packets must not declare checkpoint families: "
+                        + nonCheckpointPacketsWithCheckpointFamily);
     }
 
     private static ExpectedPacket control(int packetId, String identifier) {
@@ -251,17 +265,6 @@ class PacketCoverageTest {
                 true,
                 false,
                 scope);
-    }
-
-    private static ExpectedPacket unsupported(int packetId, String typeName) {
-        return new ExpectedPacket(
-                packetId,
-                typeName,
-                PacketDisposition.UNSUPPORTED,
-                true,
-                false,
-                false,
-                PacketDescriptor.PlaybackScope.UNSAFE);
     }
 
     private static String typeName(String identifier) {

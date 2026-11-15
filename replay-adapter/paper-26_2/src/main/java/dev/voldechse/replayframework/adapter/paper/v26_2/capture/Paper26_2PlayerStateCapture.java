@@ -27,7 +27,10 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 /**
  * Coalesces serverbound Paper 26.2 player packets into authoritative main-thread
- * movement, equipment and arm-swing state.
+ * movement, equipment and arm-swing state for each connected player's own
+ * entity. The server does not echo that entity's state to its owning
+ * connection, so this sampler fills only that per-player packet-stream gap;
+ * other entities use the catalog's clientbound packet definitions.
  */
 final class Paper26_2PlayerStateCapture implements AutoCloseable {
 
@@ -73,13 +76,14 @@ final class Paper26_2PlayerStateCapture implements AutoCloseable {
 
         try {
             int entityId = event.getUser().getEntityId();
-            stateIndex.markMovement(entityId);
-            stateIndex.markEquipment(entityId);
+            stateIndex.connectionEntityId(playerId, entityId);
+            stateIndex.markMovementAuthoritative(entityId);
+            stateIndex.markEquipmentAuthoritative(entityId);
 
             InteractionHand swing = null;
             if (event.getPacketType() == PacketType.Play.Client.ANIMATION) {
                 swing = new WrapperPlayClientAnimation(event).getHand();
-                stateIndex.markSwing(entityId, serverTick.getAsLong());
+                stateIndex.markSwingAuthoritative(entityId, serverTick.getAsLong());
             }
             requestSample(playerId, swing);
         } catch (Throwable failure) {
@@ -138,6 +142,11 @@ final class Paper26_2PlayerStateCapture implements AutoCloseable {
         UUID playerId = player.getUniqueId();
         PlayerSnapshot previous = snapshots.get(playerId);
         Key world = location.getWorld().getKey();
+        stateIndex.world(playerId, world.toString());
+        stateIndex.connectionEntityId(playerId, handle.getId());
+        stateIndex.entityPosition(
+                playerId, handle.getId(), world.toString(),
+                location.getX(), location.getY(), location.getZ());
         boolean identityChanged = previous == null || previous.entityId() != handle.getId();
         boolean movementChanged = identityChanged
                 || !previous.world().equals(world)

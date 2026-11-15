@@ -27,4 +27,5 @@ final class Id010ChangeDifficultyPacketDefinition
                 PacketClassification.stateful(
                         PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
     }
+
 }

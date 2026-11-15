@@ -28,4 +28,5 @@ final class Id017ContainerClosePacketDefinition
                 PacketClassification.stateful(
                         PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
     }
+
 }

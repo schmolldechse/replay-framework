@@ -39,6 +39,13 @@ final class Id009BossEventPacketDefinition extends RebuildingPacketDefinition<
     }
 
     @Override
+    public java.util.Optional<
+            dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily> checkpointFamily() {
+        return java.util.Optional.of(
+                dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily.GLOBAL_STATE);
+    }
+
+    @Override
     protected Value read(ClientboundBossEventPacket packet) {
         AtomicReference<Value> value = new AtomicReference<>();
         packet.dispatch(new ClientboundBossEventPacket.Handler() {

@@ -33,6 +33,13 @@ final class Id091SetBorderWarningDelayPacketDefinition extends RebuildingPacketD
     }
 
     @Override
+    public java.util.Optional<
+            dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily> checkpointFamily() {
+        return java.util.Optional.of(
+                dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily.GLOBAL_STATE);
+    }
+
+    @Override
     protected Value read(ClientboundSetBorderWarningDelayPacket packet) {
         return new Value(packet.getWarningDelay());
     }

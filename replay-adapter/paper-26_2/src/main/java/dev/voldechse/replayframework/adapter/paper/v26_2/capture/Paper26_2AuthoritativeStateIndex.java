@@ -1,111 +1,190 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.capture;
 
+import dev.voldechse.replayframework.adapter.paper.packet.PacketCaptureState;
+import dev.voldechse.replayframework.adapter.CaptureContext;
+import dev.voldechse.replayframework.adapter.PacketDisposition;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import net.minecraft.network.protocol.game.ClientboundAnimatePacket;
+import net.kyori.adventure.key.Key;
 
-/** Tracks entity-state families owned by recipient-independent capture. */
-final class Paper26_2AuthoritativeStateIndex {
+/** Packet-derived world, entity-position and player-authority state for Paper 26.2 capture. */
+final class Paper26_2AuthoritativeStateIndex implements PacketCaptureState {
 
-    private static final Set<String> MOVEMENT_PACKETS = Set.of(
-            "play.clientbound.minecraft:entity_position_sync",
-            "play.clientbound.minecraft:move_entity_pos",
-            "play.clientbound.minecraft:move_entity_pos_rot",
-            "play.clientbound.minecraft:move_entity_rot",
-            "play.clientbound.minecraft:rotate_head",
-            "play.clientbound.minecraft:teleport_entity");
-    private static final String EQUIPMENT_PACKET =
-            "play.clientbound.minecraft:set_equipment";
-    private static final String ENTITY_EVENT_PACKET =
-            "play.clientbound.minecraft:entity_event";
-    private static final String ANIMATION_PACKET =
-            "play.clientbound.minecraft:animate";
-    private static final int SWAP_HANDS_EVENT = 55;
-
+    private final Map<UUID, String> connectionWorlds = new ConcurrentHashMap<>();
+    private final Map<UUID, Integer> connectionEntityIds = new ConcurrentHashMap<>();
+    private final Map<ConnectionEntity, EntityPosition> connectionEntityPositions =
+            new ConcurrentHashMap<>();
+    private final Map<Integer, EntityPosition> checkpointEntityPositions =
+            new ConcurrentHashMap<>();
     private final Set<Integer> movementEntityIds = ConcurrentHashMap.newKeySet();
     private final Set<Integer> equipmentEntityIds = ConcurrentHashMap.newKeySet();
     private final Map<Integer, Long> swingTicks = new ConcurrentHashMap<>();
 
-    void markMovement(int entityId) {
-        movementEntityIds.add(entityId);
+    @Override
+    public Optional<String> world(UUID connectionId) {
+        return connectionId == null
+                ? Optional.empty()
+                : Optional.ofNullable(connectionWorlds.get(connectionId));
     }
 
-    void markEquipment(int entityId) {
-        equipmentEntityIds.add(entityId);
-    }
-
-    void markSwing(int entityId, long tick) {
-        if (tick < 0L) {
-            throw new IllegalArgumentException("tick must not be negative");
+    @Override
+    public void world(UUID connectionId, String world) {
+        if (connectionId != null) {
+            String nextWorld = java.util.Objects.requireNonNull(world, "world");
+            String previousWorld = connectionWorlds.put(connectionId, nextWorld);
+            if (previousWorld != null && !previousWorld.equals(nextWorld)) {
+                connectionEntityPositions.keySet().removeIf(key -> key.connectionId().equals(connectionId));
+            }
         }
-        swingTicks.put(entityId, tick);
+    }
+
+    @Override
+    public CaptureContext contextForConnection(
+            UUID connectionId, PacketDisposition disposition) {
+        return new CaptureContext(
+                disposition,
+                world(connectionId).map(Key::key),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty());
+    }
+
+    @Override
+    public void connectionEntityId(UUID connectionId, int entityId) {
+        if (connectionId == null) {
+            return;
+        }
+        Integer previous = connectionEntityIds.put(connectionId, entityId);
+        if (previous != null && previous != entityId) {
+            remove(previous);
+        }
+    }
+
+    @Override
+    public Optional<EntityPosition> entityPosition(UUID connectionId, int entityId) {
+        if (connectionId == null) {
+            return Optional.ofNullable(checkpointEntityPositions.get(entityId));
+        }
+        EntityPosition connectionPosition = connectionEntityPositions.get(
+                new ConnectionEntity(connectionId, entityId));
+        if (connectionPosition != null) {
+            return Optional.of(connectionPosition);
+        }
+        EntityPosition checkpointPosition = checkpointEntityPositions.get(entityId);
+        String connectionWorld = connectionWorlds.get(connectionId);
+        return checkpointPosition != null && checkpointPosition.world().equals(connectionWorld)
+                ? Optional.of(checkpointPosition)
+                : Optional.empty();
+    }
+
+    @Override
+    public void entityPosition(UUID connectionId, int entityId, String world, double x, double y, double z) {
+        if (entityId < 0) {
+            throw new IllegalArgumentException("entityId must not be negative");
+        }
+        EntityPosition position = new EntityPosition(world, x, y, z);
+        if (connectionId == null) {
+            checkpointEntityPositions.put(entityId, position);
+        } else {
+            connectionEntityPositions.put(new ConnectionEntity(connectionId, entityId), position);
+        }
+    }
+
+    @Override
+    public void seedEntityPosition(int entityId, String world, double x, double y, double z) {
+        if (entityId < 0) {
+            throw new IllegalArgumentException("entityId must not be negative");
+        }
+        checkpointEntityPositions.put(entityId, new EntityPosition(world, x, y, z));
+    }
+
+    @Override
+    public void moveEntity(UUID connectionId, int entityId, double deltaX, double deltaY, double deltaZ) {
+        if (!Double.isFinite(deltaX) || !Double.isFinite(deltaY) || !Double.isFinite(deltaZ)) {
+            throw new IllegalArgumentException("entity movement delta must be finite");
+        }
+        entityPosition(connectionId, entityId).ifPresent(previous -> entityPosition(
+                connectionId,
+                entityId,
+                previous.world(),
+                previous.x() + deltaX,
+                previous.y() + deltaY,
+                previous.z() + deltaZ));
+    }
+
+    @Override
+    public void removeEntity(int entityId) {
+        remove(entityId);
     }
 
     void remove(int entityId) {
+        checkpointEntityPositions.remove(entityId);
+        connectionEntityPositions.keySet().removeIf(key -> key.entityId() == entityId);
         movementEntityIds.remove(entityId);
         equipmentEntityIds.remove(entityId);
         swingTicks.remove(entityId);
+        connectionEntityIds.values().removeIf(value -> value == entityId);
     }
 
-    boolean suppresses(String descriptorTypeName, byte[] payload, long observedServerTick) {
-        if (MOVEMENT_PACKETS.contains(descriptorTypeName)) {
-            return movementEntityIds.contains(readVarInt(payload).value());
+    @Override
+    public void markMovementAuthoritative(int entityId) {
+        movementEntityIds.add(entityId);
+    }
+
+    @Override
+    public void markEquipmentAuthoritative(int entityId) {
+        equipmentEntityIds.add(entityId);
+    }
+
+    @Override
+    public void markSwingAuthoritative(int entityId, long serverTick) {
+        if (serverTick < 0L) {
+            throw new IllegalArgumentException("serverTick must not be negative");
         }
-        if (EQUIPMENT_PACKET.equals(descriptorTypeName)) {
-            return equipmentEntityIds.contains(readVarInt(payload).value());
+        swingTicks.put(entityId, serverTick);
+    }
+
+    @Override
+    public boolean movementIsAuthoritative(int entityId) {
+        return movementEntityIds.contains(entityId);
+    }
+
+    @Override
+    public boolean equipmentIsAuthoritative(int entityId) {
+        return equipmentEntityIds.contains(entityId);
+    }
+
+    @Override
+    public boolean swingIsAuthoritative(int entityId, long serverTick) {
+        return swingTicks.getOrDefault(entityId, Long.MIN_VALUE) == serverTick;
+    }
+
+    @Override
+    public void removeConnection(UUID connectionId) {
+        if (connectionId == null) {
+            return;
         }
-        if (ENTITY_EVENT_PACKET.equals(descriptorTypeName)) {
-            return payload.length >= 5
-                    && equipmentEntityIds.contains(readInt(payload))
-                    && Byte.toUnsignedInt(payload[4]) == SWAP_HANDS_EVENT;
+        connectionWorlds.remove(connectionId);
+        connectionEntityPositions.keySet().removeIf(key -> key.connectionId().equals(connectionId));
+        Integer entityId = connectionEntityIds.remove(connectionId);
+        if (entityId != null) {
+            remove(entityId);
         }
-        if (ANIMATION_PACKET.equals(descriptorTypeName)) {
-            DecodedVarInt entityId = readVarInt(payload);
-            if (entityId.nextIndex() >= payload.length) {
-                throw new IllegalArgumentException("animate packet has no action");
-            }
-            int action = Byte.toUnsignedInt(payload[entityId.nextIndex()]);
-            return (action == ClientboundAnimatePacket.SWING_MAIN_HAND
-                            || action == ClientboundAnimatePacket.SWING_OFF_HAND)
-                    && swingTicks.getOrDefault(entityId.value(), Long.MIN_VALUE)
-                            == observedServerTick;
-        }
-        return false;
     }
 
     void clear() {
+        connectionWorlds.clear();
+        connectionEntityIds.clear();
+        connectionEntityPositions.clear();
+        checkpointEntityPositions.clear();
         movementEntityIds.clear();
         equipmentEntityIds.clear();
         swingTicks.clear();
     }
 
-    private static DecodedVarInt readVarInt(byte[] payload) {
-        int value = 0;
-        int shift = 0;
-        for (int index = 0; index < payload.length; index++) {
-            int current = payload[index] & 0xFF;
-            value |= (current & 0x7F) << shift;
-            if ((current & 0x80) == 0) {
-                return new DecodedVarInt(value, index + 1);
-            }
-            shift += 7;
-            if (shift >= 35) {
-                break;
-            }
-        }
-        throw new IllegalArgumentException("entity packet has no valid entity ID");
+    private record ConnectionEntity(UUID connectionId, int entityId) {
     }
-
-    private static int readInt(byte[] payload) {
-        if (payload.length < Integer.BYTES) {
-            throw new IllegalArgumentException("entity event has no complete entity ID");
-        }
-        return (payload[0] & 0xFF) << 24
-                | (payload[1] & 0xFF) << 16
-                | (payload[2] & 0xFF) << 8
-                | payload[3] & 0xFF;
-    }
-
-    private record DecodedVarInt(int value, int nextIndex) {}
 }

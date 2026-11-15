@@ -27,4 +27,5 @@ final class Id133UpdateRecipesPacketDefinition
                 PacketClassification.stateful(
                         PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
     }
+
 }

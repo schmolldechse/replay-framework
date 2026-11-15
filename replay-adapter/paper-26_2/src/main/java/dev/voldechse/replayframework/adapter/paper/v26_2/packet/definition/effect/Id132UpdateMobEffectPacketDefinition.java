@@ -39,6 +39,13 @@ final class Id132UpdateMobEffectPacketDefinition
     }
 
     @Override
+    public java.util.Optional<
+            dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily> checkpointFamily() {
+        return java.util.Optional.of(
+                dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily.RUNNING_EFFECT);
+    }
+
+    @Override
     protected Object decode(RawPacketFrame frame, PacketCodec<Object> codec) {
         Object decoded = super.decode(frame, codec);
         if (!(decoded instanceof ClientboundUpdateMobEffectPacket packet)) {

@@ -30,4 +30,5 @@ final class Id018ContainerSetContentPacketDefinition
                 PacketClassification.stateful(
                         PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
     }
+
 }

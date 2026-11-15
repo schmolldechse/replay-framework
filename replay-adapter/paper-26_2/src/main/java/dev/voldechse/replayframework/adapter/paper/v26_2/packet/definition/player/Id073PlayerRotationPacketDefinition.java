@@ -26,4 +26,5 @@ final class Id073PlayerRotationPacketDefinition
                 PacketClassification.stateful(
                         PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
     }
+
 }

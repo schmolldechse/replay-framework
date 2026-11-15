@@ -41,7 +41,9 @@ public final class Paper26_2AdapterProvider implements PaperAdapterProvider {
             Paper26_2CaptureBridge captureBridge = new Paper26_2CaptureBridge(
                     plugin, accessor, registry, nativePacketCodec);
             snapshotProvider = new Paper26_2SnapshotProvider(
-                    plugin, captureBridge::checkpointCapturePoint);
+                    plugin,
+                    captureBridge::checkpointCapturePoint,
+                    captureBridge::seedCheckpointEntityPosition);
             checkpointExecutor = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
                     new ArrayBlockingQueue<>(128),
                     Thread.ofPlatform().name("replay-checkpoint-", 0).factory(),

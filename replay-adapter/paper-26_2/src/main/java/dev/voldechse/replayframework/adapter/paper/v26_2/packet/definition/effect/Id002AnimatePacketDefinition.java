@@ -1,12 +1,16 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.definition.effect;
 
+import dev.voldechse.replayframework.adapter.CaptureContext;
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.paper.packet.PacketClassification;
+import dev.voldechse.replayframework.adapter.paper.packet.PacketCaptureState;
 import dev.voldechse.replayframework.adapter.paper.packet.RebuildingPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.packet.ValueRewriteResult;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
+import dev.voldechse.replayframework.adapter.paper.v26_2.packet.Paper26_2CaptureContexts;
 import io.netty.buffer.Unpooled;
+import java.util.UUID;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.protocol.game.ClientboundAnimatePacket;
 
@@ -32,6 +36,35 @@ final class Id002AnimatePacketDefinition extends RebuildingPacketDefinition<
                 PacketClassification.ephemeral(
                         PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES),
                 ClientboundAnimatePacket.class);
+    }
+
+
+    @Override
+    public boolean deduplicateRecipientCopies() {
+        return true;
+    }
+
+    @Override
+    public CaptureContext captureContext(
+            Object decodedPacket,
+            PacketDescriptor descriptor,
+            UUID connectionId,
+            PacketCaptureState state,
+            long serverTick) {
+        CaptureContext base = super.captureContext(
+                decodedPacket, descriptor, connectionId, state, serverTick);
+        return Paper26_2CaptureContexts.atEntity(
+                base, state, connectionId,
+                ClientboundAnimatePacket.class.cast(decodedPacket).getId());
+    }
+
+    @Override
+    public boolean suppressesRecipientState(
+            Object decodedPacket, PacketCaptureState state, long serverTick) {
+        Value value = read(ClientboundAnimatePacket.class.cast(decodedPacket));
+        return (value.action() == ClientboundAnimatePacket.SWING_MAIN_HAND
+                        || value.action() == ClientboundAnimatePacket.SWING_OFF_HAND)
+                && state.swingIsAuthoritative(value.entityId(), serverTick);
     }
 
     @Override

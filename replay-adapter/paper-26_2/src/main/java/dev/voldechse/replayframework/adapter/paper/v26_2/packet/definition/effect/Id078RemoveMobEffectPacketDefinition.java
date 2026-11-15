@@ -35,6 +35,13 @@ final class Id078RemoveMobEffectPacketDefinition extends RebuildingPacketDefinit
     }
 
     @Override
+    public java.util.Optional<
+            dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily> checkpointFamily() {
+        return java.util.Optional.of(
+                dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily.RUNNING_EFFECT);
+    }
+
+    @Override
     protected Value read(ClientboundRemoveMobEffectPacket packet) {
         return new Value(packet.entityId(), packet.effect());
     }

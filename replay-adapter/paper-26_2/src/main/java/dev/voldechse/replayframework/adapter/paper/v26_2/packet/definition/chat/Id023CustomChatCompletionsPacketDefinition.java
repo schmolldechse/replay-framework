@@ -28,4 +28,5 @@ final class Id023CustomChatCompletionsPacketDefinition
                 PacketClassification.stateful(
                         PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
     }
+
 }

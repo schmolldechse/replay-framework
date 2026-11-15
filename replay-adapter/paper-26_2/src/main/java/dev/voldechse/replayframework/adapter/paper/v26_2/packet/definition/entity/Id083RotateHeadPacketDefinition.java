@@ -1,13 +1,17 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.definition.entity;
 
+import dev.voldechse.replayframework.adapter.CaptureContext;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.paper.packet.PacketClassification;
+import dev.voldechse.replayframework.adapter.paper.packet.PacketCaptureState;
 import dev.voldechse.replayframework.adapter.paper.packet.RebuildingPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.packet.ValueRewriteResult;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
+import dev.voldechse.replayframework.adapter.paper.v26_2.packet.Paper26_2CaptureContexts;
 import io.netty.buffer.Unpooled;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.protocol.game.ClientboundRotateHeadPacket;
+import java.util.UUID;
 
 /** Complete read/rewrite/rebuild contract for {@code minecraft:rotate_head}. */
 final class Id083RotateHeadPacketDefinition extends RebuildingPacketDefinition<
@@ -25,6 +29,40 @@ final class Id083RotateHeadPacketDefinition extends RebuildingPacketDefinition<
                 PacketClassification.stateful(
                         PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES),
                 ClientboundRotateHeadPacket.class);
+    }
+
+    @Override
+    public java.util.Optional<
+            dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily> checkpointFamily() {
+        return java.util.Optional.of(
+                dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily.ENTITY_METADATA);
+    }
+
+
+    @Override
+    public boolean deduplicateRecipientCopies() {
+        return true;
+    }
+
+    @Override
+    public CaptureContext captureContext(
+            Object decodedPacket,
+            PacketDescriptor descriptor,
+            UUID connectionId,
+            PacketCaptureState state,
+            long serverTick) {
+        CaptureContext base = super.captureContext(
+                decodedPacket, descriptor, connectionId, state, serverTick);
+        return Paper26_2CaptureContexts.atEntity(
+                base, state, connectionId,
+                read(ClientboundRotateHeadPacket.class.cast(decodedPacket)).entityId());
+    }
+
+    @Override
+    public boolean suppressesRecipientState(
+            Object decodedPacket, PacketCaptureState state, long serverTick) {
+        return state.movementIsAuthoritative(
+                read(ClientboundRotateHeadPacket.class.cast(decodedPacket)).entityId());
     }
 
     @Override

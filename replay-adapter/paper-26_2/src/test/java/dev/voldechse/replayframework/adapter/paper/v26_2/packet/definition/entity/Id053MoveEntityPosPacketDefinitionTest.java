@@ -13,7 +13,9 @@ import dev.voldechse.replayframework.adapter.PacketDisposition;
 import dev.voldechse.replayframework.adapter.codec.PacketCodec;
 import dev.voldechse.replayframework.adapter.paper.packet.PacketRewriteResult;
 import dev.voldechse.replayframework.adapter.paper.v26_2.Paper26_2PacketRegistry;
+import dev.voldechse.replayframework.adapter.paper.v26_2.capture.Paper26_2CaptureTestState;
 import dev.voldechse.replayframework.adapter.paper.v26_2.packet.Paper26_2PacketCatalog;
+import dev.voldechse.replayframework.api.recording.BlockPosition;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
 import dev.voldechse.replayframework.adapter.playback.PlaybackIdentityContext;
 import dev.voldechse.replayframework.format.PacketPhase;
@@ -22,6 +24,7 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import java.util.Set;
 import java.util.UUID;
+import net.kyori.adventure.key.Key;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.ProtocolInfo;
@@ -63,6 +66,33 @@ final class Id053MoveEntityPosPacketDefinitionTest {
         assertEquals(
                 PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES,
                 definition.classification().playbackScope());
+    }
+
+    @Test
+    void captureContextAppliesRelativePositionToTheConnectionBaseline() {
+        var definition = new Id053MoveEntityPosPacketDefinition();
+        var captureState = Paper26_2CaptureTestState.create();
+        UUID connectionId = UUID.randomUUID();
+        Key world = Key.key("minecraft:overworld");
+        captureState.world(connectionId, world.toString());
+        captureState.entityPosition(connectionId, 300, world.toString(), 5.25, 63.75, -0.5);
+        ClientboundMoveEntityPacket.Pos packet = packet(
+                300, (short) 4096, (short) -2048, (short) 2048, true);
+
+        var context = definition.captureContext(
+                packet, descriptor(), connectionId, captureState, 17L);
+
+        assertEquals(java.util.Optional.of(world), context.world());
+        assertEquals(java.util.Optional.of(new BlockPosition(6, 63, 0)), context.position());
+        var position = captureState.entityPosition(connectionId, 300).orElseThrow();
+        assertEquals(6.25, position.x());
+        assertEquals(63.25, position.y());
+        assertEquals(0.0, position.z());
+        assertTrue(definition.deduplicateRecipientCopies());
+        assertFalse(definition.suppressesRecipientState(packet, captureState, 17L));
+
+        captureState.markMovementAuthoritative(300);
+        assertTrue(definition.suppressesRecipientState(packet, captureState, 17L));
     }
 
     @Test

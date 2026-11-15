@@ -1,10 +1,12 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.definition.chat;
 
+import dev.voldechse.replayframework.adapter.CaptureContext;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.paper.packet.PacketClassification;
 import dev.voldechse.replayframework.adapter.paper.packet.PacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.packet.PacketRewriteResult;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
+import dev.voldechse.replayframework.adapter.paper.packet.PacketCaptureState;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundDisguisedChatPacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerChatPacket;
@@ -33,6 +35,29 @@ final class Id065PlayerChatPacketDefinition
                 IDENTIFIER,
                 PacketClassification.configurable(
                         PacketDescriptor.PlaybackScope.SAFE));
+    }
+
+    @Override
+    public CaptureContext captureContext(
+            Object decodedPacket,
+            PacketDescriptor descriptor,
+            java.util.UUID connectionId,
+            PacketCaptureState state,
+            long serverTick) {
+        CaptureContext base = super.captureContext(
+                decodedPacket, descriptor, connectionId, state, serverTick);
+        ClientboundPlayerChatPacket packet = ClientboundPlayerChatPacket.class.cast(decodedPacket);
+        final String text;
+        if (packet.filterMask().isFullyFiltered()) {
+            text = "";
+        } else if (packet.unsignedContent() != null) {
+            text = packet.unsignedContent().getString();
+        } else {
+            String filtered = packet.filterMask().apply(packet.body().content());
+            text = filtered == null ? "" : filtered;
+        }
+        return dev.voldechse.replayframework.adapter.paper.v26_2.packet.Paper26_2CaptureContexts
+                .withChat(base, text);
     }
 
     @Override

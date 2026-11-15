@@ -44,6 +44,13 @@ final class Id099SetEntityDataPacketDefinition extends RebuildingPacketDefinitio
     }
 
     @Override
+    public java.util.Optional<
+            dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily> checkpointFamily() {
+        return java.util.Optional.of(
+                dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily.ENTITY_METADATA);
+    }
+
+    @Override
     protected Value read(ClientboundSetEntityDataPacket packet) {
         return new Value(packet.id(), packet.packedItems());
     }

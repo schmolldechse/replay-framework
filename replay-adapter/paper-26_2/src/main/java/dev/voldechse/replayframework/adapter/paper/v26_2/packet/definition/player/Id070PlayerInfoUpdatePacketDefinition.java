@@ -47,6 +47,13 @@ final class Id070PlayerInfoUpdatePacketDefinition extends RebuildingPacketDefini
     }
 
     @Override
+    public java.util.Optional<
+            dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily> checkpointFamily() {
+        return java.util.Optional.of(
+                dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily.GLOBAL_STATE);
+    }
+
+    @Override
     protected Value read(ClientboundPlayerInfoUpdatePacket packet) {
         return new Value(
                 packet.actions(),

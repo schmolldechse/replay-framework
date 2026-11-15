@@ -27,4 +27,5 @@ final class Id052MerchantOffersPacketDefinition
                 PacketClassification.stateful(
                         PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
     }
+
 }

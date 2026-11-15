@@ -27,4 +27,5 @@ final class Id074RecipeBookAddPacketDefinition
                 PacketClassification.stateful(
                         PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
     }
+
 }

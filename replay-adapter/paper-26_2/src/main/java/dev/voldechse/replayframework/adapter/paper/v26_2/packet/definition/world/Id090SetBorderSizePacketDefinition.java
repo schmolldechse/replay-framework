@@ -34,6 +34,13 @@ final class Id090SetBorderSizePacketDefinition extends RebuildingPacketDefinitio
     }
 
     @Override
+    public java.util.Optional<
+            dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily> checkpointFamily() {
+        return java.util.Optional.of(
+                dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily.GLOBAL_STATE);
+    }
+
+    @Override
     protected Value read(ClientboundSetBorderSizePacket packet) {
         return new Value(packet.getSize());
     }

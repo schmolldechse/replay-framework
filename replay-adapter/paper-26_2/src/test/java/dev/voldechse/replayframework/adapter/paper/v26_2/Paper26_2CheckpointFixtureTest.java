@@ -4,12 +4,8 @@ import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.PacketDisposition;
 import dev.voldechse.replayframework.adapter.PacketRegistry;
 import dev.voldechse.replayframework.adapter.CheckpointEncoder;
-import dev.voldechse.replayframework.adapter.CaptureBridge;
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
-import dev.voldechse.replayframework.api.recording.BlockPosition;
-import dev.voldechse.replayframework.api.recording.CuboidRegion;
 import dev.voldechse.replayframework.api.recording.RecordingScope;
-import dev.voldechse.replayframework.adapter.paper.v26_2.capture.Paper26_2SyntheticStateCollector;
 import dev.voldechse.replayframework.adapter.paper.v26_2.checkpoint.Paper26_2CheckpointEncoder;
 import dev.voldechse.replayframework.format.PacketPhase;
 import dev.voldechse.replayframework.format.RawPacketFrame;
@@ -31,10 +27,10 @@ import net.kyori.adventure.key.Key;
 import net.minecraft.network.PacketListener;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.PacketType;
-import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
@@ -42,6 +38,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 final class Paper26_2CheckpointFixtureTest {
+    @BeforeAll
+    static void bootstrapPaperRegistries() {
+        net.minecraft.SharedConstants.tryDetectVersion();
+        net.minecraft.server.Bootstrap.bootStrap();
+        net.minecraft.server.Bootstrap.validate();
+    }
+
     private static final Packet<PacketListener> TEST_PACKET = new Packet<>() {
         @Override
         public PacketType<? extends Packet<PacketListener>> type() {
@@ -117,7 +120,7 @@ final class Paper26_2CheckpointFixtureTest {
     @Test
     void encodesAllCheckpointFamiliesInStableOrder(@TempDir Path temporaryDirectory) throws Exception {
         List<DescriptorSpec> specifications = List.of(
-                descriptor("minecraft:login", 1),
+                descriptor("minecraft:set_default_spawn_position", 1),
                 descriptor("minecraft:level_chunk_with_light", 2),
                 descriptor("minecraft:block_entity_data", 3),
                 descriptor("minecraft:set_time", 4),
@@ -142,7 +145,7 @@ final class Paper26_2CheckpointFixtureTest {
                         blueprint("minecraft:set_equipment", Paper26_2CheckpointEncoder.CheckpointPacketFamily.EQUIPMENT, "minecraft:world", "entity:9"),
                         blueprint("minecraft:add_entity", Paper26_2CheckpointEncoder.CheckpointPacketFamily.ENTITY_SPAWN, "minecraft:world", "entity:9"),
                         blueprint("minecraft:block_entity_data", Paper26_2CheckpointEncoder.CheckpointPacketFamily.BLOCK_ENTITY, "minecraft:world", "block:1,64,1"),
-                        blueprint("minecraft:login", Paper26_2CheckpointEncoder.CheckpointPacketFamily.DIMENSION_SPAWN, "minecraft:world", "spawn"),
+                        blueprint("minecraft:set_default_spawn_position", Paper26_2CheckpointEncoder.CheckpointPacketFamily.DIMENSION_SPAWN, "minecraft:world", "spawn"),
                         blueprint("minecraft:set_entity_data", Paper26_2CheckpointEncoder.CheckpointPacketFamily.ENTITY_METADATA, "minecraft:world", "entity:9"),
                         blueprint("minecraft:set_time", Paper26_2CheckpointEncoder.CheckpointPacketFamily.GLOBAL_STATE, "minecraft:world", "time"),
                         blueprint("minecraft:set_passengers", Paper26_2CheckpointEncoder.CheckpointPacketFamily.PASSENGERS, "minecraft:world", "entity:9"),
@@ -218,70 +221,6 @@ final class Paper26_2CheckpointFixtureTest {
     }
 
     @Test
-    void emitsOnlyUnobservedStateChangesInsideTheRecordingScope() {
-        PacketDescriptor descriptor = descriptor("minecraft:block_update", 11).descriptor();
-        PacketRegistry registry = PacketRegistry.of(List.of(descriptor));
-        RecordingScope scope = RecordingScope.builder()
-                .addRegion(new CuboidRegion(
-                        Key.key("minecraft:world"),
-                        new BlockPosition(0, 0, 0),
-                        new BlockPosition(15, 255, 15)))
-                .build();
-
-        Paper26_2SyntheticStateCollector collector = new Paper26_2SyntheticStateCollector(
-                registry,
-                scope,
-                packet -> new Paper26_2SyntheticStateCollector.ObservedStateKey(
-                        packet.serverTick(),
-                        Paper26_2CheckpointEncoder.CheckpointPacketFamily.BLOCK_ENTITY,
-                        "minecraft:world",
-                        "block:1,64,1"),
-                delta -> new Paper26_2SyntheticStateCollector.SyntheticStatePacket(
-                        delta.captureTimeNanos(),
-                        delta.serverTick(),
-                        PacketPhase.PLAY,
-                        delta.packetId(),
-                        delta.family(),
-                        delta.worldKey(),
-                        delta.targetKey(),
-                        delta.position(),
-                        delta.payload()));
-
-        collector.observe(new CaptureBridge.CapturePacket(
-                100L,
-                4L,
-                0,
-                PacketPhase.PLAY,
-                11,
-                new byte[]{7}));
-
-        Paper26_2SyntheticStateCollector.StateDelta observed = stateDelta(
-                101L, 4L, "block:1,64,1", new BlockPosition(1, 64, 1));
-        assertTrue(collector.collect(observed).isEmpty());
-
-        Paper26_2SyntheticStateCollector.StateDelta unobserved = stateDelta(
-                102L, 4L, "block:2,64,2", new BlockPosition(2, 64, 2));
-        List<Paper26_2SyntheticStateCollector.SyntheticStatePacket> emitted =
-                collector.collect(unobserved);
-        assertEquals(1, emitted.size());
-        assertEquals("block:2,64,2", emitted.get(0).targetKey());
-        assertArrayEquals(new byte[]{2}, emitted.get(0).payload());
-
-        byte[] mutablePayload = emitted.get(0).payload();
-        mutablePayload[0] = 99;
-        assertArrayEquals(new byte[]{2}, emitted.get(0).payload());
-        assertTrue(collector.collect(unobserved).isEmpty());
-
-        Paper26_2SyntheticStateCollector.StateDelta nextTick = stateDelta(
-                200L, 5L, "block:2,64,2", new BlockPosition(2, 64, 2));
-        assertEquals(1, collector.collect(nextTick).size());
-
-        Paper26_2SyntheticStateCollector.StateDelta outsideScope = stateDelta(
-                201L, 5L, "block:20,64,20", new BlockPosition(20, 64, 20));
-        assertTrue(collector.collect(outsideScope).isEmpty());
-    }
-
-    @Test
     void refusesCheckpointRelevantDescriptorWithoutSafeGenerator() {
         PacketRegistry registry = PacketRegistry.of(List.of(
                 descriptor("minecraft:block_changed_ack", 12).descriptor()));
@@ -326,22 +265,6 @@ final class Paper26_2CheckpointFixtureTest {
                 worldKey,
                 targetKey,
                 TEST_PACKET);
-    }
-
-    private static Paper26_2SyntheticStateCollector.StateDelta stateDelta(
-            long captureTimeNanos,
-            long serverTick,
-            String targetKey,
-            BlockPosition position) {
-        return new Paper26_2SyntheticStateCollector.StateDelta(
-                captureTimeNanos,
-                serverTick,
-                Paper26_2CheckpointEncoder.CheckpointPacketFamily.BLOCK_ENTITY,
-                "minecraft:world",
-                targetKey,
-                position,
-                11,
-                new byte[]{(byte) position.x()});
     }
 
     private record DescriptorSpec(String typeName, int packetId, PacketDescriptor descriptor) {

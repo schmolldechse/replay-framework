@@ -35,6 +35,13 @@ final class Id037ForgetLevelChunkPacketDefinition extends RebuildingPacketDefini
     }
 
     @Override
+    public java.util.Optional<
+            dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily> checkpointFamily() {
+        return java.util.Optional.of(
+                dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily.CHUNK_LIGHT);
+    }
+
+    @Override
     protected Value read(ClientboundForgetLevelChunkPacket packet) {
         return new Value(packet.pos());
     }

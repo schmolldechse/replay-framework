@@ -36,6 +36,13 @@ final class Id113SetTimePacketDefinition extends RebuildingPacketDefinition<
     }
 
     @Override
+    public java.util.Optional<
+            dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily> checkpointFamily() {
+        return java.util.Optional.of(
+                dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily.GLOBAL_STATE);
+    }
+
+    @Override
     protected Value read(ClientboundSetTimePacket packet) {
         return new Value(packet.gameTime(), packet.clockUpdates());
     }

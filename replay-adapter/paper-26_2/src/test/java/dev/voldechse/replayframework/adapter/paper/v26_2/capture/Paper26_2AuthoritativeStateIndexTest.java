@@ -10,6 +10,8 @@ import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import net.kyori.adventure.key.Key;
 import net.minecraft.network.protocol.game.ClientboundAnimatePacket;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ItemStack;
@@ -17,7 +19,7 @@ import net.minecraft.world.item.Items;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-class Paper26_2EntityStateCaptureTest {
+class Paper26_2AuthoritativeStateIndexTest {
 
     @BeforeAll
     static void bootstrap() {
@@ -27,50 +29,45 @@ class Paper26_2EntityStateCaptureTest {
     }
 
     @Test
-    void authoritativeStateSuppressesOnlyMatchingRecipientDerivedPackets() {
+    void relativePositionsAreTrackedIndependentlyPerConnection() {
         var index = new Paper26_2AuthoritativeStateIndex();
-        index.markMovement(300);
-        index.markEquipment(300);
+        UUID firstConnection = UUID.randomUUID();
+        UUID secondConnection = UUID.randomUUID();
+        Key overworld = Key.key("minecraft:overworld");
+        index.world(firstConnection, overworld.toString());
+        index.world(secondConnection, overworld.toString());
+        index.seedEntityPosition(300, overworld.toString(), 10.25, 64.0, -4.5);
 
-        assertTrue(index.suppresses(
-                "play.clientbound.minecraft:move_entity_pos", varInt(300), 40));
-        assertTrue(index.suppresses(
-                "play.clientbound.minecraft:entity_position_sync", varInt(300), 40));
-        assertFalse(index.suppresses(
-                "play.clientbound.minecraft:move_entity_pos", varInt(301), 40));
-        assertFalse(index.suppresses(
-                "play.clientbound.minecraft:set_entity_motion", varInt(300), 40));
-        assertTrue(index.suppresses(
-                "play.clientbound.minecraft:set_equipment", varInt(300), 40));
-        assertFalse(index.suppresses(
-                "play.clientbound.minecraft:set_equipment", varInt(301), 40));
-        assertTrue(index.suppresses(
-                "play.clientbound.minecraft:entity_event", entityEvent(300, 55), 40));
-        assertFalse(index.suppresses(
-                "play.clientbound.minecraft:entity_event", entityEvent(300, 3), 40));
+        index.moveEntity(firstConnection, 300, 0.25, 0.0, 0.0);
+        index.moveEntity(secondConnection, 300, 0.25, 0.0, 0.0);
+
+        assertEquals(10.5, index.entityPosition(firstConnection, 300).orElseThrow().x());
+        assertEquals(10.5, index.entityPosition(secondConnection, 300).orElseThrow().x());
+
+        index.world(firstConnection, "minecraft:the_nether");
+        assertTrue(index.entityPosition(firstConnection, 300).isEmpty());
+        assertEquals(10.5, index.entityPosition(secondConnection, 300).orElseThrow().x());
     }
 
     @Test
-    void playerSwingSuppressionIsActionAndTickScoped() {
+    void playerAuthorityAndRemovalAreScopedToEntityState() {
         var index = new Paper26_2AuthoritativeStateIndex();
-        index.markSwing(300, 40);
+        index.markMovementAuthoritative(300);
+        index.markEquipmentAuthoritative(300);
+        index.markSwingAuthoritative(300, 40);
 
-        assertTrue(index.suppresses(
-                "play.clientbound.minecraft:animate",
-                animation(300, ClientboundAnimatePacket.SWING_MAIN_HAND),
-                40));
-        assertTrue(index.suppresses(
-                "play.clientbound.minecraft:animate",
-                animation(300, ClientboundAnimatePacket.SWING_OFF_HAND),
-                40));
-        assertFalse(index.suppresses(
-                "play.clientbound.minecraft:animate",
-                animation(300, ClientboundAnimatePacket.CRITICAL_HIT),
-                40));
-        assertFalse(index.suppresses(
-                "play.clientbound.minecraft:animate",
-                animation(300, ClientboundAnimatePacket.SWING_MAIN_HAND),
-                41));
+        assertTrue(index.movementIsAuthoritative(300));
+        assertTrue(index.equipmentIsAuthoritative(300));
+        assertTrue(index.swingIsAuthoritative(300, 40));
+        assertFalse(index.swingIsAuthoritative(300, 41));
+        assertFalse(index.movementIsAuthoritative(301));
+        assertFalse(index.equipmentIsAuthoritative(301));
+
+        index.removeEntity(300);
+
+        assertFalse(index.movementIsAuthoritative(300));
+        assertFalse(index.equipmentIsAuthoritative(300));
+        assertFalse(index.swingIsAuthoritative(300, 40));
     }
 
     @Test
@@ -128,36 +125,5 @@ class Paper26_2EntityStateCaptureTest {
             holder.bindComponents(net.minecraft.core.component.DataComponentMap.EMPTY);
         }
         return new ItemStack(holder);
-    }
-
-    private static byte[] animation(int entityId, int action) {
-        byte[] entity = varInt(entityId);
-        byte[] result = Arrays.copyOf(entity, entity.length + 1);
-        result[entity.length] = (byte) action;
-        return result;
-    }
-
-    private static byte[] entityEvent(int entityId, int event) {
-        return new byte[] {
-            (byte) (entityId >>> 24),
-            (byte) (entityId >>> 16),
-            (byte) (entityId >>> 8),
-            (byte) entityId,
-            (byte) event
-        };
-    }
-
-    private static byte[] varInt(int value) {
-        byte[] result = new byte[5];
-        int index = 0;
-        do {
-            int current = value & 0x7F;
-            value >>>= 7;
-            if (value != 0) {
-                current |= 0x80;
-            }
-            result[index++] = (byte) current;
-        } while (value != 0);
-        return Arrays.copyOf(result, index);
     }
 }

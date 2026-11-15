@@ -1,11 +1,8 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.capture;
 
-import dev.voldechse.replayframework.adapter.CaptureContext;
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
-import dev.voldechse.replayframework.adapter.PacketDisposition;
 import dev.voldechse.replayframework.adapter.PacketRegistry;
-import dev.voldechse.replayframework.api.recording.BlockPosition;
 import dev.voldechse.replayframework.format.PacketPhase;
 import dev.voldechse.replayframework.format.RawPacketFrame;
 import io.netty.buffer.ByteBuf;
@@ -17,7 +14,6 @@ import io.netty.channel.ChannelOutboundHandler;
 import io.netty.channel.ChannelPipeline;
 import java.lang.reflect.Field;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
 import net.minecraft.network.Connection;
@@ -25,21 +21,8 @@ import net.minecraft.network.PacketEncoder;
 import net.minecraft.network.ProtocolInfo;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.PacketFlow;
-import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
-import net.minecraft.network.protocol.game.ClientboundAddEntityPacket;
-import net.minecraft.network.protocol.game.ClientboundBlockDestructionPacket;
-import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
-import net.minecraft.network.protocol.game.ClientboundBlockEventPacket;
-import net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket;
-import net.minecraft.network.protocol.game.ClientboundDisguisedChatPacket;
-import net.minecraft.network.protocol.game.ClientboundEntityPositionSyncPacket;
-import net.minecraft.network.protocol.game.ClientboundPlayerChatPacket;
-import net.minecraft.network.protocol.game.ClientboundSystemChatPacket;
-import net.minecraft.network.protocol.game.ClientboundTeleportEntityPacket;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
 import org.bukkit.entity.Player;
 import org.bukkit.craftbukkit.entity.CraftPlayer;
 
@@ -289,35 +272,6 @@ public final class PaperConnectionAccessor {
         }
     }
 
-    /**
-     * Extracts only semantic facts that Paper 26.2 exposes as typed packet or
-     * connection state. This method is deliberately adapter-local: the core
-     * receives the resulting immutable context and never reflects over NMS or
-     * guesses from serialized payload bytes.
-     *
-     * <p>Packets carrying multiple positions, relative movement or an opaque
-     * state aggregate return no position. Treating a representative point as
-     * the whole packet would silently violate a bounded recording region.</p>
-     */
-    public CaptureContext captureContext(
-            Object outboundPacket,
-            PacketDescriptor descriptor,
-            Optional<net.kyori.adventure.key.Key> world) {
-        Objects.requireNonNull(outboundPacket, "outboundPacket");
-        Objects.requireNonNull(descriptor, "descriptor");
-        Objects.requireNonNull(world, "world");
-
-        Optional<String> chat = normalizedChat(outboundPacket);
-        Optional<net.kyori.adventure.key.Key> customChannel = customPayloadChannel(outboundPacket);
-        Optional<BlockPosition> position = packetPosition(outboundPacket);
-        return new CaptureContext(
-                Optional.of(descriptor.disposition()),
-                world,
-                position,
-                chat,
-                customChannel);
-    }
-
     /** Returns the current Paper server tick used by capture sequencing. */
     public long currentServerTick() {
         MinecraftServer server = MinecraftServer.getServer();
@@ -345,78 +299,6 @@ public final class PaperConnectionAccessor {
             return null;
         }
         return new ConnectionHandle(player.getUniqueId(), channel);
-    }
-
-    private static Optional<String> normalizedChat(Object packet) {
-        final String text;
-        if (packet instanceof ClientboundSystemChatPacket systemChat) {
-            text = systemChat.content().getString();
-        } else if (packet instanceof ClientboundPlayerChatPacket playerChat) {
-            if (playerChat.filterMask().isFullyFiltered()) {
-                text = "";
-            } else if (playerChat.unsignedContent() != null) {
-                text = playerChat.unsignedContent().getString();
-            } else {
-                // Paper 26.2 permits absent unsigned content. In that form,
-                // expose only the signed body text allowed by its filter mask.
-                String filtered = playerChat.filterMask().apply(playerChat.body().content());
-                text = filtered == null ? "" : filtered;
-            }
-        } else if (packet instanceof ClientboundDisguisedChatPacket disguisedChat) {
-            text = disguisedChat.message().getString();
-        } else {
-            return Optional.empty();
-        }
-        return Optional.of(text);
-    }
-
-    private static Optional<net.kyori.adventure.key.Key> customPayloadChannel(Object packet) {
-        if (!(packet instanceof ClientboundCustomPayloadPacket customPayload)) {
-            return Optional.empty();
-        }
-        Identifier identifier = customPayload.payload().type().id();
-        return Optional.of(net.kyori.adventure.key.Key.key(identifier.toString()));
-    }
-
-    private static Optional<BlockPosition> packetPosition(Object packet) {
-        if (packet instanceof ClientboundBlockDestructionPacket blockDestruction) {
-            return Optional.of(toApiPosition(blockDestruction.getPos()));
-        }
-        if (packet instanceof ClientboundBlockUpdatePacket blockUpdate) {
-            return Optional.of(toApiPosition(blockUpdate.getPos()));
-        }
-        if (packet instanceof ClientboundBlockEntityDataPacket blockEntityData) {
-            return Optional.of(toApiPosition(blockEntityData.getPos()));
-        }
-        if (packet instanceof ClientboundBlockEventPacket blockEvent) {
-            return Optional.of(toApiPosition(blockEvent.getPos()));
-        }
-        if (packet instanceof ClientboundAddEntityPacket addEntity) {
-            return Optional.of(new BlockPosition(
-                    floor(addEntity.getX()), floor(addEntity.getY()), floor(addEntity.getZ())));
-        }
-        if (packet instanceof ClientboundTeleportEntityPacket teleport
-                && teleport.relatives().isEmpty()) {
-            return Optional.of(toApiPosition(BlockPos.containing(teleport.change().position())));
-        }
-        if (packet instanceof ClientboundEntityPositionSyncPacket sync) {
-            return Optional.of(toApiPosition(BlockPos.containing(sync.values().position())));
-        }
-        // Chunk and section updates encode multiple positions. Returning an
-        // arbitrary origin would make a bounded scope accept or reject the
-        // complete update incorrectly, so the safe value is unknown.
-        return Optional.empty();
-    }
-
-    private static BlockPosition toApiPosition(BlockPos position) {
-        return new BlockPosition(position.getX(), position.getY(), position.getZ());
-    }
-
-    private static int floor(double value) {
-        if (value < Integer.MIN_VALUE || value > Integer.MAX_VALUE) {
-            throw incompatible("Paper packet position exceeds block-coordinate bounds", null);
-        }
-        return (int) Math.floor(value);
     }
 
     private static ProtocolInfo<?> protocolInfoOf(PacketEncoder<?> encoder) {

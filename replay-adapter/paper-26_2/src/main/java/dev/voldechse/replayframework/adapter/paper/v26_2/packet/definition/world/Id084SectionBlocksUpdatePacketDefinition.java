@@ -35,6 +35,13 @@ final class Id084SectionBlocksUpdatePacketDefinition extends RebuildingPacketDef
     }
 
     @Override
+    public java.util.Optional<
+            dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily> checkpointFamily() {
+        return java.util.Optional.of(
+                dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily.BLOCK_ENTITY);
+    }
+
+    @Override
     protected Value read(ClientboundSectionBlocksUpdatePacket packet) {
         Objects.requireNonNull(packet, "packet");
         packet.runUpdates((ignoredPosition, state) -> requireRegisteredState(state));

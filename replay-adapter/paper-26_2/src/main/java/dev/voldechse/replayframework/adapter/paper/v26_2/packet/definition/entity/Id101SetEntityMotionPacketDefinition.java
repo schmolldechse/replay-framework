@@ -28,6 +28,13 @@ final class Id101SetEntityMotionPacketDefinition extends RebuildingPacketDefinit
     }
 
     @Override
+    public java.util.Optional<
+            dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily> checkpointFamily() {
+        return java.util.Optional.of(
+                dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily.ENTITY_METADATA);
+    }
+
+    @Override
     protected Value read(ClientboundSetEntityMotionPacket packet) {
         return new Value(packet.id(), packet.movement());
     }

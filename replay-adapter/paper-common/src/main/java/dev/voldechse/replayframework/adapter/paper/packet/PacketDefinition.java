@@ -1,11 +1,14 @@
 package dev.voldechse.replayframework.adapter.paper.packet;
 
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
+import dev.voldechse.replayframework.adapter.CaptureContext;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.codec.PacketCodec;
 import dev.voldechse.replayframework.format.PacketPhase;
 import dev.voldechse.replayframework.format.RawPacketFrame;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
 
 /**
  * One explicit packet implementation. The definition owns descriptor policy
@@ -48,6 +51,48 @@ public abstract class PacketDefinition<C> {
 
     public final PacketClassification classification() {
         return classification;
+    }
+
+    /** Returns this packet's checkpoint family when it contributes snapshot state. */
+    public Optional<PacketCheckpointFamily> checkpointFamily() {
+        return Optional.empty();
+    }
+
+    /** Whether identical same-tick observations can be recipient copies of one entity update. */
+    public boolean deduplicateRecipientCopies() {
+        return false;
+    }
+
+    /**
+     * Builds capture context from the decoded packet and packet-owned state.
+     * Implementations may update the supplied state for later relative packets.
+     */
+    public CaptureContext captureContext(
+            Object decodedPacket,
+            PacketDescriptor descriptor,
+            UUID connectionId,
+            PacketCaptureState state,
+            long serverTick) {
+        Objects.requireNonNull(decodedPacket, "decodedPacket");
+        validateCaptureDescriptor(descriptor);
+        Objects.requireNonNull(state, "state");
+        if (serverTick < 0L) {
+            throw new IllegalArgumentException("serverTick must not be negative");
+        }
+        return state.contextForConnection(connectionId, descriptor.disposition());
+    }
+
+    /** Suppresses recipient copies only when a packet-driven authoritative source owns the state. */
+    public boolean suppressesRecipientState(
+            Object decodedPacket,
+            PacketCaptureState state,
+            long serverTick) {
+        Objects.requireNonNull(decodedPacket, "decodedPacket");
+        Objects.requireNonNull(state, "state");
+        if (serverTick < 0L) {
+            throw new IllegalArgumentException("serverTick must not be negative");
+        }
+        return false;
     }
 
     /** Applies policy, decodes only when permitted, then reads/rewrites/rebuilds the packet. */
@@ -153,6 +198,17 @@ public abstract class PacketDefinition<C> {
         if (!classification.playbackScope().equals(descriptor.playbackScope())) {
             throw new IncompatibleAdapterException(
                     "packet definition scope differs from descriptor for " + typeName);
+        }
+    }
+
+    private void validateCaptureDescriptor(PacketDescriptor descriptor) {
+        Objects.requireNonNull(descriptor, "descriptor");
+        if (!typeName.equals(descriptor.typeName())
+                || packetId != descriptor.packetId()
+                || descriptor.phase() != PacketPhase.PLAY
+                || descriptor.direction() != PacketDescriptor.Direction.CLIENTBOUND) {
+            throw new IncompatibleAdapterException(
+                    "captured packet does not match definition for " + typeName);
         }
     }
 

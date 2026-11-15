@@ -1,12 +1,18 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.definition.entity;
 
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
+import dev.voldechse.replayframework.adapter.CaptureContext;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.paper.packet.PacketClassification;
+import dev.voldechse.replayframework.adapter.paper.packet.PacketCaptureState;
 import dev.voldechse.replayframework.adapter.paper.packet.RebuildingPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.packet.ValueRewriteResult;
+import dev.voldechse.replayframework.adapter.paper.v26_2.packet.Paper26_2CaptureContexts;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
+import net.kyori.adventure.key.Key;
 import net.minecraft.network.protocol.game.ClientboundEntityPositionSyncPacket;
 import net.minecraft.world.entity.PositionMoveRotation;
 import net.minecraft.world.phys.Vec3;
@@ -35,6 +41,53 @@ final class Id035EntityPositionSyncPacketDefinition extends RebuildingPacketDefi
                 PacketClassification.stateful(
                         PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES),
                 ClientboundEntityPositionSyncPacket.class);
+    }
+
+    @Override
+    public java.util.Optional<
+            dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily> checkpointFamily() {
+        return java.util.Optional.of(
+                dev.voldechse.replayframework.adapter.paper.packet.PacketCheckpointFamily.ENTITY_METADATA);
+    }
+
+
+    @Override
+    public boolean deduplicateRecipientCopies() {
+        return true;
+    }
+
+    @Override
+    public CaptureContext captureContext(
+            Object decodedPacket,
+            PacketDescriptor descriptor,
+            UUID connectionId,
+            PacketCaptureState state,
+            long serverTick) {
+        CaptureContext base = super.captureContext(
+                decodedPacket, descriptor, connectionId, state, serverTick);
+        Value value = read(ClientboundEntityPositionSyncPacket.class.cast(decodedPacket));
+        Optional<String> world = state.entityPosition(connectionId, value.entityId())
+                .map(PacketCaptureState.EntityPosition::world)
+                .or(() -> state.world(connectionId))
+                .or(() -> base.world().map(Key::toString));
+        world.ifPresent(key -> state.entityPosition(
+                connectionId, value.entityId(), key,
+                value.values().position().x,
+                value.values().position().y,
+                value.values().position().z));
+        return world.<CaptureContext>map(key -> Paper26_2CaptureContexts.atPosition(
+                        base, Key.key(key),
+                        value.values().position().x,
+                        value.values().position().y,
+                        value.values().position().z))
+                .orElse(base);
+    }
+
+    @Override
+    public boolean suppressesRecipientState(
+            Object decodedPacket, PacketCaptureState state, long serverTick) {
+        return state.movementIsAuthoritative(
+                ClientboundEntityPositionSyncPacket.class.cast(decodedPacket).id());
     }
 
     @Override
