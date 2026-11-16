@@ -6,6 +6,7 @@ import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.codec.PacketCodec;
 import dev.voldechse.replayframework.format.PacketPhase;
 import dev.voldechse.replayframework.format.RawPacketFrame;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -93,6 +94,29 @@ public abstract class PacketDefinition<C> {
             throw new IllegalArgumentException("serverTick must not be negative");
         }
         return false;
+    }
+
+    /**
+     * Returns scene packets this observation implies for the neutral stream.
+     *
+     * <p>Some connection-local packets carry a scene change that the protocol
+     * only sends as separate packets to other recipients, for example the
+     * entity replacement behind a respawn. A definition may translate such an
+     * observation into the equivalent recipient-independent packets, using
+     * only fields of the decoded packet and packet-owned capture state. The
+     * capture bridge publishes them directly after the observed packet.</p>
+     */
+    public List<DerivedScenePacket> derivedScenePackets(
+            Object decodedPacket,
+            UUID connectionId,
+            PacketCaptureState state,
+            long serverTick) {
+        Objects.requireNonNull(decodedPacket, "decodedPacket");
+        Objects.requireNonNull(state, "state");
+        if (serverTick < 0L) {
+            throw new IllegalArgumentException("serverTick must not be negative");
+        }
+        return List.of();
     }
 
     /** Applies policy, decodes only when permitted, then reads/rewrites/rebuilds the packet. */

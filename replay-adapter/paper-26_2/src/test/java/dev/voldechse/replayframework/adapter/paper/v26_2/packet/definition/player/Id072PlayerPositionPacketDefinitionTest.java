@@ -99,6 +99,87 @@ final class Id072PlayerPositionPacketDefinitionTest {
     }
 
     @Test
+    void derivesTheEntityReplacementFromTheFirstAbsoluteCorrectionAfterARespawn() {
+        var definition = new Id072PlayerPositionPacketDefinition();
+        var state = dev.voldechse.replayframework.adapter.paper.v26_2.capture
+                .Paper26_2CaptureTestState.create();
+        UUID connectionId = UUID.fromString("00000000-0000-0000-0000-000000000019");
+        state.world(connectionId, "minecraft:overworld");
+        state.connectionEntityId(connectionId, 19);
+        state.markRespawnPending(connectionId);
+
+        var derived = definition.derivedScenePackets(
+                new ClientboundPlayerPositionPacket(7, CHANGE, Set.of()), connectionId, state, 40L);
+
+        assertEquals(2, derived.size());
+        var remove = assertInstanceOf(
+                net.minecraft.network.protocol.game.ClientboundRemoveEntitiesPacket.class,
+                derived.get(0).packet());
+        assertEquals(List.of(19), remove.getEntityIds().intStream().boxed().toList());
+        var add = assertInstanceOf(
+                net.minecraft.network.protocol.game.ClientboundAddEntityPacket.class,
+                derived.get(1).packet());
+        assertEquals(19, add.getId());
+        assertEquals(connectionId, add.getUUID());
+        assertEquals(net.minecraft.world.entity.EntityTypes.PLAYER, add.getType());
+        assertEquals(12.25, add.getX());
+        assertEquals(-64.5, add.getY());
+        assertEquals(-0.0, add.getZ());
+        assertEquals(179.5F, add.getYRot(), 360.0F / 256.0F);
+        assertEquals(-90.0F, add.getXRot(), 360.0F / 256.0F);
+        assertEquals(179.5F, add.getYHeadRot(), 360.0F / 256.0F);
+        assertEquals(0, add.getData());
+        for (var packet : derived) {
+            assertEquals("minecraft:overworld", packet.position().world());
+            assertEquals(12, packet.position().blockX());
+            assertEquals(-65, packet.position().blockY());
+        }
+        assertTrue(state.entityReplacedAt(19, 40L));
+        assertEquals(12.25, state.entityPosition(connectionId, 19).orElseThrow().x());
+
+        // The respawn is consumed; an ordinary later correction derives nothing.
+        assertTrue(definition.derivedScenePackets(
+                        new ClientboundPlayerPositionPacket(8, CHANGE, Set.of()),
+                        connectionId, state, 41L)
+                .isEmpty());
+    }
+
+    @Test
+    void derivesNothingWithoutARespawnAndKeepsItPendingAcrossRelativeCorrections() {
+        var definition = new Id072PlayerPositionPacketDefinition();
+        var state = dev.voldechse.replayframework.adapter.paper.v26_2.capture
+                .Paper26_2CaptureTestState.create();
+        UUID connectionId = UUID.fromString("00000000-0000-0000-0000-000000000019");
+        state.world(connectionId, "minecraft:overworld");
+        state.connectionEntityId(connectionId, 19);
+
+        assertTrue(definition.derivedScenePackets(
+                        new ClientboundPlayerPositionPacket(1, CHANGE, Set.of()),
+                        connectionId, state, 40L)
+                .isEmpty());
+
+        state.markRespawnPending(connectionId);
+        assertTrue(definition.derivedScenePackets(
+                        new ClientboundPlayerPositionPacket(2, CHANGE, Set.of(Relative.Y)),
+                        connectionId, state, 40L)
+                .isEmpty());
+        assertFalse(state.entityReplacedAt(19, 40L));
+        assertEquals(2, definition.derivedScenePackets(
+                        new ClientboundPlayerPositionPacket(3, CHANGE, Set.of()),
+                        connectionId, state, 40L)
+                .size());
+
+        // Without a known owner entity the respawn cannot be translated.
+        UUID unknown = UUID.fromString("00000000-0000-0000-0000-000000000020");
+        state.world(unknown, "minecraft:overworld");
+        state.markRespawnPending(unknown);
+        assertTrue(definition.derivedScenePackets(
+                        new ClientboundPlayerPositionPacket(4, CHANGE, Set.of()),
+                        unknown, state, 40L)
+                .isEmpty());
+    }
+
+    @Test
     void nativeCodecRoundTripsEveryCombinationOfTheNineRelativeFlags() {
         ProtocolInfo<?> protocol = protocol();
 

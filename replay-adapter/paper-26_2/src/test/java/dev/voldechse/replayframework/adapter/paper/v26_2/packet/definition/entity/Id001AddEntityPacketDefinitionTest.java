@@ -51,6 +51,31 @@ final class Id001AddEntityPacketDefinitionTest {
     }
 
     @Test
+    void suppressesRecipientCopiesOfAnEntityTheAdapterReplacedOnRespawn() {
+        var definition = new Id001AddEntityPacketDefinition();
+        var state = dev.voldechse.replayframework.adapter.paper.v26_2.capture
+                .Paper26_2CaptureTestState.create();
+        var packet = new ClientboundAddEntityPacket(
+                19,
+                java.util.UUID.fromString("00000000-0000-0000-0000-000000000019"),
+                1.0, 2.0, 3.0, 0.0F, 0.0F,
+                net.minecraft.world.entity.EntityTypes.PLAYER,
+                0,
+                net.minecraft.world.phys.Vec3.ZERO,
+                0.0);
+
+        org.junit.jupiter.api.Assertions.assertFalse(
+                definition.suppressesRecipientState(packet, state, 40L));
+        state.markEntityReplaced(19, 40L);
+        org.junit.jupiter.api.Assertions.assertTrue(
+                definition.suppressesRecipientState(packet, state, 40L));
+        org.junit.jupiter.api.Assertions.assertTrue(
+                definition.suppressesRecipientState(packet, state, 41L));
+        org.junit.jupiter.api.Assertions.assertFalse(
+                definition.suppressesRecipientState(packet, state, 42L));
+    }
+
+    @Test
     void classifiesSpawnAsCheckpointRelevantIdentityBearingState() {
         var definition = new Id001AddEntityPacketDefinition();
 

@@ -13,6 +13,7 @@ import dev.voldechse.replayframework.adapter.CheckpointEncoder;
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.PacketRegistry;
+import dev.voldechse.replayframework.adapter.paper.packet.DerivedScenePacket;
 import dev.voldechse.replayframework.adapter.paper.packet.PacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.v26_2.Paper26_2PacketRegistry;
 import dev.voldechse.replayframework.adapter.paper.v26_2.packet.Paper26_2PacketCatalog;
@@ -24,6 +25,7 @@ import dev.voldechse.replayframework.format.RawPacketFrame;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentMap;
@@ -47,6 +49,7 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
     private final JavaPlugin owner;
     private final Paper26_2AuthoritativeStateIndex captureState;
     private final Paper26_2PlayerStateCapture playerStateCapture;
+    private final Paper26_2NativePacketCodec stateCodec;
     private final PacketCopyDeduplicator packetCopyDeduplicator = new PacketCopyDeduplicator();
     private final AtomicReference<State> state = new AtomicReference<>(State.NEW);
     private final AtomicBoolean failureReported = new AtomicBoolean();
@@ -97,6 +100,7 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
         this.owner = null;
         this.captureState = new Paper26_2AuthoritativeStateIndex();
         this.playerStateCapture = null;
+        this.stateCodec = null;
         this.captureOrder = new Paper26_2CaptureOrder(
                 System::nanoTime, this.accessor::currentServerTick);
     }
@@ -110,12 +114,13 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
         this.accessor = Objects.requireNonNull(accessor, "accessor");
         this.registry = verifyRegistry(registry);
         this.owner = Objects.requireNonNull(owner, "owner");
+        this.stateCodec = Objects.requireNonNull(codec, "codec");
         this.captureState = new Paper26_2AuthoritativeStateIndex();
         this.captureOrder = new Paper26_2CaptureOrder(
                 System::nanoTime, this.accessor::currentServerTick);
         this.playerStateCapture = new Paper26_2PlayerStateCapture(
                 owner,
-                Objects.requireNonNull(codec, "codec"),
+                this.stateCodec,
                 this::hasActiveRecording,
                 this.accessor::currentServerTick,
                 this::captureSyntheticEntityState,
@@ -232,6 +237,8 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
             UUID connectionId = event.getUser().getUUID();
             captureOrder.publish(point -> {
                 CaptureContext context;
+                boolean publishObserved = true;
+                List<DerivedScenePacket> derived = List.of();
                 if (phase == PacketPhase.PLAY) {
                     Object rawChannel = event.getChannel();
                     if (!(rawChannel instanceof Channel channel) || connectionId == null) {
@@ -249,15 +256,16 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
                     Object decoded = accessor.decodeCapturedFrame(connection, frame, registry);
                     context = definition.captureContext(
                             decoded, descriptor, connectionId, captureState, point.serverTick());
+                    derived = definition.derivedScenePackets(
+                            decoded, connectionId, captureState, point.serverTick());
                     if (definition.suppressesRecipientState(
                             decoded, captureState, point.serverTick())) {
-                        return;
-                    }
-                    if (definition.deduplicateRecipientCopies()
+                        publishObserved = false;
+                    } else if (definition.deduplicateRecipientCopies()
                             && !packetCopyDeduplicator.first(
                                     point.serverTick(), packetId, context.world().orElse(null),
                                     connectionId, payload)) {
-                        return;
+                        publishObserved = false;
                     }
                 } else {
                     context = new CaptureContext(
@@ -267,21 +275,70 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
                             Optional.empty(),
                             Optional.empty());
                 }
-                CaptureBridge.CapturePacket packet = new CaptureBridge.CapturePacket(
-                        point.captureTimeNanos(),
-                        point.serverTick(),
-                        point.sequence(),
-                        phase,
-                        packetId,
-                        payload,
-                        context);
                 CaptureBridge.PacketSink currentSink = sink;
-                if (currentSink != null) {
-                    currentSink.accept(packet);
+                if (publishObserved && currentSink != null) {
+                    currentSink.accept(new CaptureBridge.CapturePacket(
+                            point.captureTimeNanos(),
+                            point.serverTick(),
+                            point.sequence(),
+                            phase,
+                            packetId,
+                            payload,
+                            context));
                 }
+                publishDerivedScenePackets(derived, connectionId);
             });
         } catch (Throwable failure) {
             fail(failure);
+        }
+    }
+
+    /**
+     * Publishes definition-derived scene packets directly after their source
+     * observation. The caller holds the capture-order lock, so each packet
+     * takes the next sequence before any later observation can be published.
+     */
+    private void publishDerivedScenePackets(
+            List<DerivedScenePacket> derived, UUID connectionId) {
+        if (derived.isEmpty()) {
+            return;
+        }
+        if (stateCodec == null) {
+            throw incompatible(
+                    "derived scene packets require the Paper 26.2 native packet codec", null);
+        }
+        CaptureBridge.PacketSink currentSink = sink;
+        for (DerivedScenePacket scenePacket : derived) {
+            if (!(scenePacket.packet() instanceof net.minecraft.network.protocol.Packet<?> nativePacket)) {
+                throw incompatible("derived scene packet is not a Paper 26.2 packet", null);
+            }
+            Paper26_2NativePacketCodec.EncodedStatePacket encoded =
+                    stateCodec.encodeState(nativePacket);
+            var position = scenePacket.position();
+            CaptureContext context = new CaptureContext(
+                    encoded.descriptor().disposition(),
+                    Optional.of(Key.key(position.world())),
+                    Optional.of(new BlockPosition(
+                            position.blockX(), position.blockY(), position.blockZ())),
+                    Optional.empty(),
+                    Optional.empty());
+            captureOrder.publish(point -> {
+                if (currentSink != null) {
+                    currentSink.accept(new CaptureBridge.CapturePacket(
+                            point.captureTimeNanos(),
+                            point.serverTick(),
+                            point.sequence(),
+                            PacketPhase.PLAY,
+                            encoded.packetId(),
+                            encoded.payload(),
+                            context));
+                }
+            });
+        }
+        // The derived packets rebuilt this connection's scene entity, so the
+        // sampled baseline no longer describes what a replay client holds.
+        if (playerStateCapture != null && connectionId != null) {
+            playerStateCapture.resetSnapshot(connectionId);
         }
     }
 

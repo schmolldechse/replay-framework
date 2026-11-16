@@ -43,6 +43,25 @@ packets. In particular, player movement, player equipment, and player arm swings
 must not be based on `PlayerMoveEvent`, inventory/equipment events, or arm-swing
 events while the accepted serverbound packet stream is available.
 
+## Derived scene packets
+
+Some connection-local packets imply a scene change that the protocol sends to
+other recipients as separate packets. A respawn is the main case: the
+respawning client replaces its own entity, while tracking players receive an
+entity removal and a new spawn. When nobody else tracks the player, the
+recipient-independent form never appears on the wire.
+
+A packet definition may therefore derive the equivalent scene packets from the
+decoded connection-local packet and packet-owned capture state. The capture
+bridge encodes them with the native codec and publishes them directly after
+the observed packet, inside the same capture-order lock. Derivation runs on
+the capture callback and must not read mutable server state.
+
+When an adapter derives such a replacement, recipient copies of the same
+entity spawn observed in that tick or the next are suppressed, and the
+player-state sampler forgets its baseline so position, head rotation and
+equipment are emitted again for the new entity.
+
 ## Thread boundary
 
 PacketEvents callbacks can execute on a Netty event-loop thread. They must not

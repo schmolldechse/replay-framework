@@ -221,6 +221,15 @@ final class Paper26_2PlayerStateCapture implements AutoCloseable {
         return copy;
     }
 
+    /**
+     * Forgets the sampled baseline after the player's scene entity was
+     * replaced, so the next sample re-emits position, head rotation and the
+     * complete equipment for the new entity.
+     */
+    void resetSnapshot(UUID playerId) {
+        snapshots.remove(playerId);
+    }
+
     void remove(UUID playerId) {
         pending.remove(playerId);
         snapshots.remove(playerId);

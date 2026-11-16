@@ -18,6 +18,14 @@ import net.minecraft.network.protocol.game.ClientboundRespawnPacket;
  * attribute/entity-data retention mask. Forwarding it would respawn or
  * relocate the observer and alter their session state. It is therefore
  * recorded but dropped under the viewer-local playback policy.</p>
+ *
+ * <p>The packet carries no entity ID; it always targets the receiving
+ * player's own entity. Unless {@link ClientboundRespawnPacket#KEEP_ENTITY_DATA}
+ * is set, the client discards that entity and builds a new one, which is the
+ * case for a respawn after death. Capture marks the connection so that the
+ * following {@code minecraft:player_position} can replace the scene entity in
+ * the neutral stream. A respawn that keeps entity data, such as a dimension
+ * change, does not request that replacement.</p>
  */
 final class Id082RespawnPacketDefinition
         extends PacketDefinition<Paper26_2ReplayPacketRewriter> {
@@ -43,6 +51,9 @@ final class Id082RespawnPacketDefinition
         ClientboundRespawnPacket packet = ClientboundRespawnPacket.class.cast(decodedPacket);
         Key world = Key.key(packet.commonPlayerSpawnInfo().dimension().identifier().toString());
         state.world(connectionId, world.toString());
+        if (!packet.shouldKeep(ClientboundRespawnPacket.KEEP_ENTITY_DATA)) {
+            state.markRespawnPending(connectionId);
+        }
         return super.captureContext(decodedPacket, descriptor, connectionId, state, serverTick);
     }
 

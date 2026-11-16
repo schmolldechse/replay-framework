@@ -5,6 +5,7 @@ import dev.voldechse.replayframework.adapter.CaptureContext;
 import dev.voldechse.replayframework.adapter.PacketDisposition;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -22,6 +23,8 @@ final class Paper26_2AuthoritativeStateIndex implements PacketCaptureState {
     private final Set<Integer> movementEntityIds = ConcurrentHashMap.newKeySet();
     private final Set<Integer> equipmentEntityIds = ConcurrentHashMap.newKeySet();
     private final Map<Integer, Long> swingTicks = new ConcurrentHashMap<>();
+    private final Set<UUID> respawnPendingConnections = ConcurrentHashMap.newKeySet();
+    private final Map<Integer, Long> replacedEntityTicks = new ConcurrentHashMap<>();
 
     @Override
     public Optional<String> world(UUID connectionId) {
@@ -61,6 +64,41 @@ final class Paper26_2AuthoritativeStateIndex implements PacketCaptureState {
         if (previous != null && previous != entityId) {
             remove(previous);
         }
+    }
+
+    @Override
+    public OptionalInt connectionEntityId(UUID connectionId) {
+        Integer entityId = connectionId == null ? null : connectionEntityIds.get(connectionId);
+        return entityId == null ? OptionalInt.empty() : OptionalInt.of(entityId);
+    }
+
+    @Override
+    public void markRespawnPending(UUID connectionId) {
+        if (connectionId != null) {
+            respawnPendingConnections.add(connectionId);
+        }
+    }
+
+    @Override
+    public boolean consumeRespawnPending(UUID connectionId) {
+        return connectionId != null && respawnPendingConnections.remove(connectionId);
+    }
+
+    @Override
+    public void markEntityReplaced(int entityId, long serverTick) {
+        if (serverTick < 0L) {
+            throw new IllegalArgumentException("serverTick must not be negative");
+        }
+        replacedEntityTicks.put(entityId, serverTick);
+    }
+
+    @Override
+    public boolean entityReplacedAt(int entityId, long serverTick) {
+        Long replacedTick = replacedEntityTicks.get(entityId);
+        // The tracker's copies leave on other event loops and may be observed
+        // one tick after the owning connection's respawn.
+        return replacedTick != null
+                && (serverTick == replacedTick || serverTick == replacedTick + 1L);
     }
 
     @Override
@@ -168,10 +206,12 @@ final class Paper26_2AuthoritativeStateIndex implements PacketCaptureState {
             return;
         }
         connectionWorlds.remove(connectionId);
+        respawnPendingConnections.remove(connectionId);
         connectionEntityPositions.keySet().removeIf(key -> key.connectionId().equals(connectionId));
         Integer entityId = connectionEntityIds.remove(connectionId);
         if (entityId != null) {
             remove(entityId);
+            replacedEntityTicks.remove(entityId);
         }
     }
 
@@ -183,6 +223,8 @@ final class Paper26_2AuthoritativeStateIndex implements PacketCaptureState {
         movementEntityIds.clear();
         equipmentEntityIds.clear();
         swingTicks.clear();
+        respawnPendingConnections.clear();
+        replacedEntityTicks.clear();
     }
 
     private record ConnectionEntity(UUID connectionId, int entityId) {

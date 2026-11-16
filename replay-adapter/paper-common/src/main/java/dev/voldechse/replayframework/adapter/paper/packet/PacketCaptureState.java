@@ -3,6 +3,7 @@ package dev.voldechse.replayframework.adapter.paper.packet;
 import dev.voldechse.replayframework.adapter.CaptureContext;
 import dev.voldechse.replayframework.adapter.PacketDisposition;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.UUID;
 
 /** Mutable, adapter-owned state available while packet definitions interpret capture observations. */
@@ -41,6 +42,32 @@ public interface PacketCaptureState {
     boolean swingIsAuthoritative(int entityId, long serverTick);
 
     void removeConnection(UUID connectionId);
+
+    /** Returns the protocol entity ID owned by a connection, when known. */
+    default OptionalInt connectionEntityId(UUID connectionId) {
+        return OptionalInt.empty();
+    }
+
+    /**
+     * Records that a connection received a respawn which discards its own
+     * client entity. Adapters without respawn replacement keep the no-op.
+     */
+    default void markRespawnPending(UUID connectionId) {
+    }
+
+    /** Returns and clears the pending respawn of a connection. */
+    default boolean consumeRespawnPending(UUID connectionId) {
+        return false;
+    }
+
+    /** Records that the adapter replaced an entity in the neutral stream in this tick. */
+    default void markEntityReplaced(int entityId, long serverTick) {
+    }
+
+    /** Whether a recipient copy in this tick duplicates an adapter-owned entity replacement. */
+    default boolean entityReplacedAt(int entityId, long serverTick) {
+        return false;
+    }
 
     /** Immutable exact position retained between relative movement packets. */
     record EntityPosition(String world, double x, double y, double z) {

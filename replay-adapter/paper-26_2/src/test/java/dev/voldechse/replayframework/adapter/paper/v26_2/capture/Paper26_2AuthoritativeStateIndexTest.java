@@ -71,6 +71,34 @@ class Paper26_2AuthoritativeStateIndexTest {
     }
 
     @Test
+    void respawnReplacementIsPendingOncePerConnectionAndCoversTheFollowingTick() {
+        var index = new Paper26_2AuthoritativeStateIndex();
+        java.util.UUID connection =
+                java.util.UUID.fromString("00000000-0000-0000-0000-000000000019");
+
+        assertTrue(index.connectionEntityId(connection).isEmpty());
+        index.connectionEntityId(connection, 19);
+        assertEquals(19, index.connectionEntityId(connection).orElseThrow());
+
+        assertFalse(index.consumeRespawnPending(connection));
+        index.markRespawnPending(connection);
+        assertTrue(index.consumeRespawnPending(connection));
+        assertFalse(index.consumeRespawnPending(connection));
+
+        index.markEntityReplaced(19, 40);
+        assertFalse(index.entityReplacedAt(19, 39));
+        assertTrue(index.entityReplacedAt(19, 40));
+        assertTrue(index.entityReplacedAt(19, 41));
+        assertFalse(index.entityReplacedAt(19, 42));
+        assertFalse(index.entityReplacedAt(20, 40));
+
+        index.markRespawnPending(connection);
+        index.removeConnection(connection);
+        assertFalse(index.consumeRespawnPending(connection));
+        assertFalse(index.entityReplacedAt(19, 40));
+    }
+
+    @Test
     void equipmentDiffIncludesInitialStateChangesAndClearedSlots() {
         Map<EquipmentSlot, ItemStack> empty = emptyEquipment();
         assertEquals(

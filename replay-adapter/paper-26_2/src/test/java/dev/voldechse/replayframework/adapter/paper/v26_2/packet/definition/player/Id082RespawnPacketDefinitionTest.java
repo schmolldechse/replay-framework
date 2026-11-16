@@ -167,6 +167,26 @@ final class Id082RespawnPacketDefinitionTest {
     }
 
     @Test
+    void marksTheConnectionForEntityReplacementOnlyWhenEntityDataIsDiscarded() {
+        var definition = new Id082RespawnPacketDefinition();
+        var state = dev.voldechse.replayframework.adapter.paper.v26_2.capture
+                .Paper26_2CaptureTestState.create();
+        UUID connectionId = UUID.fromString("00000000-0000-0000-0000-000000000019");
+
+        for (byte keep : new byte[] {
+            ClientboundRespawnPacket.KEEP_ENTITY_DATA, ClientboundRespawnPacket.KEEP_ALL_DATA
+        }) {
+            definition.captureContext(samplePacket(keep), descriptor(), connectionId, state, 40L);
+            assertFalse(state.consumeRespawnPending(connectionId));
+        }
+        for (byte keep : new byte[] {0, ClientboundRespawnPacket.KEEP_ATTRIBUTE_MODIFIERS}) {
+            definition.captureContext(samplePacket(keep), descriptor(), connectionId, state, 40L);
+            assertTrue(state.consumeRespawnPending(connectionId));
+            assertFalse(state.consumeRespawnPending(connectionId));
+        }
+    }
+
+    @Test
     void dropsValidAndMalformedFramesBeforeAnyPlaybackCodecAccess() {
         var definition = new Id082RespawnPacketDefinition();
         AtomicInteger decodes = new AtomicInteger();

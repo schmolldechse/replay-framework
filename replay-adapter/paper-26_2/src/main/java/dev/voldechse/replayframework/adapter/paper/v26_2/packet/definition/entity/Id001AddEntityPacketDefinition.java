@@ -88,6 +88,19 @@ final class Id001AddEntityPacketDefinition extends RebuildingPacketDefinition<
                 .orElse(base);
     }
 
+    /**
+     * A respawn replacement derived from the owning connection already added
+     * this entity; a tracking recipient's copy would replace it once more and
+     * discard the state applied in between.
+     */
+    @Override
+    public boolean suppressesRecipientState(
+            Object decodedPacket, PacketCaptureState state, long serverTick) {
+        super.suppressesRecipientState(decodedPacket, state, serverTick);
+        return state.entityReplacedAt(
+                ClientboundAddEntityPacket.class.cast(decodedPacket).getId(), serverTick);
+    }
+
     @Override
     protected Value read(ClientboundAddEntityPacket packet) {
         return new Value(
