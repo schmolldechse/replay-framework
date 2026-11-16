@@ -65,6 +65,15 @@ public abstract class PacketDefinition<C> {
     }
 
     /**
+     * Whether the packet concerns its whole world instead of a place in it,
+     * such as a tab-list entry or public chat. A recording of a region in
+     * that world then accepts it wherever its recipient stands.
+     */
+    public boolean worldWide() {
+        return false;
+    }
+
+    /**
      * Names the chunk or entity a {@link PacketDistribution#VIEW_MEMBERSHIP}
      * packet adds to or removes from its recipient's view.
      */

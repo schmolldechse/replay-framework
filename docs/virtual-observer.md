@@ -258,7 +258,34 @@ dropped.
 Not verified in game: a full recording with a region scope through storage
 and playback.
 
+### Player-only packets in a region recording
+
+A region accepts a packet by its position, so a packet that only players
+receive must say where it belongs:
+
+- Sound, particles, level event and explosion carry their position; an
+  entity sound takes the position of its entity.
+- The tab list and public chat are **world-wide**: every region recording of
+  that world accepts them wherever the recipient stands. Without the tab
+  list a client cannot show a player who joined after the recording began.
+- Everything else without a position stays out of a region recording.
+
+Chat follows one rule in every recording: a replay shows what everyone
+could read and nothing the server told one player only.
+
+| Packet | Recorded and replayed | Neither recorded nor replayed |
+|---|---|---|
+| Player chat, disguised chat | every chat type except the four below | whisper and team message types |
+| System message | death, join, quit and advancement broadcasts, once per tick | everything else: command feedback, plugin text, action bar |
+
+A system message is recognized by its translation key. A broadcast a plugin
+writes as plain text is therefore treated as private.
+
 ### Known limits of phase 1
+
+- Player chat is recorded once per recipient, because each copy carries
+  recipient-specific signature data. With several players online a replay
+  shows a chat line several times.
 
 - Sampled time and weather are published once per watch. A recording whose
   region contains the eye of another recording receives them twice, and a

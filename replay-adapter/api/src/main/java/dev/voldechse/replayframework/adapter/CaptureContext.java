@@ -19,6 +19,8 @@ import net.kyori.adventure.key.Key;
  * @param normalizedChat normalized chat text, when the packet is chat
  * @param customPayloadChannel exact custom-payload channel, when applicable
  * @param origin source the packet was observed through
+ * @param worldWide whether the packet concerns its whole world instead of a
+ *                  place in it, such as a tab-list entry or public chat
  */
 public record CaptureContext(
         Optional<PacketDisposition> disposition,
@@ -26,7 +28,8 @@ public record CaptureContext(
         Optional<BlockPosition> position,
         Optional<String> normalizedChat,
         Optional<Key> customPayloadChannel,
-        CaptureOrigin origin) {
+        CaptureOrigin origin,
+        boolean worldWide) {
 
     /** Creates a context for scene state observed through a player view. */
     public CaptureContext(
@@ -36,7 +39,7 @@ public record CaptureContext(
             Optional<String> normalizedChat,
             Optional<Key> customPayloadChannel) {
         this(disposition, world, position, normalizedChat, customPayloadChannel,
-                CaptureOrigin.PLAYER_VIEW);
+                CaptureOrigin.PLAYER_VIEW, false);
     }
 
     /**
@@ -79,7 +82,15 @@ public record CaptureContext(
     /** Returns this context as observed through another source. */
     public CaptureContext withOrigin(CaptureOrigin nextOrigin) {
         return new CaptureContext(
-                disposition, world, position, normalizedChat, customPayloadChannel, nextOrigin);
+                disposition, world, position, normalizedChat, customPayloadChannel,
+                nextOrigin, worldWide);
+    }
+
+    /** Returns this context for a packet that concerns its whole world. */
+    public CaptureContext asWorldWide() {
+        return new CaptureContext(
+                disposition, world, position, normalizedChat, customPayloadChannel,
+                origin, true);
     }
 
     /** Returns this context with a position when the packet itself carries none. */
@@ -88,7 +99,7 @@ public record CaptureContext(
                 ? this
                 : new CaptureContext(
                         disposition, world, Optional.of(fallback), normalizedChat,
-                        customPayloadChannel, origin);
+                        customPayloadChannel, origin, worldWide);
     }
 
     private static <T> Optional<T> requireOptional(Optional<T> value, String name) {

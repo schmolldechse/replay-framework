@@ -119,4 +119,18 @@ final class Id116SoundEntityPacketDefinition extends RebuildingPacketDefinition<
             }
         }
     }
+
+    /** Places the sound at its entity so that a region recording can accept it. */
+    @Override
+    public dev.voldechse.replayframework.adapter.CaptureContext captureContext(
+            Object decodedPacket,
+            dev.voldechse.replayframework.adapter.PacketDescriptor descriptor,
+            java.util.UUID connectionId,
+            dev.voldechse.replayframework.adapter.paper.packet.PacketCaptureState state,
+            long serverTick) {
+        var base = super.captureContext(
+                decodedPacket, descriptor, connectionId, state, serverTick);
+        var packet = net.minecraft.network.protocol.game.ClientboundSoundEntityPacket.class.cast(decodedPacket);
+        return dev.voldechse.replayframework.adapter.paper.v26_2.packet.Paper26_2CaptureContexts.atEntity(base, state, connectionId, packet.getId());
+    }
 }

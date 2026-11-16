@@ -64,4 +64,10 @@ final class Id069PlayerInfoRemovePacketDefinition extends RebuildingPacketDefini
             profileIds = List.copyOf(Objects.requireNonNull(profileIds, "profileIds"));
         }
     }
+
+    /** The tab list is not a place: every recording of the world needs it to show players. */
+    @Override
+    public boolean worldWide() {
+        return true;
+    }
 }

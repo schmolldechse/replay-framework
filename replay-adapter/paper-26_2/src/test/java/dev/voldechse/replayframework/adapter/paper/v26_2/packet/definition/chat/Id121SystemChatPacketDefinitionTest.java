@@ -8,7 +8,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import dev.voldechse.replayframework.adapter.CaptureContext;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.PacketDisposition;
-import dev.voldechse.replayframework.adapter.codec.PacketCodec;
 import dev.voldechse.replayframework.adapter.paper.packet.PacketRewriteResult;
 import dev.voldechse.replayframework.adapter.paper.v26_2.Paper26_2PacketRegistry;
 import dev.voldechse.replayframework.adapter.paper.v26_2.capture.Paper26_2CaptureTestState;
@@ -22,7 +21,6 @@ import io.netty.buffer.Unpooled;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicInteger;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.ProtocolInfo;
@@ -53,7 +51,7 @@ final class Id121SystemChatPacketDefinitionTest {
     }
 
     @Test
-    void classifiesSystemChatAsConfigurableCaptureAndViewerLocalPlayback() {
+    void classifiesSystemChatAsConfigurableCaptureAndSafePlayback() {
         var definition = new Id121SystemChatPacketDefinition();
 
         assertEquals(PACKET_ID, definition.packetId());
@@ -65,7 +63,7 @@ final class Id121SystemChatPacketDefinitionTest {
         assertTrue(definition.classification().replayable());
         assertFalse(definition.classification().checkpointRelevant());
         assertEquals(
-                PacketDescriptor.PlaybackScope.VIEWER_LOCAL,
+                PacketDescriptor.PlaybackScope.SAFE,
                 definition.classification().playbackScope());
     }
 
@@ -91,39 +89,50 @@ final class Id121SystemChatPacketDefinitionTest {
         assertTrue(descriptor.captureByDefault());
         assertTrue(descriptor.replayable());
         assertFalse(descriptor.checkpointRelevant());
-        assertEquals(PacketDescriptor.PlaybackScope.VIEWER_LOCAL, descriptor.playbackScope());
+        assertEquals(PacketDescriptor.PlaybackScope.SAFE, descriptor.playbackScope());
         assertTrue(Paper26_2PacketCatalog.explicitlyClassifies(TYPE_NAME));
     }
 
     @Test
-    void dropsEverySystemChatPayloadBeforePlaybackCodecAccess() {
+    void replaysServerBroadcastsUnchanged() {
         var definition = new Id121SystemChatPacketDefinition();
-        AtomicInteger decodes = new AtomicInteger();
-        AtomicInteger encodes = new AtomicInteger();
-        PacketCodec<Object> codec = failingCodec(decodes, encodes);
+        ClientboundSystemChatPacket death = new ClientboundSystemChatPacket(
+                Component.translatable("death.attack.fall", "Alex"), false);
 
-        for (byte[] payload : new byte[][] {
-            new byte[0],
-            new byte[] {0},
-            new byte[] {1, 2, 3},
-            new byte[] {(byte) 0x80},
-            new byte[] {(byte) 0xFF, (byte) 0xFF, (byte) 0xFF}
-        }) {
-            PacketRewriteResult result = definition.handlePlayback(
-                    frame(payload), descriptor(), codec, rewriter());
-            assertEquals(PacketRewriteResult.Decision.DROP_LOCAL, result.decision());
-        }
+        PacketRewriteResult result = definition.rewrite(death, descriptor(), rewriter());
 
-        assertEquals(0, decodes.get());
-        assertEquals(0, encodes.get());
+        assertEquals(PacketRewriteResult.Decision.SEND, result.decision());
+        assertEquals(Optional.of(death), result.packet());
     }
 
     @Test
-    void dropsAlreadyDecodedValuesBeforeInspectingTheirType() {
-        PacketRewriteResult result = new Id121SystemChatPacketDefinition()
-                .rewrite(new Object(), descriptor(), rewriter());
+    void neitherRecordsNorReplaysMessagesToOnePlayer() {
+        var definition = new Id121SystemChatPacketDefinition();
+        var state = Paper26_2CaptureTestState.create();
+        for (ClientboundSystemChatPacket privateMessage : new ClientboundSystemChatPacket[] {
+            new ClientboundSystemChatPacket(
+                    Component.translatable("commands.gamemode.success.self", "Creative"), false),
+            new ClientboundSystemChatPacket(Component.literal("Recording started"), false),
+            new ClientboundSystemChatPacket(
+                    Component.translatable("death.attack.fall", "Alex"), true)
+        }) {
+            assertTrue(definition.suppressesRecipientState(privateMessage, state, 0L));
+            assertEquals(
+                    PacketRewriteResult.Decision.DROP_LOCAL,
+                    definition.rewrite(privateMessage, descriptor(), rewriter()).decision());
+        }
+    }
 
-        assertEquals(PacketRewriteResult.Decision.DROP_LOCAL, result.decision());
+    @Test
+    void recordsServerBroadcastsOnceForTheWholeWorld() {
+        var definition = new Id121SystemChatPacketDefinition();
+        ClientboundSystemChatPacket joined = new ClientboundSystemChatPacket(
+                Component.translatable("multiplayer.player.joined", "Alex"), false);
+
+        assertFalse(definition.suppressesRecipientState(
+                joined, Paper26_2CaptureTestState.create(), 0L));
+        assertTrue(definition.worldWide());
+        assertTrue(definition.deduplicateRecipientCopies());
     }
 
     @Test
@@ -189,29 +198,11 @@ final class Id121SystemChatPacketDefinitionTest {
                 true,
                 false,
                 "paper-26.2/" + TYPE_NAME,
-                PacketDescriptor.PlaybackScope.VIEWER_LOCAL);
+                PacketDescriptor.PlaybackScope.SAFE);
     }
 
     private static RawPacketFrame frame(byte[] payload) {
         return new RawPacketFrame(0L, 0L, 0, PacketPhase.PLAY, PACKET_ID, payload);
-    }
-
-    private static PacketCodec<Object> failingCodec(
-            AtomicInteger decodes,
-            AtomicInteger encodes) {
-        return new PacketCodec<>() {
-            @Override
-            public EncodedPacket encode(Object packet) {
-                encodes.incrementAndGet();
-                throw new AssertionError("viewer-local system_chat must not encode");
-            }
-
-            @Override
-            public Object decode(RawPacketFrame ignored) {
-                decodes.incrementAndGet();
-                throw new AssertionError("viewer-local system_chat must not decode");
-            }
-        };
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})

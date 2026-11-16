@@ -222,7 +222,7 @@ public final class RecordingRuntimeModule extends AbstractModule {
      * adapter places them for its scope, player views otherwise. Packets that
      * only players receive belong to every recording.
      */
-    private static boolean acceptsOrigin(
+    static boolean acceptsOrigin(
             boolean observed,
             dev.voldechse.replayframework.core.capture.CapturedPacket packet) {
         return switch (packet.context().origin()) {
@@ -232,7 +232,7 @@ public final class RecordingRuntimeModule extends AbstractModule {
         };
     }
 
-    private static boolean acceptsScope(
+    static boolean acceptsScope(
             RecordingScope requested,
             dev.voldechse.replayframework.core.capture.CapturedPacket packet) {
         if (requested.worlds().isEmpty() && requested.regions().isEmpty()) {
@@ -248,6 +248,9 @@ public final class RecordingRuntimeModule extends AbstractModule {
         }
         if (requested.regions().isEmpty()) {
             return true;
+        }
+        if (context.worldWide()) {
+            return requested.regions().stream().anyMatch(region -> region.world().equals(world));
         }
         var position = context.position().orElse(null);
         if (position == null) {

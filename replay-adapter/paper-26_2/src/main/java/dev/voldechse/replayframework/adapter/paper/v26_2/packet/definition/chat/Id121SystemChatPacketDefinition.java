@@ -11,8 +11,10 @@ import net.minecraft.network.protocol.game.ClientboundSystemChatPacket;
 /**
  * Capture-policy contract for {@code minecraft:system_chat}.
  *
- * <p>The text is eligible for chat-policy filtering, but the packet's chat-history/action-bar
- * mutation belongs to the recorded connection and is dropped before playback decoding.</p>
+ * <p>Messages the server broadcasts to everyone, such as death, join, quit and
+ * advancement messages, are recorded once and replayed. Messages to one player,
+ * such as command feedback or the action bar, are neither recorded nor replayed.
+ * The text of a recorded message stays eligible for chat-policy filtering.</p>
  */
 final class Id121SystemChatPacketDefinition
         extends PacketDefinition<Paper26_2ReplayPacketRewriter> {
@@ -24,7 +26,7 @@ final class Id121SystemChatPacketDefinition
         super(
                 PACKET_ID,
                 IDENTIFIER,
-                PacketClassification.configurable(PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
+                PacketClassification.configurable(PacketDescriptor.PlaybackScope.SAFE));
     }
 
     @Override
@@ -40,5 +42,40 @@ final class Id121SystemChatPacketDefinition
                 .content().getString();
         return dev.voldechse.replayframework.adapter.paper.v26_2.packet.Paper26_2CaptureContexts
                 .withChat(base, text);
+    }
+
+    /** Private messages are never recorded; see {@link PublicChat}. */
+    @Override
+    public boolean suppressesRecipientState(
+            Object decodedPacket,
+            dev.voldechse.replayframework.adapter.paper.packet.PacketCaptureState state,
+            long serverTick) {
+        return !(isPublic(decodedPacket));
+    }
+
+    /** Public chat is not a place: every recording of the world accepts it. */
+    @Override
+    public boolean worldWide() {
+        return true;
+    }
+
+    /** Every recipient gets the same broadcast; one copy is enough. */
+    @Override
+    public boolean deduplicateRecipientCopies() {
+        return true;
+    }
+
+    @Override
+    protected dev.voldechse.replayframework.adapter.paper.packet.PacketRewriteResult rewriteSafe(
+            Object decodedPacket,
+            Paper26_2ReplayPacketRewriter context) {
+        return isPublic(decodedPacket)
+                ? dev.voldechse.replayframework.adapter.paper.packet.PacketRewriteResult.send(decodedPacket)
+                : dev.voldechse.replayframework.adapter.paper.packet.PacketRewriteResult.drop("system message was addressed to one player");
+    }
+
+    private static boolean isPublic(Object decodedPacket) {
+        ClientboundSystemChatPacket packet = ClientboundSystemChatPacket.class.cast(decodedPacket);
+        return PublicChat.isPublicSystemMessage(packet.content(), packet.overlay());
     }
 }

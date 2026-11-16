@@ -64,7 +64,7 @@ final class Id033DisguisedChatPacketDefinitionTest {
     }
 
     @Test
-    void classifiesDisguisedChatAsViewerLocalEphemeralData() {
+    void classifiesDisguisedChatAsSafeEphemeralData() {
         var definition = new Id033DisguisedChatPacketDefinition();
 
         assertEquals(PACKET_ID, definition.packetId());
@@ -76,7 +76,7 @@ final class Id033DisguisedChatPacketDefinitionTest {
         assertTrue(definition.classification().replayable());
         assertFalse(definition.classification().checkpointRelevant());
         assertEquals(
-                PacketDescriptor.PlaybackScope.VIEWER_LOCAL,
+                PacketDescriptor.PlaybackScope.SAFE,
                 definition.classification().playbackScope());
     }
 
@@ -102,44 +102,51 @@ final class Id033DisguisedChatPacketDefinitionTest {
         assertTrue(registryDescriptor.captureByDefault());
         assertTrue(registryDescriptor.replayable());
         assertFalse(registryDescriptor.checkpointRelevant());
-        assertEquals(PacketDescriptor.PlaybackScope.VIEWER_LOCAL, registryDescriptor.playbackScope());
+        assertEquals(PacketDescriptor.PlaybackScope.SAFE, registryDescriptor.playbackScope());
     }
 
     @Test
-    void dropsRecordedChatBeforeDecodingOrEncodingAnyPayload() {
-        var definition = new Id033DisguisedChatPacketDefinition();
-        AtomicInteger decodes = new AtomicInteger();
-        AtomicInteger encodes = new AtomicInteger();
-        PacketCodec<Object> codec = failingCodec(decodes, encodes);
+    void replaysPublicChatUnchanged() {
+        ClientboundDisguisedChatPacket chat = new ClientboundDisguisedChatPacket(
+                Component.literal("Hallo Leute! :)"),
+                new ChatType.Bound(
+                        Holder.direct(customChatType()), Component.literal("Alex"), Optional.empty()));
 
-        for (byte[] payload : new byte[][] {
-            new byte[0],
-            new byte[] {1},
-            new byte[] {(byte) 0x80},
-            new byte[] {10, 1, 2, 3}
-        }) {
-            PacketRewriteResult result = definition.handlePlayback(
-                    frame(payload), descriptor(), codec, rewriter());
-
-            assertEquals(PacketRewriteResult.Decision.DROP_LOCAL, result.decision());
-            assertTrue(result.packet().isEmpty());
-        }
-
-        assertEquals(0, decodes.get());
-        assertEquals(0, encodes.get());
-    }
-
-    @Test
-    void directRewriteDropsRecordedChatWithoutInspectingThePacket() {
         PacketRewriteResult result = new Id033DisguisedChatPacketDefinition()
-                .rewrite(new Object(), descriptor(), rewriter());
+                .rewrite(chat, descriptor(), rewriter());
 
-        assertEquals(PacketRewriteResult.Decision.DROP_LOCAL, result.decision());
-        assertTrue(result.packet().isEmpty());
+        assertEquals(PacketRewriteResult.Decision.SEND, result.decision());
+        assertEquals(Optional.of(chat), result.packet());
     }
 
     @Test
-    void validatesNullAndDescriptorBoundariesBeforeApplyingLocalPolicy() {
+    void neitherRecordsNorReplaysWhispers() {
+        var definition = new Id033DisguisedChatPacketDefinition();
+        MappedRegistry<ChatType> chatTypes = new MappedRegistry<>(
+                Registries.CHAT_TYPE, Lifecycle.stable(), false);
+        Holder.Reference<ChatType> whisperType = chatTypes.register(
+                ChatType.MSG_COMMAND_INCOMING, customChatType(), RegistrationInfo.BUILT_IN);
+        chatTypes.freeze();
+        ClientboundDisguisedChatPacket whisper = new ClientboundDisguisedChatPacket(
+                Component.literal("psst"),
+                new ChatType.Bound(whisperType, Component.literal("Alex"), Optional.empty()));
+        ClientboundDisguisedChatPacket chat = new ClientboundDisguisedChatPacket(
+                Component.literal("hello"),
+                new ChatType.Bound(
+                        Holder.direct(customChatType()), Component.literal("Alex"), Optional.empty()));
+        var state = dev.voldechse.replayframework.adapter.paper.v26_2.capture
+                .Paper26_2CaptureTestState.create();
+
+        assertTrue(definition.suppressesRecipientState(whisper, state, 0L));
+        assertEquals(
+                PacketRewriteResult.Decision.DROP_LOCAL,
+                definition.rewrite(whisper, descriptor(), rewriter()).decision());
+        assertFalse(definition.suppressesRecipientState(chat, state, 0L));
+        assertTrue(definition.worldWide());
+    }
+
+    @Test
+    void validatesNullAndDescriptorBoundariesBeforeDecoding() {
         var definition = new Id033DisguisedChatPacketDefinition();
         PacketCodec<Object> codec = failingCodec(new AtomicInteger(), new AtomicInteger());
 
@@ -153,13 +160,13 @@ final class Id033DisguisedChatPacketDefinitionTest {
                 definition.handlePlayback(frame(new byte[0]), descriptor(), codec, null));
         assertThrows(IncompatibleAdapterException.class, () -> definition.handlePlayback(
                 frame(new byte[0]), descriptor(PACKET_ID + 1, true,
-                        PacketDescriptor.PlaybackScope.VIEWER_LOCAL), codec, rewriter()));
+                        PacketDescriptor.PlaybackScope.SAFE), codec, rewriter()));
         assertThrows(IncompatibleAdapterException.class, () -> definition.handlePlayback(
                 frame(new byte[0]), descriptor(PACKET_ID, false,
-                        PacketDescriptor.PlaybackScope.VIEWER_LOCAL), codec, rewriter()));
+                        PacketDescriptor.PlaybackScope.SAFE), codec, rewriter()));
         assertThrows(IncompatibleAdapterException.class, () -> definition.handlePlayback(
                 frame(new byte[0]), descriptor(PACKET_ID, true,
-                        PacketDescriptor.PlaybackScope.SAFE), codec, rewriter()));
+                        PacketDescriptor.PlaybackScope.VIEWER_LOCAL), codec, rewriter()));
     }
 
     @Test
@@ -333,7 +340,7 @@ final class Id033DisguisedChatPacketDefinitionTest {
     }
 
     private static PacketDescriptor descriptor() {
-        return descriptor(PACKET_ID, true, PacketDescriptor.PlaybackScope.VIEWER_LOCAL);
+        return descriptor(PACKET_ID, true, PacketDescriptor.PlaybackScope.SAFE);
     }
 
     private static PacketDescriptor descriptor(

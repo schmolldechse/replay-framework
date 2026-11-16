@@ -236,4 +236,10 @@ final class Id070PlayerInfoUpdatePacketDefinition extends RebuildingPacketDefini
                     + Arrays.hashCode(keySignature);
         }
     }
+
+    /** The tab list is not a place: every recording of the world needs it to show players. */
+    @Override
+    public boolean worldWide() {
+        return true;
+    }
 }

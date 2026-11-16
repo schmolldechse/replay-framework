@@ -9,13 +9,12 @@ import dev.voldechse.replayframework.adapter.paper.packet.PacketCaptureState;
 import net.minecraft.network.protocol.game.ClientboundDisguisedChatPacket;
 
 /**
- * Viewer-local contract for {@code minecraft:disguised_chat}.
+ * Contract for {@code minecraft:disguised_chat}.
  *
- * <p>The packet contains arbitrary chat content and a bound chat type: a
- * registry-backed decoration, sender name, and optional target name. These
- * values describe how a message from the recorded connection is presented in
- * that connection's chat history. Keep the raw packet for recording, but do
- * not apply it to the neutral observer's local chat.</p>
+ * <p>The packet contains chat content and a bound chat type: a
+ * registry-backed decoration, sender name, and optional target name. A
+ * message of a public chat type is recorded and replayed; a whisper or team
+ * message is neither.</p>
  */
 final class Id033DisguisedChatPacketDefinition
         extends PacketDefinition<Paper26_2ReplayPacketRewriter> {
@@ -28,7 +27,7 @@ final class Id033DisguisedChatPacketDefinition
                 PACKET_ID,
                 IDENTIFIER,
                 PacketClassification.ephemeral(
-                        PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
+                        PacketDescriptor.PlaybackScope.SAFE));
     }
 
     @Override
@@ -44,5 +43,30 @@ final class Id033DisguisedChatPacketDefinition
                 .message().getString();
         return dev.voldechse.replayframework.adapter.paper.v26_2.packet.Paper26_2CaptureContexts
                 .withChat(base, text);
+    }
+
+    /** Private messages are never recorded; see {@link PublicChat}. */
+    @Override
+    public boolean suppressesRecipientState(
+            Object decodedPacket,
+            dev.voldechse.replayframework.adapter.paper.packet.PacketCaptureState state,
+            long serverTick) {
+        return !(PublicChat.isPublic(ClientboundDisguisedChatPacket.class.cast(decodedPacket).chatType()));
+    }
+
+    /** Public chat is not a place: every recording of the world accepts it. */
+    @Override
+    public boolean worldWide() {
+        return true;
+    }
+
+    @Override
+    protected dev.voldechse.replayframework.adapter.paper.packet.PacketRewriteResult rewriteSafe(
+            Object decodedPacket,
+            Paper26_2ReplayPacketRewriter context) {
+        return PublicChat.isPublic(
+                        ClientboundDisguisedChatPacket.class.cast(decodedPacket).chatType())
+                ? dev.voldechse.replayframework.adapter.paper.packet.PacketRewriteResult.send(decodedPacket)
+                : dev.voldechse.replayframework.adapter.paper.packet.PacketRewriteResult.drop("chat message was addressed to selected players");
     }
 }

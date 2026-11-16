@@ -165,4 +165,21 @@ final class Id047LevelParticlesPacketDefinition extends RebuildingPacketDefiniti
             }
         }
     }
+
+    /** Places the effect in the world so that a region recording can accept it. */
+    @Override
+    public dev.voldechse.replayframework.adapter.CaptureContext captureContext(
+            Object decodedPacket,
+            dev.voldechse.replayframework.adapter.PacketDescriptor descriptor,
+            java.util.UUID connectionId,
+            dev.voldechse.replayframework.adapter.paper.packet.PacketCaptureState state,
+            long serverTick) {
+        var base = super.captureContext(
+                decodedPacket, descriptor, connectionId, state, serverTick);
+        var packet = net.minecraft.network.protocol.game.ClientboundLevelParticlesPacket.class.cast(decodedPacket);
+        return dev.voldechse.replayframework.adapter.paper.v26_2.packet.Paper26_2CaptureContexts.atBlockPosition(
+                base,
+                new dev.voldechse.replayframework.api.recording.BlockPosition(
+                        (int) Math.floor(packet.getX()), (int) Math.floor(packet.getY()), (int) Math.floor(packet.getZ())));
+    }
 }

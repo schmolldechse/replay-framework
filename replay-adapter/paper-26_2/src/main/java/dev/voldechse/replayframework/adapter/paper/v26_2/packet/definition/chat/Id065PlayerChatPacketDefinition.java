@@ -68,6 +68,9 @@ final class Id065PlayerChatPacketDefinition
             return PacketRewriteResult.fail(
                     "decoded packet type does not match " + IDENTIFIER);
         }
+        if (!PublicChat.isPublic(playerChat.chatType())) {
+            return PacketRewriteResult.drop("chat message was addressed to selected players");
+        }
         if (playerChat.filterMask().isFullyFiltered()) {
             return PacketRewriteResult.drop("fully filtered player chat has no visible replay text");
         }
@@ -84,5 +87,20 @@ final class Id065PlayerChatPacketDefinition
         return PacketRewriteResult.sendAs(
                 new ClientboundDisguisedChatPacket(visibleContent, playerChat.chatType()),
                 Id033DisguisedChatPacketDefinition.PACKET_ID);
+    }
+
+    /** Private messages are never recorded; see {@link PublicChat}. */
+    @Override
+    public boolean suppressesRecipientState(
+            Object decodedPacket,
+            dev.voldechse.replayframework.adapter.paper.packet.PacketCaptureState state,
+            long serverTick) {
+        return !(PublicChat.isPublic(ClientboundPlayerChatPacket.class.cast(decodedPacket).chatType()));
+    }
+
+    /** Public chat is not a place: every recording of the world accepts it. */
+    @Override
+    public boolean worldWide() {
+        return true;
     }
 }

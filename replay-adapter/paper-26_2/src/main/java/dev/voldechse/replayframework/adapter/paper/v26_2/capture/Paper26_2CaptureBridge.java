@@ -289,6 +289,9 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
                     Object decoded = accessor.decodeCapturedFrame(connection, frame, registry);
                     context = definition.captureContext(
                             decoded, descriptor, connectionId, captureState, point.serverTick());
+                    if (definition.worldWide()) {
+                        context = context.asWorldWide();
+                    }
                     if (!definition.distribution().observable()) {
                         context = context.withOrigin(CaptureOrigin.PLAYER_ONLY);
                     }
