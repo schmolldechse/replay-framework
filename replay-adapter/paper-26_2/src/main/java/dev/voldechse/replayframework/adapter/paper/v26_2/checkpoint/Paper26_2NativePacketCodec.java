@@ -170,6 +170,46 @@ public final class Paper26_2NativePacketCodec
         }
     }
 
+    /**
+     * Encodes a packet a virtual observer received.
+     *
+     * @return the wire data, or empty when the registry never captures this packet
+     */
+    public java.util.Optional<EncodedStatePacket> encodeObserved(Packet<?> packet) {
+        Objects.requireNonNull(packet, "packet");
+        synchronized (lock) {
+            ensureOpen();
+            if (packet.type() == null || packet.type().flow() != PacketFlow.CLIENTBOUND) {
+                throw incompatible("Paper observed packet is not clientbound", null);
+            }
+            ByteBuf buffer = Unpooled.buffer();
+            try {
+                encodeNative(protocolInfo, buffer, packet);
+                int packetId = readVarInt(buffer);
+                PacketDescriptor descriptor = registry.find(
+                                PacketPhase.PLAY,
+                                PacketDescriptor.Direction.CLIENTBOUND,
+                                packetId)
+                        .orElseThrow(() -> incompatible(
+                                "observed packet ID is not registered: " + packetId,
+                                null));
+                if (!registry.captureAllowed(
+                        PacketPhase.PLAY, PacketDescriptor.Direction.CLIENTBOUND, packetId)) {
+                    return java.util.Optional.empty();
+                }
+                byte[] payload = new byte[buffer.readableBytes()];
+                buffer.readBytes(payload);
+                return java.util.Optional.of(new EncodedStatePacket(packetId, payload, descriptor));
+            } catch (IncompatibleAdapterException exception) {
+                throw exception;
+            } catch (RuntimeException | LinkageError exception) {
+                throw incompatible("Paper 26.2 observed packet encoding failed", exception);
+            } finally {
+                buffer.release();
+            }
+        }
+    }
+
     /** Immutable wire data produced for an adapter-generated state transition. */
     public record EncodedStatePacket(
             int packetId,

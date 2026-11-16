@@ -58,6 +58,8 @@ public final class RecordingCoordinator {
     private final ReplayDiagnostics diagnostics;
     private final Map<RecordingSessionId, DefaultRecordingSession> sessions =
             new ConcurrentHashMap<>();
+    private final Map<RecordingSessionId, dev.voldechse.replayframework.adapter.SceneObservation.Watch>
+            sceneWatches = new java.util.concurrent.ConcurrentHashMap<>();
     private final Object lifecycleLock = new Object();
     private final AtomicBoolean closed = new AtomicBoolean();
     private final AtomicBoolean adapterFailed = new AtomicBoolean();
@@ -361,6 +363,24 @@ public final class RecordingCoordinator {
     /** Removes a session sink idempotently from the central route. */
     void unregister(RecordingSessionId sessionId) {
         captureRouter.unregister(Objects.requireNonNull(sessionId, "sessionId"));
+        closeSceneWatch(sessionId);
+    }
+
+    /** Places the adapter's virtual observers when they deliver this scope's scene. */
+    private void openSceneWatch(
+            RecordingSessionId sessionId,
+            dev.voldechse.replayframework.api.recording.RecordingScope scope) {
+        var observation = adapter.sceneObservation();
+        if (observation.observes(scope)) {
+            sceneWatches.put(sessionId, observation.watch(scope));
+        }
+    }
+
+    private void closeSceneWatch(RecordingSessionId sessionId) {
+        var watch = sceneWatches.remove(sessionId);
+        if (watch != null) {
+            watch.close();
+        }
     }
 
     CompletionStage<RecordingSession> requestFinalization(
@@ -631,6 +651,9 @@ public final class RecordingCoordinator {
                     return;
                 }
                 session.activate();
+                // Opened only now: a session rejects packets until it is
+                // active, and what an observer sends first must not be lost.
+                openSceneWatch(sessionId, request.scope());
                 publishEvent(new ReplayEventPublisher.RecordingStatusChanged(
                         session.id(),
                         session.replayId(),
@@ -640,6 +663,7 @@ public final class RecordingCoordinator {
                 installAppender(request, session);
                 result.complete(session);
             } catch (Throwable activationFailure) {
+                closeSceneWatch(sessionId);
                 sessions.remove(sessionId);
                 session.markFailed(ReplayFailureCode.INTERNAL_ERROR,
                         diagnostic(replayId, sessionId, "session activation", activationFailure));

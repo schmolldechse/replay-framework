@@ -115,4 +115,9 @@ final class Id131UpdateAttributesPacketDefinition extends RebuildingPacketDefini
             }
         }
     }
+
+    @Override
+    public dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution distribution() {
+        return dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution.BROADCAST;
+    }
 }

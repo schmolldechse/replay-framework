@@ -96,4 +96,14 @@ final class Id037ForgetLevelChunkPacketDefinition extends RebuildingPacketDefini
         return state.viewTeardown().tearingDown(connectionId)
                 || super.suppressesRecipientState(decodedPacket, connectionId, state, serverTick);
     }
+
+    @Override
+    public dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution distribution() {
+        return dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution.VIEW_MEMBERSHIP;
+    }
+
+    @Override
+    public dev.voldechse.replayframework.adapter.paper.packet.SceneMembership sceneMembership(Object decodedPacket) {
+        return dev.voldechse.replayframework.adapter.paper.packet.SceneMembership.chunkLost(net.minecraft.network.protocol.game.ClientboundForgetLevelChunkPacket.class.cast(decodedPacket).pos().x(), net.minecraft.network.protocol.game.ClientboundForgetLevelChunkPacket.class.cast(decodedPacket).pos().z());
+    }
 }

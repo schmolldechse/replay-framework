@@ -116,4 +116,14 @@ final class Id077RemoveEntitiesPacketDefinition extends RebuildingPacketDefiniti
             entityIds = List.copyOf(entityIds);
         }
     }
+
+    @Override
+    public dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution distribution() {
+        return dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution.VIEW_MEMBERSHIP;
+    }
+
+    @Override
+    public dev.voldechse.replayframework.adapter.paper.packet.SceneMembership sceneMembership(Object decodedPacket) {
+        return dev.voldechse.replayframework.adapter.paper.packet.SceneMembership.entitiesLost(net.minecraft.network.protocol.game.ClientboundRemoveEntitiesPacket.class.cast(decodedPacket).getEntityIds().toIntArray());
+    }
 }

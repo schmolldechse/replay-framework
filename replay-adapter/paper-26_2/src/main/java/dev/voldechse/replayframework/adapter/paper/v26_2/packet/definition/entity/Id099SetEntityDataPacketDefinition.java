@@ -181,4 +181,9 @@ final class Id099SetEntityDataPacketDefinition extends RebuildingPacketDefinitio
             }
         }
     }
+
+    @Override
+    public dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution distribution() {
+        return dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution.BROADCAST;
+    }
 }

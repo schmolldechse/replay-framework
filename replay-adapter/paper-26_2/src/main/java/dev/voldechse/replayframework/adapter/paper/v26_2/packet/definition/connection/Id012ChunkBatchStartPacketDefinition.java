@@ -19,4 +19,9 @@ final class Id012ChunkBatchStartPacketDefinition
     Id012ChunkBatchStartPacketDefinition() {
         super(PACKET_ID, IDENTIFIER);
     }
+
+    @Override
+    public dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution distribution() {
+        return dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution.VIEW_LOCAL;
+    }
 }

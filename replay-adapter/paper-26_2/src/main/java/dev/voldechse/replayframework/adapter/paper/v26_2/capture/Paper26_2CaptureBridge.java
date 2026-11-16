@@ -9,14 +9,19 @@ import com.github.retrooper.packetevents.event.PacketSendEvent;
 import com.github.retrooper.packetevents.event.UserDisconnectEvent;
 import dev.voldechse.replayframework.adapter.CaptureBridge;
 import dev.voldechse.replayframework.adapter.CaptureContext;
+import dev.voldechse.replayframework.adapter.CaptureOrigin;
 import dev.voldechse.replayframework.adapter.CheckpointEncoder;
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.PacketRegistry;
+import dev.voldechse.replayframework.adapter.SceneObservation;
+import dev.voldechse.replayframework.adapter.paper.argus.Argus;
+import dev.voldechse.replayframework.adapter.paper.argus.LatticeEyePlacement;
 import dev.voldechse.replayframework.adapter.paper.packet.DerivedScenePacket;
 import dev.voldechse.replayframework.adapter.paper.packet.PacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.packet.ViewTeardownState;
 import dev.voldechse.replayframework.adapter.paper.v26_2.Paper26_2PacketRegistry;
+import dev.voldechse.replayframework.adapter.paper.v26_2.argus.Paper26_2ArgusPlatform;
 import dev.voldechse.replayframework.adapter.paper.v26_2.packet.Paper26_2PacketCatalog;
 import dev.voldechse.replayframework.adapter.paper.v26_2.checkpoint.Paper26_2CheckpointEncoder;
 import dev.voldechse.replayframework.adapter.paper.v26_2.checkpoint.Paper26_2NativePacketCodec;
@@ -41,12 +46,18 @@ import net.minecraft.world.level.ChunkPos;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitTask;
 
 /**
  * Global Paper 26.2 capture installation shared by all active recording
  * sessions. Session filtering remains in the core router.
  */
 public final class Paper26_2CaptureBridge implements CaptureBridge {
+
+    /** Eye budget of one recorded region. */
+    private static final int ARGUS_MAX_EYES_PER_REGION = 64;
+    /** Largest chunk radius a single eye loads and keeps simulated. */
+    private static final int ARGUS_MAX_VIEW_DISTANCE = 8;
 
     private final PaperConnectionAccessor accessor;
     private final PacketRegistry registry;
@@ -59,6 +70,8 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
     private final AtomicBoolean failureReported = new AtomicBoolean();
     private final Object handlerStateLock = new Object();
     private final Paper26_2CaptureOrder captureOrder;
+    private final Argus argus;
+    private volatile BukkitTask argusTask;
     private final PacketListener packetListener = new PacketListener() {
         @Override
         public void onPacketSend(PacketSendEvent event) {
@@ -107,6 +120,7 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
         this.stateCodec = null;
         this.captureOrder = new Paper26_2CaptureOrder(
                 System::nanoTime, this.accessor::currentServerTick);
+        this.argus = null;
     }
 
     /** Creates the production bridge with definition-owned packet capture and player self-sampling. */
@@ -130,6 +144,17 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
                 this::captureSyntheticEntityState,
                 this::fail,
                 captureState);
+        this.argus = new Argus(
+                new Paper26_2ArgusPlatform(),
+                new LatticeEyePlacement(ARGUS_MAX_EYES_PER_REGION, ARGUS_MAX_VIEW_DISTANCE),
+                this::publishObserved,
+                this.accessor::currentServerTick,
+                this::fail);
+    }
+
+    /** Returns Argus, the virtual-observer source of this bridge. */
+    public SceneObservation sceneObservation() {
+        return argus == null ? SceneObservation.none() : argus;
     }
 
     @Override
@@ -155,6 +180,9 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
 
         try {
             seedOnlineConnections();
+            if (argus != null) {
+                argusTask = Bukkit.getScheduler().runTaskTimer(owner, argus::tick, 1L, 1L);
+            }
             installedListener = PacketEvents.getAPI().getEventManager().registerListener(
                     packetListener, PacketListenerPriority.MONITOR);
         } catch (Throwable failure) {
@@ -174,6 +202,7 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
 
         // UNINSTALLED is an expected lifecycle end, not an integrity failure.
         unregisterPacketListener();
+        closeArgus();
         closePlayerStateCapture();
         captureState.clear();
         packetCopyDeduplicator.clear();
@@ -260,6 +289,9 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
                     Object decoded = accessor.decodeCapturedFrame(connection, frame, registry);
                     context = definition.captureContext(
                             decoded, descriptor, connectionId, captureState, point.serverTick());
+                    if (!definition.distribution().observable()) {
+                        context = context.withOrigin(CaptureOrigin.PLAYER_ONLY);
+                    }
                     derived = definition.derivedScenePackets(
                             decoded, connectionId, captureState, point.serverTick());
                     if (definition.suppressesRecipientState(
@@ -391,6 +423,66 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
         });
     }
 
+    /**
+     * Publishes one packet of an Argus scene. The scene is already merged, so
+     * neither recipient suppression nor copy deduplication applies; the
+     * packet definition still supplies the capture context.
+     */
+    private void publishObserved(
+            UUID sceneId, String world, Object packet, BlockPosition anchor) {
+        CaptureBridge.PacketSink currentSink = sink;
+        if (state.get() != State.INSTALLED
+                || currentSink == null
+                || !currentSink.hasActiveSinks()) {
+            return;
+        }
+        if (!(packet instanceof net.minecraft.network.protocol.Packet<?> nativePacket)) {
+            throw incompatible("Argus packet is not a Paper 26.2 packet", null);
+        }
+        Optional<Paper26_2NativePacketCodec.EncodedStatePacket> observed =
+                stateCodec.encodeObserved(nativePacket);
+        if (observed.isEmpty()) {
+            return;
+        }
+        Paper26_2NativePacketCodec.EncodedStatePacket encoded = observed.get();
+        PacketDefinition<?> definition = Paper26_2PacketCatalog.catalog()
+                .find(encoded.packetId())
+                .orElseThrow(() -> incompatible(
+                        "PLAY packet has no definition for ID " + encoded.packetId(), null));
+        // Definitions key packet-owned state by connection. A scene takes
+        // the place of a connection that stays in one world.
+        captureState.world(sceneId, world);
+        captureOrder.publish(point -> currentSink.accept(new CaptureBridge.CapturePacket(
+                point.captureTimeNanos(),
+                point.serverTick(),
+                point.sequence(),
+                PacketPhase.PLAY,
+                encoded.packetId(),
+                encoded.payload(),
+                definition.captureContext(
+                                nativePacket, encoded.descriptor(), sceneId,
+                                captureState, point.serverTick())
+                        .withFallbackPosition(anchor)
+                        .withOrigin(CaptureOrigin.OBSERVER))));
+    }
+
+    /** Stops the eyes on the server thread, where the server registered them. */
+    private void closeArgus() {
+        BukkitTask task = argusTask;
+        argusTask = null;
+        if (task != null) {
+            task.cancel();
+        }
+        if (argus == null) {
+            return;
+        }
+        if (Bukkit.isPrimaryThread()) {
+            argus.close();
+        } else if (owner.isEnabled()) {
+            Bukkit.getScheduler().runTask(owner, argus::close);
+        }
+    }
+
     private void capture(PacketReceiveEvent event) {
         if (state.get() != State.INSTALLED || event.isCancelled()
                 || playerStateCapture == null
@@ -471,6 +563,7 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
         }
 
         unregisterPacketListener();
+        closeArgus();
         closePlayerStateCapture();
         captureState.clear();
         packetCopyDeduplicator.clear();

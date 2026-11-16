@@ -70,4 +70,9 @@ final class Id095SetChunkCacheRadiusPacketDefinition extends RebuildingPacketDef
     }
 
     record Value(int radius) {}
+
+    @Override
+    public dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution distribution() {
+        return dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution.VIEW_LOCAL;
+    }
 }

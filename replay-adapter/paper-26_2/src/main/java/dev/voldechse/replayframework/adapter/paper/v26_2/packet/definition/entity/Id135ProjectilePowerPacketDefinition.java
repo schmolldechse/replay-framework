@@ -55,4 +55,9 @@ final class Id135ProjectilePowerPacketDefinition extends RebuildingPacketDefinit
     }
 
     record Value(int entityId, double accelerationPower) {}
+
+    @Override
+    public dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution distribution() {
+        return dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution.BROADCAST;
+    }
 }

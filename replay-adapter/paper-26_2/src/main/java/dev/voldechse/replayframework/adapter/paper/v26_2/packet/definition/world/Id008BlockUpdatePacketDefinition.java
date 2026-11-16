@@ -95,4 +95,9 @@ final class Id008BlockUpdatePacketDefinition extends RebuildingPacketDefinition<
         return new dev.voldechse.replayframework.api.recording.BlockPosition(
                 position.getX(), position.getY(), position.getZ());
     }
+
+    @Override
+    public dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution distribution() {
+        return dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution.BROADCAST;
+    }
 }

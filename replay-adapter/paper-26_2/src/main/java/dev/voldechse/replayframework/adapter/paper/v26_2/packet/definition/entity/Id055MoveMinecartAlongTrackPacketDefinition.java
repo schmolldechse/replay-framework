@@ -64,4 +64,9 @@ final class Id055MoveMinecartAlongTrackPacketDefinition extends RebuildingPacket
             lerpSteps = List.copyOf(lerpSteps);
         }
     }
+
+    @Override
+    public dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution distribution() {
+        return dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution.BROADCAST;
+    }
 }

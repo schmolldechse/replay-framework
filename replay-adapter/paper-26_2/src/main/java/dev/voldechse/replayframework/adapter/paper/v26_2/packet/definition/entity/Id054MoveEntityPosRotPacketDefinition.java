@@ -115,4 +115,9 @@ final class Id054MoveEntityPosRotPacketDefinition extends RebuildingPacketDefini
         // Keep signed rotation bytes verbatim rather than unpacking them to
         // degrees and attempting a second, potentially different quantization.
     }
+
+    @Override
+    public dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution distribution() {
+        return dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution.BROADCAST;
+    }
 }

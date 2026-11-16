@@ -209,4 +209,14 @@ final class Id001AddEntityPacketDefinition extends RebuildingPacketDefinition<
         // source-reviewed projectile types must remain explicit.
         return OWNER_ENTITY_ID_DATA_TYPES.contains(entityType);
     }
+
+    @Override
+    public dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution distribution() {
+        return dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution.VIEW_MEMBERSHIP;
+    }
+
+    @Override
+    public dev.voldechse.replayframework.adapter.paper.packet.SceneMembership sceneMembership(Object decodedPacket) {
+        return dev.voldechse.replayframework.adapter.paper.packet.SceneMembership.entityGained(net.minecraft.network.protocol.game.ClientboundAddEntityPacket.class.cast(decodedPacket).getId());
+    }
 }

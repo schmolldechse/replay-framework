@@ -148,4 +148,9 @@ final class Id125TeleportEntityPacketDefinition extends RebuildingPacketDefiniti
                     "teleport_entity contains a non-finite " + field + " value");
         }
     }
+
+    @Override
+    public dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution distribution() {
+        return dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution.BROADCAST;
+    }
 }

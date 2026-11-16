@@ -62,6 +62,14 @@ public final class Paper26_2ReplayAdapter extends AbstractReplayAdapter {
                 checkpointEncoder, checkpointSignals, playbackFactory);
     }
 
+    @Override
+    public dev.voldechse.replayframework.adapter.SceneObservation sceneObservation() {
+        return captureBridge() instanceof
+                        dev.voldechse.replayframework.adapter.paper.v26_2.capture.Paper26_2CaptureBridge bridge
+                ? bridge.sceneObservation()
+                : dev.voldechse.replayframework.adapter.SceneObservation.none();
+    }
+
     private static Components discover() {
         Paper26_2ProtocolIntrospector.ProtocolSnapshot snapshot =
                 new Paper26_2ProtocolIntrospector().inspect();

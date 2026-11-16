@@ -130,4 +130,9 @@ final class Id034EntityEventPacketDefinition extends RebuildingPacketDefinition<
             }
         }
     }
+
+    @Override
+    public dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution distribution() {
+        return dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution.BROADCAST;
+    }
 }

@@ -56,7 +56,9 @@ public final class RecordingRuntimeModule extends AbstractModule {
     @Provides
     @Singleton
     RecordingCoordinator.ScopeResolver provideScopeResolver() {
-        return request -> java.util.concurrent.CompletableFuture.completedFuture(
+        return request -> {
+            boolean observed = adapter.sceneObservation().observes(request.scope());
+            return java.util.concurrent.CompletableFuture.completedFuture(
                 new ResolvedRecordingScope(
                         request.scope(),
                         0L,
@@ -64,7 +66,9 @@ public final class RecordingRuntimeModule extends AbstractModule {
                         request.scope().regions(),
                         CapturePolicy.builder().build(),
                         request.participants(),
-                        packet -> acceptsScope(request.scope(), packet)));
+                        packet -> acceptsOrigin(observed, packet)
+                                && acceptsScope(request.scope(), packet)));
+        };
     }
 
     @Provides
@@ -211,6 +215,21 @@ public final class RecordingRuntimeModule extends AbstractModule {
             CaptureRouter captureRouter,
             RecordingCoordinator coordinator) {
         return new RecordingRuntimeLifecycle(replayAdapter, captureRouter, coordinator);
+    }
+
+    /**
+     * A recording takes its scene from one source: virtual observers when the
+     * adapter places them for its scope, player views otherwise. Packets that
+     * only players receive belong to every recording.
+     */
+    private static boolean acceptsOrigin(
+            boolean observed,
+            dev.voldechse.replayframework.core.capture.CapturedPacket packet) {
+        return switch (packet.context().origin()) {
+            case PLAYER_ONLY -> true;
+            case OBSERVER -> observed;
+            case PLAYER_VIEW -> !observed;
+        };
     }
 
     private static boolean acceptsScope(

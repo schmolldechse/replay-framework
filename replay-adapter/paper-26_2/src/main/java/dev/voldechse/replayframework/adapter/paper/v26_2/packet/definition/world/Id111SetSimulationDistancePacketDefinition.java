@@ -54,4 +54,9 @@ final class Id111SetSimulationDistancePacketDefinition extends RebuildingPacketD
     }
 
     record Value(int simulationDistance) {}
+
+    @Override
+    public dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution distribution() {
+        return dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution.VIEW_LOCAL;
+    }
 }

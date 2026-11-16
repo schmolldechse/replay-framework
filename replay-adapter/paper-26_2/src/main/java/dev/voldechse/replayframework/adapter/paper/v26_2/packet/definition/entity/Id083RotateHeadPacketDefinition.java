@@ -101,4 +101,9 @@ final class Id083RotateHeadPacketDefinition extends RebuildingPacketDefinition<
     record Value(int entityId, byte headYaw) {
         // Keep the quantized angle byte verbatim; converting it to degrees and back is lossy.
     }
+
+    @Override
+    public dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution distribution() {
+        return dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution.BROADCAST;
+    }
 }

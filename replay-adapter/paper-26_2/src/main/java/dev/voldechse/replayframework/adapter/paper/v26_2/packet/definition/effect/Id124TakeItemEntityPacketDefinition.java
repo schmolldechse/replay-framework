@@ -48,4 +48,9 @@ final class Id124TakeItemEntityPacketDefinition extends RebuildingPacketDefiniti
 
     /** Both leading fields are entity references; amount is the original pickup stack count. */
     record Value(int itemEntityId, int collectorEntityId, int amount) {}
+
+    @Override
+    public dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution distribution() {
+        return dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution.BROADCAST;
+    }
 }

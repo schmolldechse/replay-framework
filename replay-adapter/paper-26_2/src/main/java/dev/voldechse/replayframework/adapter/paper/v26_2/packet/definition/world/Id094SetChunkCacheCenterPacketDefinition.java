@@ -70,4 +70,9 @@ final class Id094SetChunkCacheCenterPacketDefinition extends RebuildingPacketDef
     }
 
     record Value(int x, int z) {}
+
+    @Override
+    public dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution distribution() {
+        return dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution.VIEW_LOCAL;
+    }
 }

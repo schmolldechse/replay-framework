@@ -59,6 +59,20 @@ public abstract class PacketDefinition<C> {
         return Optional.empty();
     }
 
+    /** How the server distributes this packet; decides whether and how observers deliver it. */
+    public PacketDistribution distribution() {
+        return PacketDistribution.PLAYER_ONLY;
+    }
+
+    /**
+     * Names the chunk or entity a {@link PacketDistribution#VIEW_MEMBERSHIP}
+     * packet adds to or removes from its recipient's view.
+     */
+    public SceneMembership sceneMembership(Object decodedPacket) {
+        throw new IncompatibleAdapterException(
+                "packet definition declares no scene membership: " + typeName);
+    }
+
     /** Whether identical same-tick observations can be recipient copies of one entity update. */
     public boolean deduplicateRecipientCopies() {
         return false;

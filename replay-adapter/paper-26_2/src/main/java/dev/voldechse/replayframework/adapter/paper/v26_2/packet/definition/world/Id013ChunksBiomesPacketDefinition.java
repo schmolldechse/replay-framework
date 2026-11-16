@@ -94,4 +94,9 @@ final class Id013ChunksBiomesPacketDefinition extends RebuildingPacketDefinition
             return buffer.clone();
         }
     }
+
+    @Override
+    public dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution distribution() {
+        return dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution.BROADCAST;
+    }
 }

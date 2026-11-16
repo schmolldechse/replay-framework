@@ -133,4 +133,9 @@ final class Id035EntityPositionSyncPacketDefinition extends RebuildingPacketDefi
                     "entity_position_sync contains a non-finite " + field + " value");
         }
     }
+
+    @Override
+    public dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution distribution() {
+        return dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution.BROADCAST;
+    }
 }

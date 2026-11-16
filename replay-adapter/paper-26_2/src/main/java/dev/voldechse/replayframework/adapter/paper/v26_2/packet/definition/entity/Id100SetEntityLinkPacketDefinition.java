@@ -67,4 +67,9 @@ final class Id100SetEntityLinkPacketDefinition extends RebuildingPacketDefinitio
     record Value(int sourceId, int destinationId) {
         // Destination ID zero is Paper 26.2's unlink sentinel; other values are entity IDs.
     }
+
+    @Override
+    public dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution distribution() {
+        return dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution.BROADCAST;
+    }
 }

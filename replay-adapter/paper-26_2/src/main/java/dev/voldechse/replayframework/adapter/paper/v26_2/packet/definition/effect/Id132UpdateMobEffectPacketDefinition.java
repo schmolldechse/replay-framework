@@ -153,4 +153,9 @@ final class Id132UpdateMobEffectPacketDefinition
             return payload.clone();
         }
     }
+
+    @Override
+    public dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution distribution() {
+        return dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution.BROADCAST;
+    }
 }

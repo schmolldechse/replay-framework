@@ -131,4 +131,9 @@ final class Id102SetEquipmentPacketDefinition extends RebuildingPacketDefinition
             return Pair.of(slot, itemStack.copy());
         }
     }
+
+    @Override
+    public dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution distribution() {
+        return dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution.BROADCAST;
+    }
 }

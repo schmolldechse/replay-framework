@@ -108,4 +108,9 @@ final class Id053MoveEntityPosPacketDefinition extends RebuildingPacketDefinitio
         // Keep the signed fixed-point shorts verbatim: converting the 1/4096-block
         // deltas to floating point and back can change a movement update.
     }
+
+    @Override
+    public dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution distribution() {
+        return dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution.BROADCAST;
+    }
 }

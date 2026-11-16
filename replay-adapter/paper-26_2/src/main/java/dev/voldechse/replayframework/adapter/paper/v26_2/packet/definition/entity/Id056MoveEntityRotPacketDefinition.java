@@ -94,4 +94,9 @@ final class Id056MoveEntityRotPacketDefinition extends RebuildingPacketDefinitio
         // Keep the quantized rotation bytes verbatim; converting them to
         // degrees and back can change the encoded angles.
     }
+
+    @Override
+    public dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution distribution() {
+        return dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution.BROADCAST;
+    }
 }

@@ -66,4 +66,14 @@ final class Id045LevelChunkWithLightPacketDefinition
         state.viewTeardown().chunkLoaded(connectionId, packet.getX(), packet.getZ(), serverTick);
         return super.captureContext(decodedPacket, descriptor, connectionId, state, serverTick);
     }
+
+    @Override
+    public dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution distribution() {
+        return dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution.VIEW_MEMBERSHIP;
+    }
+
+    @Override
+    public dev.voldechse.replayframework.adapter.paper.packet.SceneMembership sceneMembership(Object decodedPacket) {
+        return dev.voldechse.replayframework.adapter.paper.packet.SceneMembership.chunkGained(net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket.class.cast(decodedPacket).getX(), net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket.class.cast(decodedPacket).getZ());
+    }
 }

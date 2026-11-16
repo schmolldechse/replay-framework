@@ -94,4 +94,9 @@ final class Id006BlockEntityDataPacketDefinition extends RebuildingPacketDefinit
             return tag.copy();
         }
     }
+
+    @Override
+    public dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution distribution() {
+        return dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution.BROADCAST;
+    }
 }

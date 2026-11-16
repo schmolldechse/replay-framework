@@ -103,4 +103,9 @@ final class Id002AnimatePacketDefinition extends RebuildingPacketDefinition<
             }
         }
     }
+
+    @Override
+    public dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution distribution() {
+        return dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution.BROADCAST;
+    }
 }

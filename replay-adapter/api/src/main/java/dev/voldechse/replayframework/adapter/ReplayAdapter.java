@@ -55,6 +55,14 @@ public interface ReplayAdapter {
      * @return open playback bridge
      * @throws IncompatibleAdapterException when the adapter was not verified
      */
+    /**
+     * Returns the adapter's virtual-observer source. Adapters that only
+     * capture player connections keep the default.
+     */
+    default SceneObservation sceneObservation() {
+        return SceneObservation.none();
+    }
+
     PlaybackBridge openPlayback(Player player);
 
     /** Opens and binds a bridge to the isolated playback identity context. */
