@@ -50,6 +50,13 @@ final class Id082RespawnPacketDefinition
             long serverTick) {
         ClientboundRespawnPacket packet = ClientboundRespawnPacket.class.cast(decodedPacket);
         Key world = Key.key(packet.commonPlayerSpawnInfo().dimension().identifier().toString());
+        // The respawn ends a death teardown of this connection's view. Only a
+        // respawn into the same world rebuilds the chunks and entities whose
+        // unloads were withheld.
+        boolean sameWorld = state.world(connectionId)
+                .map(world.toString()::equals)
+                .orElse(true);
+        state.viewTeardown().playerRespawned(connectionId, serverTick, sameWorld);
         state.world(connectionId, world.toString());
         if (!packet.shouldKeep(ClientboundRespawnPacket.KEEP_ENTITY_DATA)) {
             state.markRespawnPending(connectionId);

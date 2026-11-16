@@ -62,6 +62,31 @@ entity spawn observed in that tick or the next are suppressed, and the
 player-state sampler forgets its baseline so position, head rotation and
 equipment are emitted again for the new entity.
 
+## View teardown of a dead player
+
+The server removes a dead player from its level, either when the death
+animation ends or at the respawn. The connection then receives a chunk unload
+for every loaded chunk followed by an entity removal for every tracked entity,
+and after the respawn the same chunks and entities are sent again. These
+unloads describe the recipient's view, not the scene; replaying them makes the
+world disappear and reload for the neutral observer.
+
+Capture recognizes the teardown from packets of the affected connection only:
+the receiving player's health reaching zero marks it as dead, and because a
+dead player cannot move its view, its first chunk unload starts the teardown.
+The respawn packet ends it. Unloads observed in between are withheld and
+resolved afterwards:
+
+- a chunk or entity that is sent again replaces the withheld one in place;
+- a withheld chunk outside the respawned view (announced center and radius,
+  plus one column) is published as an unload together with its entities;
+- a withheld entity that does not reappear within one second after its chunk
+  was sent again is published as a removal; and
+- a respawn into another world publishes every withheld unload.
+
+Unloads of living players, and removals observed between death and the
+teardown, remain ordinary scene changes.
+
 ## Thread boundary
 
 PacketEvents callbacks can execute on a Netty event-loop thread. They must not

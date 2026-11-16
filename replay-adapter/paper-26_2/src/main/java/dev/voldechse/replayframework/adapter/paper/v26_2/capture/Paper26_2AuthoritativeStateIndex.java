@@ -1,6 +1,7 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.capture;
 
 import dev.voldechse.replayframework.adapter.paper.packet.PacketCaptureState;
+import dev.voldechse.replayframework.adapter.paper.packet.ViewTeardownState;
 import dev.voldechse.replayframework.adapter.CaptureContext;
 import dev.voldechse.replayframework.adapter.PacketDisposition;
 import java.util.Map;
@@ -25,6 +26,12 @@ final class Paper26_2AuthoritativeStateIndex implements PacketCaptureState {
     private final Map<Integer, Long> swingTicks = new ConcurrentHashMap<>();
     private final Set<UUID> respawnPendingConnections = ConcurrentHashMap.newKeySet();
     private final Map<Integer, Long> replacedEntityTicks = new ConcurrentHashMap<>();
+    private final Paper26_2ViewTeardownIndex viewTeardown = new Paper26_2ViewTeardownIndex();
+
+    @Override
+    public ViewTeardownState viewTeardown() {
+        return viewTeardown;
+    }
 
     @Override
     public Optional<String> world(UUID connectionId) {
@@ -207,6 +214,7 @@ final class Paper26_2AuthoritativeStateIndex implements PacketCaptureState {
         }
         connectionWorlds.remove(connectionId);
         respawnPendingConnections.remove(connectionId);
+        viewTeardown.removeConnection(connectionId);
         connectionEntityPositions.keySet().removeIf(key -> key.connectionId().equals(connectionId));
         Integer entityId = connectionEntityIds.remove(connectionId);
         if (entityId != null) {
@@ -225,6 +233,7 @@ final class Paper26_2AuthoritativeStateIndex implements PacketCaptureState {
         swingTicks.clear();
         respawnPendingConnections.clear();
         replacedEntityTicks.clear();
+        viewTeardown.clear();
     }
 
     private record ConnectionEntity(UUID connectionId, int entityId) {

@@ -15,6 +15,7 @@ import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.PacketRegistry;
 import dev.voldechse.replayframework.adapter.paper.packet.DerivedScenePacket;
 import dev.voldechse.replayframework.adapter.paper.packet.PacketDefinition;
+import dev.voldechse.replayframework.adapter.paper.packet.ViewTeardownState;
 import dev.voldechse.replayframework.adapter.paper.v26_2.Paper26_2PacketRegistry;
 import dev.voldechse.replayframework.adapter.paper.v26_2.packet.Paper26_2PacketCatalog;
 import dev.voldechse.replayframework.adapter.paper.v26_2.checkpoint.Paper26_2CheckpointEncoder;
@@ -34,6 +35,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.Optional;
 import net.kyori.adventure.key.Key;
+import net.minecraft.network.protocol.game.ClientboundForgetLevelChunkPacket;
+import net.minecraft.network.protocol.game.ClientboundRemoveEntitiesPacket;
+import net.minecraft.world.level.ChunkPos;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -259,7 +263,7 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
                     derived = definition.derivedScenePackets(
                             decoded, connectionId, captureState, point.serverTick());
                     if (definition.suppressesRecipientState(
-                            decoded, captureState, point.serverTick())) {
+                            decoded, connectionId, captureState, point.serverTick())) {
                         publishObserved = false;
                     } else if (definition.deduplicateRecipientCopies()
                             && !packetCopyDeduplicator.first(
@@ -287,6 +291,10 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
                             context));
                 }
                 publishDerivedScenePackets(derived, connectionId);
+                if (phase == PacketPhase.PLAY) {
+                    publishReleasedUnloads(
+                            captureState.viewTeardown().drainDue(connectionId, point.serverTick()));
+                }
             });
         } catch (Throwable failure) {
             fail(failure);
@@ -303,43 +311,84 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
         if (derived.isEmpty()) {
             return;
         }
-        if (stateCodec == null) {
-            throw incompatible(
-                    "derived scene packets require the Paper 26.2 native packet codec", null);
-        }
-        CaptureBridge.PacketSink currentSink = sink;
         for (DerivedScenePacket scenePacket : derived) {
             if (!(scenePacket.packet() instanceof net.minecraft.network.protocol.Packet<?> nativePacket)) {
                 throw incompatible("derived scene packet is not a Paper 26.2 packet", null);
             }
-            Paper26_2NativePacketCodec.EncodedStatePacket encoded =
-                    stateCodec.encodeState(nativePacket);
             var position = scenePacket.position();
-            CaptureContext context = new CaptureContext(
-                    encoded.descriptor().disposition(),
+            publishScenePacket(
+                    nativePacket,
                     Optional.of(Key.key(position.world())),
                     Optional.of(new BlockPosition(
-                            position.blockX(), position.blockY(), position.blockZ())),
-                    Optional.empty(),
-                    Optional.empty());
-            captureOrder.publish(point -> {
-                if (currentSink != null) {
-                    currentSink.accept(new CaptureBridge.CapturePacket(
-                            point.captureTimeNanos(),
-                            point.serverTick(),
-                            point.sequence(),
-                            PacketPhase.PLAY,
-                            encoded.packetId(),
-                            encoded.payload(),
-                            context));
-                }
-            });
+                            position.blockX(), position.blockY(), position.blockZ())));
         }
         // The derived packets rebuilt this connection's scene entity, so the
         // sampled baseline no longer describes what a replay client holds.
         if (playerStateCapture != null && connectionId != null) {
             playerStateCapture.resetSnapshot(connectionId);
         }
+    }
+
+    /**
+     * Publishes unloads that were withheld during a death teardown and that
+     * the respawned view no longer covers. Like the observed unloads they
+     * replace, they carry the world but no position.
+     */
+    private void publishReleasedUnloads(ViewTeardownState.Unloads unloads) {
+        if (unloads.isEmpty()) {
+            return;
+        }
+        Optional<Key> world = unloads.world().map(Key::key);
+        for (ViewTeardownState.ChunkCoordinate chunk : unloads.chunks()) {
+            publishScenePacket(
+                    new ClientboundForgetLevelChunkPacket(new ChunkPos(chunk.x(), chunk.z())),
+                    world,
+                    Optional.empty());
+        }
+        if (!unloads.entityIds().isEmpty()) {
+            unloads.entityIds().forEach(captureState::removeEntity);
+            publishScenePacket(
+                    new ClientboundRemoveEntitiesPacket(unloads.entityIds().stream()
+                            .mapToInt(Integer::intValue)
+                            .toArray()),
+                    world,
+                    Optional.empty());
+        }
+    }
+
+    /**
+     * Encodes one adapter-built scene packet and publishes it at the next
+     * capture point. The caller holds the capture-order lock.
+     */
+    private void publishScenePacket(
+            net.minecraft.network.protocol.Packet<?> nativePacket,
+            Optional<Key> world,
+            Optional<BlockPosition> position) {
+        if (stateCodec == null) {
+            throw incompatible(
+                    "adapter-built scene packets require the Paper 26.2 native packet codec", null);
+        }
+        Paper26_2NativePacketCodec.EncodedStatePacket encoded =
+                stateCodec.encodeState(nativePacket);
+        CaptureContext context = new CaptureContext(
+                encoded.descriptor().disposition(),
+                world,
+                position,
+                Optional.empty(),
+                Optional.empty());
+        CaptureBridge.PacketSink currentSink = sink;
+        captureOrder.publish(point -> {
+            if (currentSink != null) {
+                currentSink.accept(new CaptureBridge.CapturePacket(
+                        point.captureTimeNanos(),
+                        point.serverTick(),
+                        point.sequence(),
+                        PacketPhase.PLAY,
+                        encoded.packetId(),
+                        encoded.payload(),
+                        context));
+            }
+        });
     }
 
     private void capture(PacketReceiveEvent event) {

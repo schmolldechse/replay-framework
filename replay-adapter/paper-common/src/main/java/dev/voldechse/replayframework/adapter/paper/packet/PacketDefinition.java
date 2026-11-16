@@ -97,6 +97,19 @@ public abstract class PacketDefinition<C> {
     }
 
     /**
+     * Connection-aware form of {@link #suppressesRecipientState(Object, PacketCaptureState, long)}
+     * for packets whose scene relevance depends on the receiving connection,
+     * such as unloads that only tear down a dead player's view.
+     */
+    public boolean suppressesRecipientState(
+            Object decodedPacket,
+            UUID connectionId,
+            PacketCaptureState state,
+            long serverTick) {
+        return suppressesRecipientState(decodedPacket, state, serverTick);
+    }
+
+    /**
      * Returns scene packets this observation implies for the neutral stream.
      *
      * <p>Some connection-local packets carry a scene change that the protocol

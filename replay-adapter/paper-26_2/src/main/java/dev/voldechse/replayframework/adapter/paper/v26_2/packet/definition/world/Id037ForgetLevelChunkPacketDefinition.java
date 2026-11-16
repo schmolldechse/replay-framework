@@ -8,6 +8,9 @@ import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2Repla
 import java.util.Objects;
 import net.minecraft.network.protocol.game.ClientboundForgetLevelChunkPacket;
 import net.minecraft.world.level.ChunkPos;
+import dev.voldechse.replayframework.adapter.CaptureContext;
+import dev.voldechse.replayframework.adapter.paper.packet.PacketCaptureState;
+import java.util.UUID;
 
 /**
  * Complete read/rewrite/rebuild contract for {@code minecraft:forget_level_chunk}.
@@ -65,5 +68,32 @@ final class Id037ForgetLevelChunkPacketDefinition extends RebuildingPacketDefini
         Value {
             Objects.requireNonNull(position, "position");
         }
+    }
+
+    /**
+     * A dead player cannot move its view, so a chunk unload on its connection
+     * is the server tearing that view down. The teardown state claims it and
+     * later releases it only if the respawned view does not cover the chunk.
+     */
+    @Override
+    public CaptureContext captureContext(
+            Object decodedPacket,
+            PacketDescriptor descriptor,
+            UUID connectionId,
+            PacketCaptureState state,
+            long serverTick) {
+        ChunkPos position = ClientboundForgetLevelChunkPacket.class.cast(decodedPacket).pos();
+        state.viewTeardown().withholdChunkUnload(connectionId, position.x(), position.z());
+        return super.captureContext(decodedPacket, descriptor, connectionId, state, serverTick);
+    }
+
+    @Override
+    public boolean suppressesRecipientState(
+            Object decodedPacket,
+            UUID connectionId,
+            PacketCaptureState state,
+            long serverTick) {
+        return state.viewTeardown().tearingDown(connectionId)
+                || super.suppressesRecipientState(decodedPacket, connectionId, state, serverTick);
     }
 }

@@ -43,6 +43,11 @@ public interface PacketCaptureState {
 
     void removeConnection(UUID connectionId);
 
+    /** Returns the per-connection view-teardown state; adapters without it track nothing. */
+    default ViewTeardownState viewTeardown() {
+        return ViewTeardownState.NONE;
+    }
+
     /** Returns the protocol entity ID owned by a connection, when known. */
     default OptionalInt connectionEntityId(UUID connectionId) {
         return OptionalInt.empty();
