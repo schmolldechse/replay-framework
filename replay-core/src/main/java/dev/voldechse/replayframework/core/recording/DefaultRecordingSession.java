@@ -144,8 +144,23 @@ final class DefaultRecordingSession implements RecordingSession, CaptureSink {
         Objects.requireNonNull(packet, "packet");
         return status.get() == RecordingStatus.RECORDING
                 && !queue.closed()
+                && ownsObservation(packet)
                 && resolvedScope.accepts(packet);
     }
+
+    /** Names the scene observation whose packets belong to this recording. */
+    void observation(java.util.UUID observationId) {
+        this.observationId = Objects.requireNonNull(observationId, "observationId");
+    }
+
+    /** Observer packets are private to the recording that placed the observers. */
+    private boolean ownsObservation(CapturedPacket packet) {
+        return packet.context().observation()
+                .map(observation -> observation.equals(observationId))
+                .orElse(true);
+    }
+
+    private volatile java.util.UUID observationId;
 
     @Override
     public void enqueue(CapturedPacket packet) {

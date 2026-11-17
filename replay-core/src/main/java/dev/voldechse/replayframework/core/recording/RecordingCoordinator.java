@@ -368,12 +368,26 @@ public final class RecordingCoordinator {
 
     /** Places the adapter's virtual observers when they deliver this scope's scene. */
     private void openSceneWatch(
-            RecordingSessionId sessionId,
+            DefaultRecordingSession session,
             dev.voldechse.replayframework.api.recording.RecordingScope scope) {
         var observation = adapter.sceneObservation();
         if (observation.observes(scope)) {
-            sceneWatches.put(sessionId, observation.watch(scope));
+            // Named before the watch opens, so no observed packet can arrive
+            // at a session that does not know its observation yet.
+            java.util.UUID observationId = java.util.UUID.randomUUID();
+            session.observation(observationId);
+            sceneWatches.put(session.id(), observation.watch(scope, observationId));
         }
+    }
+
+    /**
+     * A checkpoint must hold what the stream after it refers to. For an
+     * observed recording that is everything its observers see.
+     */
+    private dev.voldechse.replayframework.api.recording.RecordingScope checkpointScope(
+            dev.voldechse.replayframework.api.recording.RecordingScope scope) {
+        var observation = adapter.sceneObservation();
+        return observation.observes(scope) ? observation.coverage(scope) : scope;
     }
 
     private void closeSceneWatch(RecordingSessionId sessionId) {
@@ -529,7 +543,7 @@ public final class RecordingCoordinator {
         try {
             checkpointStage = Objects.requireNonNull(
                     adapter.checkpointEncoder().encode(new CheckpointEncoder.CheckpointRequest(
-                            request.scope(),
+                            checkpointScope(request.scope()),
                             0L,
                             resolvedScope.initialServerTick(),
                             CheckpointEncoder.CheckpointKind.INITIAL)),
@@ -653,7 +667,7 @@ public final class RecordingCoordinator {
                 session.activate();
                 // Opened only now: a session rejects packets until it is
                 // active, and what an observer sends first must not be lost.
-                openSceneWatch(sessionId, request.scope());
+                openSceneWatch(session, request.scope());
                 publishEvent(new ReplayEventPublisher.RecordingStatusChanged(
                         session.id(),
                         session.replayId(),
@@ -685,12 +699,14 @@ public final class RecordingCoordinator {
         Path workspace = Objects.requireNonNull(
                 recordingTarget.stagingDirectoryFactory().apply(session.replayId()),
                 "stagingDirectoryFactory returned null");
+        dev.voldechse.replayframework.api.recording.RecordingScope checkpointScope =
+                checkpointScope(request.scope());
         CheckpointScheduler scheduler = new CheckpointScheduler(
                 request.options().checkpointInterval(),
                 adapter.checkpointEncoder(),
-                request.scope(),
+                checkpointScope,
                 (elapsedNanos, serverTick, kind) -> new CheckpointEncoder.CheckpointRequest(
-                        request.scope(),
+                        checkpointScope,
                         elapsedNanos,
                         serverTick,
                         kind,

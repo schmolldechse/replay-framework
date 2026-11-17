@@ -147,7 +147,18 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
         this.argus = new Argus(
                 new Paper26_2ArgusPlatform(),
                 new LatticeEyePlacement(ARGUS_MAX_EYES_PER_REGION, ARGUS_MAX_VIEW_DISTANCE),
-                this::publishObserved,
+                new dev.voldechse.replayframework.adapter.paper.argus.ArgusPublisher() {
+                    @Override
+                    public void publish(
+                            UUID observationId, UUID sceneId, String world, Object packet) {
+                        publishObserved(observationId, sceneId, world, packet);
+                    }
+
+                    @Override
+                    public void sceneClosed(UUID sceneId) {
+                        captureState.removeConnection(sceneId);
+                    }
+                },
                 this.accessor::currentServerTick,
                 this::fail);
     }
@@ -432,7 +443,7 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
      * packet definition still supplies the capture context.
      */
     private void publishObserved(
-            UUID sceneId, String world, Object packet, BlockPosition anchor) {
+            UUID observationId, UUID sceneId, String world, Object packet) {
         CaptureBridge.PacketSink currentSink = sink;
         if (state.get() != State.INSTALLED
                 || currentSink == null
@@ -465,8 +476,7 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
                 definition.captureContext(
                                 nativePacket, encoded.descriptor(), sceneId,
                                 captureState, point.serverTick())
-                        .withFallbackPosition(anchor)
-                        .withOrigin(CaptureOrigin.OBSERVER))));
+                        .observedBy(observationId))));
     }
 
     /** Stops the eyes on the server thread, where the server registered them. */

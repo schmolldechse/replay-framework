@@ -3,6 +3,7 @@ package dev.voldechse.replayframework.adapter;
 import dev.voldechse.replayframework.api.recording.BlockPosition;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import net.kyori.adventure.key.Key;
 
 /**
@@ -21,6 +22,8 @@ import net.kyori.adventure.key.Key;
  * @param origin source the packet was observed through
  * @param worldWide whether the packet concerns its whole world instead of a
  *                  place in it, such as a tab-list entry or public chat
+ * @param observation the scene observation an {@link CaptureOrigin#OBSERVER}
+ *                    packet belongs to; empty for every other origin
  */
 public record CaptureContext(
         Optional<PacketDisposition> disposition,
@@ -29,7 +32,8 @@ public record CaptureContext(
         Optional<String> normalizedChat,
         Optional<Key> customPayloadChannel,
         CaptureOrigin origin,
-        boolean worldWide) {
+        boolean worldWide,
+        Optional<UUID> observation) {
 
     /** Creates a context for scene state observed through a player view. */
     public CaptureContext(
@@ -39,7 +43,7 @@ public record CaptureContext(
             Optional<String> normalizedChat,
             Optional<Key> customPayloadChannel) {
         this(disposition, world, position, normalizedChat, customPayloadChannel,
-                CaptureOrigin.PLAYER_VIEW, false);
+                CaptureOrigin.PLAYER_VIEW, false, Optional.empty());
     }
 
     /**
@@ -64,6 +68,7 @@ public record CaptureContext(
         normalizedChat = requireOptional(normalizedChat, "normalizedChat");
         customPayloadChannel = requireOptional(customPayloadChannel, "customPayloadChannel");
         Objects.requireNonNull(origin, "origin");
+        observation = requireOptional(observation, "observation");
     }
 
     /**
@@ -83,23 +88,25 @@ public record CaptureContext(
     public CaptureContext withOrigin(CaptureOrigin nextOrigin) {
         return new CaptureContext(
                 disposition, world, position, normalizedChat, customPayloadChannel,
-                nextOrigin, worldWide);
+                nextOrigin, worldWide, observation);
     }
 
     /** Returns this context for a packet that concerns its whole world. */
     public CaptureContext asWorldWide() {
         return new CaptureContext(
                 disposition, world, position, normalizedChat, customPayloadChannel,
-                origin, true);
+                origin, true, observation);
     }
 
-    /** Returns this context with a position when the packet itself carries none. */
-    public CaptureContext withFallbackPosition(BlockPosition fallback) {
-        return position.isPresent()
-                ? this
-                : new CaptureContext(
-                        disposition, world, Optional.of(fallback), normalizedChat,
-                        customPayloadChannel, origin, worldWide);
+    /**
+     * Returns this context for a packet seen by the virtual observers of one
+     * scene observation. Only the recording that opened it accepts the packet.
+     */
+    public CaptureContext observedBy(UUID observationId) {
+        return new CaptureContext(
+                disposition, world, position, normalizedChat, customPayloadChannel,
+                CaptureOrigin.OBSERVER, worldWide,
+                Optional.of(Objects.requireNonNull(observationId, "observationId")));
     }
 
     private static <T> Optional<T> requireOptional(Optional<T> value, String name) {

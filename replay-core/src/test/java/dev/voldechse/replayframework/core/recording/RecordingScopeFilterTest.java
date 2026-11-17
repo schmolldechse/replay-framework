@@ -59,6 +59,16 @@ class RecordingScopeFilterTest {
                 ARENA, packet(context(NETHER, null).asWorldWide())));
     }
 
+    @Test
+    void aRegionAcceptsEveryPacketOfItsObserversWhereverItHappened() {
+        java.util.UUID observation = java.util.UUID.randomUUID();
+
+        assertTrue(RecordingRuntimeModule.acceptsScope(ARENA, packet(
+                context(OVERWORLD, new BlockPosition(200, 300, 10)).observedBy(observation))));
+        assertTrue(RecordingRuntimeModule.acceptsScope(ARENA, packet(
+                context(OVERWORLD, null).observedBy(observation))));
+    }
+
     private static CaptureContext context(Key world, BlockPosition position) {
         return new CaptureContext(
                 PacketDisposition.STATEFUL,

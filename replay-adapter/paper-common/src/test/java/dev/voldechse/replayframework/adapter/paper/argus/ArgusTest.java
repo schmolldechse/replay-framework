@@ -19,6 +19,7 @@ import dev.voldechse.replayframework.api.recording.RecordingScope;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import net.kyori.adventure.key.Key;
@@ -27,18 +28,30 @@ import org.junit.jupiter.api.Test;
 class ArgusTest {
 
     private static final Key WORLD = Key.key("minecraft:overworld");
+    private static final UUID OBSERVATION = UUID.randomUUID();
+    /** Wider than one eye reaches at a tracking range of 64 blocks: two eyes. */
+    private static final CuboidRegion TWO_EYES = region(0, 0, 119, 15);
 
     private final FakePlatform platform = new FakePlatform();
     private final List<Object> published = new ArrayList<>();
-    private final List<BlockPosition> anchors = new ArrayList<>();
+    private final List<UUID> observations = new ArrayList<>();
+    private final List<UUID> closedScenes = new ArrayList<>();
     private final List<Throwable> failures = new ArrayList<>();
     private final AtomicLong tick = new AtomicLong();
     private final Argus argus = new Argus(
             platform,
             new LatticeEyePlacement(8, 8),
-            (sceneId, world, packet, anchor) -> {
-                published.add(packet);
-                anchors.add(anchor);
+            new ArgusPublisher() {
+                @Override
+                public void publish(UUID observationId, UUID sceneId, String world, Object packet) {
+                    published.add(packet);
+                    observations.add(observationId);
+                }
+
+                @Override
+                public void sceneClosed(UUID sceneId) {
+                    closedScenes.add(sceneId);
+                }
             },
             tick::get,
             failures::add);
@@ -50,8 +63,19 @@ class ArgusTest {
     }
 
     @Test
+    void coversWhatItsEyesSeeBeyondTheRegion() {
+        // One eye at (8, 8) with view distance 2 receives three chunks each way.
+        RecordingScope coverage = argus.coverage(scope(region(0, 0, 15, 15)));
+
+        CuboidRegion covered = coverage.regions().get(0);
+        assertEquals(new BlockPosition(-40, -2048, -40), covered.min());
+        assertEquals(new BlockPosition(56, 2047, 56), covered.max());
+        assertEquals(WORLD, covered.world());
+    }
+
+    @Test
     void opensEyesOnTheNextTickAndDrivesThem() {
-        argus.watch(scope(region(0, 0, 15, 15)));
+        argus.watch(scope(region(0, 0, 15, 15)), OBSERVATION);
         assertTrue(platform.eyes.isEmpty());
 
         argus.tick();
@@ -63,7 +87,7 @@ class ArgusTest {
 
     @Test
     void neverOpensAWatchThatWasClosedFirst() {
-        argus.watch(scope(region(0, 0, 15, 15))).close();
+        argus.watch(scope(region(0, 0, 15, 15)), OBSERVATION).close();
 
         argus.tick();
 
@@ -73,13 +97,12 @@ class ArgusTest {
     @Test
     void rejectsAScopeBeyondTheEyeBudget() {
         assertThrows(IllegalArgumentException.class,
-                () -> argus.watch(scope(region(0, 0, 4999, 4999))));
+                () -> argus.watch(scope(region(0, 0, 4999, 4999)), OBSERVATION));
     }
 
     @Test
-    void publishesSharedStateOnceAcrossOverlappingWatches() {
-        argus.watch(scope(region(0, 0, 15, 15)));
-        argus.watch(scope(region(8, 8, 23, 23)));
+    void publishesSharedStateOnceAcrossTheEyesOfAWatch() {
+        argus.watch(scope(TWO_EYES), OBSERVATION);
         argus.tick();
         FakeEye first = platform.eyes.get(0);
         FakeEye second = platform.eyes.get(1);
@@ -95,7 +118,7 @@ class ArgusTest {
         assertEquals(
                 List.of(new Chunk(1, 1, true), move, new Chunk(1, 1, false)),
                 published);
-        assertEquals(new BlockPosition(8, 0, 8), anchors.get(0));
+        assertEquals(List.of(OBSERVATION, OBSERVATION, OBSERVATION), observations);
         assertTrue(failures.isEmpty());
     }
 
@@ -111,8 +134,7 @@ class ArgusTest {
 
     @Test
     void dropsTheWholePairingBundleOfAnEntityAnotherEyeHolds() {
-        argus.watch(scope(region(0, 0, 15, 15)));
-        argus.watch(scope(region(8, 8, 23, 23)));
+        argus.watch(scope(TWO_EYES), OBSERVATION);
         argus.tick();
         Spawn spawn = new Spawn(7);
         Move firstData = new Move();
@@ -126,8 +148,7 @@ class ArgusTest {
 
     @Test
     void narrowsAnEntityRemovalToWhatLeftTheScene() {
-        argus.watch(scope(region(0, 0, 15, 15)));
-        argus.watch(scope(region(8, 8, 23, 23)));
+        argus.watch(scope(TWO_EYES), OBSERVATION);
         argus.tick();
         FakeEye first = platform.eyes.get(0);
         FakeEye second = platform.eyes.get(1);
@@ -144,17 +165,36 @@ class ArgusTest {
     }
 
     @Test
-    void unloadsWhatAClosedWatchWasHoldingAlone() {
-        SceneObservation.Watch closing = argus.watch(scope(region(0, 0, 15, 15)));
-        argus.watch(scope(region(8, 8, 23, 23)));
+    void keepsTheScenesOfTwoWatchesApart() {
+        UUID other = UUID.randomUUID();
+        argus.watch(scope(region(0, 0, 15, 15)), OBSERVATION);
+        argus.watch(scope(region(8, 8, 23, 23)), other);
+        argus.tick();
+        Move move = new Move();
+
+        platform.eyes.get(0).receive(new Chunk(1, 1, true));
+        platform.eyes.get(1).receive(new Chunk(1, 1, true));
+        platform.eyes.get(0).receive(move);
+        platform.eyes.get(1).receive(move);
+
+        assertEquals(
+                List.of(new Chunk(1, 1, true), new Chunk(1, 1, true), move, move),
+                published);
+        assertEquals(List.of(OBSERVATION, other, OBSERVATION, other), observations);
+    }
+
+    @Test
+    void unloadsEverythingAClosedWatchWasHolding() {
+        SceneObservation.Watch closing = argus.watch(scope(region(0, 0, 15, 15)), OBSERVATION);
+        argus.watch(scope(region(8, 8, 23, 23)), UUID.randomUUID());
         argus.tick();
         FakeEye first = platform.eyes.get(0);
         FakeEye second = platform.eyes.get(1);
         first.receive(new Chunk(0, 0, true));
-        first.receive(new Chunk(1, 1, true));
-        second.receive(new Chunk(1, 1, true));
         first.receive(new Spawn(5));
+        second.receive(new Chunk(0, 0, true));
         published.clear();
+        observations.clear();
 
         closing.close();
         argus.tick();
@@ -164,17 +204,19 @@ class ArgusTest {
         assertEquals(2, published.size());
         assertEquals(new Chunk(0, 0, false), published.get(0));
         assertArrayEquals(new int[] {5}, ((Remove) published.get(1)).ids());
+        assertEquals(List.of(OBSERVATION, OBSERVATION), observations);
+        assertEquals(1, closedScenes.size());
     }
 
     @Test
-    void publishesSampledWorldStateOncePerWatch() {
+    void publishesSampledWorldStateIntoTheSceneOfItsWatch() {
         openSingleEye();
         platform.ambientChanges.add("rain");
 
         argus.tick();
 
         assertEquals(List.of("rain"), published);
-        assertEquals(List.of(new BlockPosition(8, 0, 8)), anchors);
+        assertEquals(List.of(OBSERVATION), observations);
     }
 
     @Test
@@ -201,7 +243,7 @@ class ArgusTest {
     }
 
     private FakeEye openSingleEye() {
-        argus.watch(scope(region(0, 0, 15, 15)));
+        argus.watch(scope(region(0, 0, 15, 15)), OBSERVATION);
         argus.tick();
         return platform.eyes.get(0);
     }

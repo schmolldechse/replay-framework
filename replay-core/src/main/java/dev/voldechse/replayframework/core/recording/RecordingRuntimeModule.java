@@ -239,6 +239,12 @@ public final class RecordingRuntimeModule extends AbstractModule {
             return true;
         }
         var context = packet.context();
+        if (context.origin() == dev.voldechse.replayframework.adapter.CaptureOrigin.OBSERVER) {
+            // The observers of this recording were placed for this scope. What
+            // they see is the recording; dropping single packets by position
+            // would break relative entity movement.
+            return true;
+        }
         Key world = context.world().orElse(null);
         if (world == null) {
             return false;

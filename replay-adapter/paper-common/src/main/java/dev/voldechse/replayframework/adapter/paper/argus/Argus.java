@@ -7,7 +7,7 @@ import dev.voldechse.replayframework.api.recording.BlockPosition;
 import dev.voldechse.replayframework.api.recording.CuboidRegion;
 import dev.voldechse.replayframework.api.recording.RecordingScope;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -20,17 +20,25 @@ import java.util.function.LongSupplier;
 
 /**
  * Argus, the virtual-observer system: places eyes for recording scopes and
- * merges what they see into one scene per world.
+ * merges what the eyes of one recording see into one scene per world.
  *
  * <p>This class is shared by all adapters. It owns planning, lifecycle and
  * merging; an {@link ArgusPlatform} supplies the version-specific eye and
  * packets, and an {@link ArgusPublisher} receives the merged scene.</p>
  *
- * <p>{@link #watch(RecordingScope)} and closing a watch are safe from any
- * thread. They take effect on the next {@link #tick()}, which the adapter
- * calls once per server tick on the server thread.</p>
+ * <p>Every watch has scenes of its own. Its eyes define what its recording
+ * contains, so nothing a watch publishes depends on another recording.</p>
+ *
+ * <p>{@link #watch(RecordingScope, UUID)} and closing a watch are safe from
+ * any thread. They take effect on the next {@link #tick()}, which the
+ * adapter calls once per server tick on the server thread.</p>
  */
 public final class Argus implements SceneObservation, AutoCloseable {
+
+    private static final int CHUNK_BLOCKS = 16;
+    /** Bounds no world height exceeds. */
+    private static final int WORLD_MIN_Y = -2048;
+    private static final int WORLD_MAX_Y = 2047;
 
     private final ArgusPlatform platform;
     private final EyePlacement placement;
@@ -38,7 +46,7 @@ public final class Argus implements SceneObservation, AutoCloseable {
     private final LongSupplier serverTick;
     private final Consumer<Throwable> failureHandler;
     private final Queue<Runnable> commands = new ConcurrentLinkedQueue<>();
-    private final Map<String, WorldScene> scenes = new HashMap<>();
+    private final List<ArgusWatch> watches = new ArrayList<>();
     private boolean closed;
 
     public Argus(
@@ -60,15 +68,48 @@ public final class Argus implements SceneObservation, AutoCloseable {
         return !Objects.requireNonNull(scope, "scope").regions().isEmpty();
     }
 
+    /**
+     * Expands every region to the chunks its eyes receive, over the full
+     * height of the world. The entity tracker reaches no farther than that.
+     */
     @Override
-    public Watch watch(RecordingScope scope) {
+    public RecordingScope coverage(RecordingScope scope) {
         Objects.requireNonNull(scope, "scope");
+        RecordingScope.Builder coverage = RecordingScope.builder()
+                .chunkLoadingPolicy(scope.chunkLoadingPolicy());
+        scope.worlds().forEach(coverage::addWorld);
+        for (CuboidRegion region : scope.regions()) {
+            int minX = region.min().x();
+            int minZ = region.min().z();
+            int maxX = region.max().x();
+            int maxZ = region.max().z();
+            for (EyeSpec eye : placement.plan(
+                    region, platform.trackingRangeBlocks(region.world().asString()))) {
+                // The loader sends one chunk more than the view distance.
+                int reach = (eye.viewDistance() + 1) * CHUNK_BLOCKS;
+                minX = Math.min(minX, (int) Math.floor(eye.x()) - reach);
+                minZ = Math.min(minZ, (int) Math.floor(eye.z()) - reach);
+                maxX = Math.max(maxX, (int) Math.floor(eye.x()) + reach);
+                maxZ = Math.max(maxZ, (int) Math.floor(eye.z()) + reach);
+            }
+            coverage.addRegion(new CuboidRegion(
+                    region.world(),
+                    new BlockPosition(minX, WORLD_MIN_Y, minZ),
+                    new BlockPosition(maxX, WORLD_MAX_Y, maxZ)));
+        }
+        return coverage.build();
+    }
+
+    @Override
+    public Watch watch(RecordingScope scope, UUID observationId) {
+        Objects.requireNonNull(scope, "scope");
+        Objects.requireNonNull(observationId, "observationId");
         List<EyeSpec> specs = new ArrayList<>();
         for (CuboidRegion region : scope.regions()) {
             specs.addAll(placement.plan(
                     region, platform.trackingRangeBlocks(region.world().asString())));
         }
-        ArgusWatch watch = new ArgusWatch(specs);
+        ArgusWatch watch = new ArgusWatch(observationId, specs);
         commands.add(() -> open(watch));
         return watch;
     }
@@ -82,8 +123,8 @@ public final class Argus implements SceneObservation, AutoCloseable {
             for (Runnable command = commands.poll(); command != null; command = commands.poll()) {
                 command.run();
             }
-            for (WorldScene scene : scenes.values()) {
-                scene.tick();
+            for (ArgusWatch watch : watches) {
+                watch.scenes.values().forEach(WatchScene::tick);
             }
         } catch (Throwable failure) {
             failureHandler.accept(failure);
@@ -95,10 +136,10 @@ public final class Argus implements SceneObservation, AutoCloseable {
     public void close() {
         closed = true;
         commands.clear();
-        for (WorldScene scene : scenes.values()) {
-            scene.watches.forEach(watch -> watch.eyes.forEach(OpenEye::closeQuietly));
+        for (ArgusWatch watch : watches) {
+            watch.scenes.values().forEach(WatchScene::closeQuietly);
         }
-        scenes.clear();
+        watches.clear();
     }
 
     private void open(ArgusWatch watch) {
@@ -106,44 +147,30 @@ public final class Argus implements SceneObservation, AutoCloseable {
             return;
         }
         for (EyeSpec spec : watch.specs) {
-            WorldScene scene = scenes.computeIfAbsent(spec.world(), WorldScene::new);
-            if (!scene.watches.contains(watch)) {
-                scene.watches.add(watch);
-            }
+            WatchScene scene = watch.scenes.computeIfAbsent(
+                    spec.world(), world -> new WatchScene(watch.observationId, world));
             UUID eyeId = UUID.randomUUID();
-            BlockPosition anchor = new BlockPosition(
-                    (int) Math.floor(spec.x()), (int) Math.floor(spec.y()), (int) Math.floor(spec.z()));
-            ArgusEye eye = platform.openEye(
-                    spec, packet -> scene.observe(eyeId, anchor, packet));
-            watch.eyes.add(new OpenEye(eyeId, anchor, eye, scene));
+            scene.eyes.put(eyeId, platform.openEye(spec, packet -> scene.observe(eyeId, packet)));
         }
-        watch.opened = true;
+        watches.add(watch);
     }
 
     private void close(ArgusWatch watch) {
-        if (!watch.opened) {
-            return;
+        if (watches.remove(watch)) {
+            watch.scenes.values().forEach(WatchScene::closeAndUnload);
+            watch.scenes.clear();
         }
-        for (OpenEye open : watch.eyes) {
-            // Close first: the eye must not report its own teardown.
-            open.eye.close();
-            open.scene.release(open);
-        }
-        watch.eyes.clear();
-        scenes.values().removeIf(scene -> {
-            scene.watches.remove(watch);
-            return scene.watches.isEmpty();
-        });
     }
 
     /** One recording's eyes. */
     private final class ArgusWatch implements Watch {
+        private final UUID observationId;
         private final List<EyeSpec> specs;
-        private final List<OpenEye> eyes = new ArrayList<>();
+        private final Map<String, WatchScene> scenes = new LinkedHashMap<>();
         private volatile boolean closed;
-        private boolean opened;
 
-        private ArgusWatch(List<EyeSpec> specs) {
+        private ArgusWatch(UUID observationId, List<EyeSpec> specs) {
+            this.observationId = observationId;
             this.specs = List.copyOf(specs);
         }
 
@@ -156,56 +183,35 @@ public final class Argus implements SceneObservation, AutoCloseable {
         }
     }
 
-    private record OpenEye(UUID id, BlockPosition anchor, ArgusEye eye, WorldScene scene) {
-        private void closeQuietly() {
-            try {
-                eye.close();
-            } catch (RuntimeException ignored) {
-                // Shutdown must reach every eye.
-            }
-        }
-    }
-
-    /** The merged scene of one world and the watches that feed it. */
-    private final class WorldScene {
+    /** The merged scene of one watch in one world. */
+    private final class WatchScene {
+        private final UUID observationId;
         private final String world;
         private final UUID sceneId = UUID.randomUUID();
         private final ArgusScene scene = new ArgusScene();
         private final AmbientSource ambient;
-        private final List<ArgusWatch> watches = new ArrayList<>();
+        private final Map<UUID, ArgusEye> eyes = new LinkedHashMap<>();
 
-        private WorldScene(String world) {
+        private WatchScene(UUID observationId, String world) {
+            this.observationId = observationId;
             this.world = world;
             this.ambient = platform.ambient(world);
         }
 
         private void tick() {
-            for (ArgusWatch watch : watches) {
-                watch.eyes.forEach(open -> open.eye.tick());
-            }
-            List<Object> changes = ambient.sample();
-            if (changes.isEmpty()) {
-                return;
-            }
-            // World state has no position. Each watch gets it at one of its
-            // own eyes so that the scope of its recording accepts it.
-            for (ArgusWatch watch : watches) {
-                if (!watch.eyes.isEmpty()) {
-                    BlockPosition anchor = watch.eyes.get(0).anchor;
-                    changes.forEach(packet -> publisher.publish(sceneId, world, packet, anchor));
-                }
-            }
+            eyes.values().forEach(ArgusEye::tick);
+            ambient.sample().forEach(this::publish);
         }
 
         /** Entry point for every packet an eye receives; must not throw into the server. */
-        private void observe(UUID eye, BlockPosition anchor, Object packet) {
+        private void observe(UUID eye, Object packet) {
             if (closed) {
                 return;
             }
             try {
                 List<Object> parts = platform.unbundle(packet);
                 for (Object part : parts) {
-                    if (!merge(eye, anchor, part) && parts.size() > 1) {
+                    if (!merge(eye, part) && parts.size() > 1) {
                         // A bundle pairs an entity with its initial state.
                         // When another eye already holds the entity, the
                         // rest of the bundle repeats known state.
@@ -218,7 +224,7 @@ public final class Argus implements SceneObservation, AutoCloseable {
         }
 
         /** @return {@code false} only when an entity spawn was a duplicate */
-        private boolean merge(UUID eye, BlockPosition anchor, Object packet) {
+        private boolean merge(UUID eye, Object packet) {
             Optional<PacketDefinition<?>> definition = platform.definition(packet);
             if (definition.isEmpty()) {
                 return true;
@@ -227,60 +233,77 @@ public final class Argus implements SceneObservation, AutoCloseable {
                 case VIEW_LOCAL -> { }
                 case BROADCAST, PLAYER_ONLY -> {
                     if (scene.broadcast(eye, packet, serverTick.getAsLong())) {
-                        publisher.publish(sceneId, world, packet, anchor);
+                        publish(packet);
                     }
                 }
                 case VIEW_MEMBERSHIP -> {
-                    return mergeMembership(
-                            eye, anchor, packet, definition.get().sceneMembership(packet));
+                    return mergeMembership(eye, packet, definition.get().sceneMembership(packet));
                 }
             }
             return true;
         }
 
-        private boolean mergeMembership(
-                UUID eye, BlockPosition anchor, Object packet, SceneMembership membership) {
+        private boolean mergeMembership(UUID eye, Object packet, SceneMembership membership) {
             switch (membership.kind()) {
                 case CHUNK_GAINED -> {
                     if (scene.chunkGained(eye, membership.chunkX(), membership.chunkZ())) {
-                        publisher.publish(sceneId, world, packet, anchor);
+                        publish(packet);
                     }
                 }
                 case CHUNK_LOST -> {
                     if (scene.chunkLost(eye, membership.chunkX(), membership.chunkZ())) {
-                        publisher.publish(sceneId, world, packet, anchor);
+                        publish(packet);
                     }
                 }
                 case ENTITY_GAINED -> {
                     if (!scene.entityGained(eye, membership.entityIds()[0])) {
                         return false;
                     }
-                    publisher.publish(sceneId, world, packet, anchor);
+                    publish(packet);
                 }
                 case ENTITIES_LOST -> {
                     int[] all = membership.entityIds();
                     int[] gone = scene.entitiesLost(eye, all);
                     if (gone.length == all.length) {
-                        publisher.publish(sceneId, world, packet, anchor);
+                        publish(packet);
                     } else if (gone.length > 0) {
-                        publisher.publish(sceneId, world, platform.removeEntities(gone), anchor);
+                        publish(platform.removeEntities(gone));
                     }
                 }
             }
             return true;
         }
 
-        /** Publishes the unloads of everything only this eye was holding. */
-        private void release(OpenEye open) {
-            ArgusScene.Released released = scene.release(open.id);
-            for (ArgusScene.ChunkPosition chunk : released.chunks()) {
-                publisher.publish(
-                        sceneId, world, platform.forgetChunk(chunk.x(), chunk.z()), open.anchor);
+        /** Closes the eyes of a finished watch and publishes the unloads of what they held. */
+        private void closeAndUnload() {
+            for (Map.Entry<UUID, ArgusEye> eye : eyes.entrySet()) {
+                // Close first: the eye must not report its own teardown.
+                eye.getValue().close();
+                ArgusScene.Released released = scene.release(eye.getKey());
+                for (ArgusScene.ChunkPosition chunk : released.chunks()) {
+                    publish(platform.forgetChunk(chunk.x(), chunk.z()));
+                }
+                if (released.entityIds().length > 0) {
+                    publish(platform.removeEntities(released.entityIds()));
+                }
             }
-            if (released.entityIds().length > 0) {
-                publisher.publish(
-                        sceneId, world, platform.removeEntities(released.entityIds()), open.anchor);
+            eyes.clear();
+            publisher.sceneClosed(sceneId);
+        }
+
+        private void closeQuietly() {
+            for (ArgusEye eye : eyes.values()) {
+                try {
+                    eye.close();
+                } catch (RuntimeException ignored) {
+                    // Shutdown must reach every eye.
+                }
             }
+            eyes.clear();
+        }
+
+        private void publish(Object packet) {
+            publisher.publish(observationId, sceneId, world, packet);
         }
     }
 }

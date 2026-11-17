@@ -236,9 +236,29 @@ next server tick. Closing an eye publishes the unloads of what only it was
 holding. A scope beyond the eye budget (64 eyes per region, view distance
 8) fails the start of the recording.
 
+**The eyes define the scope.** Every watch has scenes of its own, and each
+scene packet carries the identity of its watch. A recording accepts every
+packet of its own watch and none of another, without looking at the
+position of the packet. A recording therefore contains its regions plus the
+margin its eyes see.
+
+Filtering scene packets one by one by position does not work: the tracker
+sends entity movement as steps relative to the last position. One dropped
+step, for example while a player is above the region, leaves every later
+position wrong until the server happens to send an absolute one. With the
+eyes as the boundary, an entity that leaves is removed by the server and
+spawned again when it returns.
+
+**Checkpoints** of an observed recording cover the same area
+(`SceneObservation.coverage`): the chunks its eyes receive, over the full
+height of the world. Otherwise a seek would restore a scene the following
+stream does not fit. The checkpoint area is a rectangle while an eye
+receives a rough circle, so a checkpoint can hold entities in the corners
+that no eye tracks. They stay where they were until scene-model checkpoints
+replace the snapshot.
+
 **Scene packets** pass through the same packet definitions as player
-packets to obtain their capture context. A packet without a position of its
-own, such as a chunk, takes the position of the eye that observed it.
+packets to obtain their capture context.
 
 **Bundles.** The tracker sends a new entity and its initial state as one
 bundle. When another eye already holds the entity, the whole bundle is
@@ -248,9 +268,9 @@ dropped.
 
 | Check | Result |
 |---|---|
-| Two overlapping 64x64 regions | 139 chunks, each published once; entities published once |
-| First watch closed | 22 chunks unloaded, shared chunks and entities kept |
-| Second watch closed | scene empty, no unload of anything unknown |
+| One watch with several eyes | each chunk and entity published once |
+| Two overlapping watches | each has a complete scene of its own; closing one leaves the other untouched |
+| Movement of 30 wandering animals over 62 seconds, replayed like a client | 1800 relative steps, 148 absolute checks, largest difference 0.27 blocks, no step for an unknown entity |
 | 400x400 region | lattice loaded 1077 chunks without duplicates |
 | Storm started | rain start and rain level packets from the sampled source |
 | Codec and definition context | 1702 packets encoded with world and position, no failure |
@@ -260,8 +280,9 @@ and playback.
 
 ### Player-only packets in a region recording
 
-A region accepts a packet by its position, so a packet that only players
-receive must say where it belongs:
+Packets that only players receive are single events, not a stream of
+relative steps. A region accepts them by their position, so such a packet
+must say where it belongs:
 
 - Sound, particles, level event and explosion carry their position; an
   entity sound takes the position of its entity.
@@ -287,10 +308,10 @@ writes as plain text is therefore treated as private.
   recipient-specific signature data. With several players online a replay
   shows a chat line several times.
 
-- Sampled time and weather are published once per watch. A recording whose
-  region contains the eye of another recording receives them twice, and a
-  player in the region contributes its own copy. These packets set state
-  and are harmless when repeated.
+- A player in the region receives time and weather from the server as well,
+  so a recording can hold them twice. These packets set state and are
+  harmless when repeated.
+- Overlapping recordings encode the packets they share once each.
 - `PlayerTrackEntityEvent` still fires for an eye.
 - Scene packets are encoded on the server thread.
 
