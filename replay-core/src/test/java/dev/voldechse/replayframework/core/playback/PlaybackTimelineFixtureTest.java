@@ -581,7 +581,10 @@ final class PlaybackTimelineFixtureTest {
                 SeekPoint checkpoint,
                 Duration endExclusive) {
             requestedBoundary = checkpoint;
-            return availability.thenApply(ignored -> deltaFrames);
+            long endNanos = endExclusive.toNanos();
+            return availability.thenApply(ignored -> deltaFrames.stream()
+                    .filter(frame -> frame.elapsedNanos() < endNanos)
+                    .toList());
         }
 
         @Override

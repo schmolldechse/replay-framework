@@ -195,9 +195,11 @@ final class Id133UpdateRecipesPacketDefinitionTest {
         for (var expectedSet : expectedSets.entrySet()) {
             RecipePropertySet decodedSet = decoded.itemSets().get(expectedSet.getKey());
             assertTrue(decodedSet != null);
-            assertArrayEquals(
-                    encodePropertySet(propertySets.get(expectedSet.getKey())),
-                    encodePropertySet(decodedSet),
+            // A property set holds its items in a hash set of holders whose
+            // order changes from run to run, so the items are compared as a set.
+            assertEquals(
+                    propertySetItemIds(propertySets.get(expectedSet.getKey())),
+                    propertySetItemIds(decodedSet),
                     expectedSet.getKey().toString());
         }
 
@@ -430,6 +432,23 @@ final class Id133UpdateRecipesPacketDefinitionTest {
             return bytes(encoded);
         } finally {
             encoded.release();
+        }
+    }
+
+    /** The item registry IDs of a property set, sorted: a VarInt count followed by VarInt IDs. */
+    private static List<Integer> propertySetItemIds(RecipePropertySet propertySet) {
+        ByteBuf wire = Unpooled.wrappedBuffer(encodePropertySet(propertySet));
+        try {
+            int count = VarInt.read(wire);
+            List<Integer> ids = new ArrayList<>(count);
+            for (int index = 0; index < count; index++) {
+                ids.add(VarInt.read(wire));
+            }
+            assertFalse(wire.isReadable());
+            ids.sort(null);
+            return ids;
+        } finally {
+            wire.release();
         }
     }
 
