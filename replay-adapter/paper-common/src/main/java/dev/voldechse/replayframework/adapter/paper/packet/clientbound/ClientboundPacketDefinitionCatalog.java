@@ -36,6 +36,16 @@ public final class ClientboundPacketDefinitionCatalog<C> {
             }
             ordered.add(value);
         }
+        List<String> undeclared = ordered.stream()
+                .filter(ClientboundPacketDefinition::recordedFromPlayers)
+                .filter(definition -> !definition.recipientCopies().declared())
+                .map(ClientboundPacketDefinition::typeName)
+                .toList();
+        if (!undeclared.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "packet definitions recorded from players must declare their recipient copies: "
+                            + undeclared);
+        }
         this.definitions = List.copyOf(ordered);
         this.byTypeName = Map.copyOf(indexed);
         this.byPacketId = Map.copyOf(indexedById);

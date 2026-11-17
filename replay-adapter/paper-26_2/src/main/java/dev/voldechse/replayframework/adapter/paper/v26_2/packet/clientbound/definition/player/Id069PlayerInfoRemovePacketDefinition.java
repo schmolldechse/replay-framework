@@ -1,6 +1,7 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.definition.player;
 
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RecipientCopies;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketClassification;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RebuildingPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ValueRewriteResult;
@@ -69,5 +70,11 @@ final class Id069PlayerInfoRemovePacketDefinition extends RebuildingPacketDefini
     @Override
     public boolean worldWide() {
         return true;
+    }
+
+    /** One packet object for every player. */
+    @Override
+    public RecipientCopies recipientCopies() {
+        return RecipientCopies.identicalPayload();
     }
 }

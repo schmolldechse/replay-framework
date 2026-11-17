@@ -81,9 +81,25 @@ public abstract class ClientboundPacketDefinition<C> {
                 "packet definition declares no scene membership: " + typeName);
     }
 
-    /** Whether identical same-tick observations can be recipient copies of one entity update. */
-    public boolean deduplicateRecipientCopies() {
-        return false;
+    /**
+     * How copies of this packet that several players received are recognized.
+     * Every definition of a {@link #recordedFromPlayers() packet recorded from
+     * player connections} must declare it; the catalog rejects it otherwise.
+     */
+    public RecipientCopies recipientCopies() {
+        return RecipientCopies.undeclared();
+    }
+
+    /**
+     * Whether recordings take this packet from player connections into the
+     * scene: only listed players receive it, and playback replays it to the
+     * viewer.
+     */
+    public final boolean recordedFromPlayers() {
+        return distribution() == PacketDistribution.PLAYER_ONLY
+                && classification.replayable()
+                && classification.playbackScope()
+                        != dev.voldechse.replayframework.adapter.PacketDescriptor.PlaybackScope.VIEWER_LOCAL;
     }
 
     /**

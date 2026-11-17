@@ -1,6 +1,7 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.definition.world;
 
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RecipientCopies;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketClassification;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RebuildingPacketDefinition;
@@ -116,5 +117,11 @@ final class Id043InitializeBorderPacketDefinition extends RebuildingPacketDefini
                         "initialize_border contains a non-finite " + field);
             }
         }
+    }
+
+    /** Built per recipient with equal content. */
+    @Override
+    public RecipientCopies recipientCopies() {
+        return RecipientCopies.identicalPayload();
     }
 }

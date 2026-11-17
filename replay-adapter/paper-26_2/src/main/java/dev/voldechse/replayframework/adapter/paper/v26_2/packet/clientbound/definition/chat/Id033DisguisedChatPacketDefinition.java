@@ -1,6 +1,7 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.definition.chat;
 
 import dev.voldechse.replayframework.adapter.CaptureContext;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RecipientCopies;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketClassification;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinition;
@@ -68,5 +69,11 @@ final class Id033DisguisedChatPacketDefinition
                         ClientboundDisguisedChatPacket.class.cast(decodedPacket).chatType())
                 ? dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketRewriteResult.send(decodedPacket)
                 : dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketRewriteResult.drop("chat message was addressed to selected players");
+    }
+
+    /** The server builds equal bytes for every recipient that hides the sender. */
+    @Override
+    public RecipientCopies recipientCopies() {
+        return RecipientCopies.identicalPayload();
     }
 }

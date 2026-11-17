@@ -1,6 +1,7 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.definition.world;
 
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RecipientCopies;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketClassification;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RebuildingPacketDefinition;
@@ -88,5 +89,11 @@ final class Id089SetBorderLerpSizePacketDefinition extends RebuildingPacketDefin
                         "set_border_lerp_size " + field + " must be finite and non-negative");
             }
         }
+    }
+
+    /** One packet object for every player of the world. */
+    @Override
+    public RecipientCopies recipientCopies() {
+        return RecipientCopies.identicalPayload();
     }
 }

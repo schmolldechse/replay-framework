@@ -1,6 +1,7 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.definition.world;
 
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RecipientCopies;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketClassification;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RebuildingPacketDefinition;
@@ -79,5 +80,11 @@ final class Id088SetBorderCenterPacketDefinition extends RebuildingPacketDefinit
                         "set_border_center contains a non-finite " + field);
             }
         }
+    }
+
+    /** One packet object for every player of the world. */
+    @Override
+    public RecipientCopies recipientCopies() {
+        return RecipientCopies.identicalPayload();
     }
 }

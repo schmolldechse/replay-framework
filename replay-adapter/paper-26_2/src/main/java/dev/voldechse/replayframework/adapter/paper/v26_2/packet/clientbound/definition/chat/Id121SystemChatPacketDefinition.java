@@ -1,6 +1,7 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.definition.chat;
 
 import dev.voldechse.replayframework.adapter.CaptureContext;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RecipientCopies;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketClassification;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinition;
@@ -59,12 +60,6 @@ final class Id121SystemChatPacketDefinition
         return true;
     }
 
-    /** Every recipient gets the same broadcast; one copy is enough. */
-    @Override
-    public boolean deduplicateRecipientCopies() {
-        return true;
-    }
-
     @Override
     protected dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketRewriteResult rewriteSafe(
             Object decodedPacket,
@@ -77,5 +72,11 @@ final class Id121SystemChatPacketDefinition
     private static boolean isPublic(Object decodedPacket) {
         ClientboundSystemChatPacket packet = ClientboundSystemChatPacket.class.cast(decodedPacket);
         return PublicChat.isPublicSystemMessage(packet.content(), packet.overlay());
+    }
+
+    /** A broadcast message has equal bytes for every recipient. */
+    @Override
+    public RecipientCopies recipientCopies() {
+        return RecipientCopies.identicalPayload();
     }
 }

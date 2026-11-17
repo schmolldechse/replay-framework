@@ -1,6 +1,7 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.definition.effect;
 
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RecipientCopies;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketClassification;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RebuildingPacketDefinition;
@@ -132,5 +133,11 @@ final class Id116SoundEntityPacketDefinition extends RebuildingPacketDefinition<
                 decodedPacket, descriptor, connectionId, state, serverTick);
         var packet = net.minecraft.network.protocol.game.ClientboundSoundEntityPacket.class.cast(decodedPacket);
         return dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.Paper26_2CaptureContexts.atEntity(base, state, connectionId, packet.getId());
+    }
+
+    /** One packet object for every recipient in range. */
+    @Override
+    public RecipientCopies recipientCopies() {
+        return RecipientCopies.identicalPayload();
     }
 }

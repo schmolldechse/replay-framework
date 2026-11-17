@@ -32,11 +32,6 @@ final class Id077RemoveEntitiesPacketDefinition extends RebuildingPacketDefiniti
 
 
     @Override
-    public boolean deduplicateRecipientCopies() {
-        return true;
-    }
-
-    @Override
     public CaptureContext captureContext(
             Object decodedPacket,
             PacketDescriptor descriptor,

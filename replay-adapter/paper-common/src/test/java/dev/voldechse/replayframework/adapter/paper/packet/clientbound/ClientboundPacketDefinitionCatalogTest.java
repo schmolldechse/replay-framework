@@ -1,6 +1,10 @@
 package dev.voldechse.replayframework.adapter.paper.packet.clientbound;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
@@ -15,7 +19,7 @@ class ClientboundPacketDefinitionCatalogTest {
 
     @Test
     void keepsOneExplicitDefinitionPerType() {
-        var definition = new SimplePacketDefinition<Object>(
+        var definition = declared(
                 7,
                 "minecraft:block_update",
                 PacketClassification.stateful(PacketDescriptor.PlaybackScope.SAFE));
@@ -29,11 +33,11 @@ class ClientboundPacketDefinitionCatalogTest {
 
     @Test
     void rejectsTwoDefinitionsForTheSamePacketId() {
-        var first = new SimplePacketDefinition<Object>(
+        var first = declared(
                 7,
                 "minecraft:block_update",
                 PacketClassification.stateful(PacketDescriptor.PlaybackScope.SAFE));
-        var second = new SimplePacketDefinition<Object>(
+        var second = declared(
                 7,
                 "minecraft:block_event",
                 PacketClassification.ephemeral(PacketDescriptor.PlaybackScope.SAFE));
@@ -104,6 +108,58 @@ class ClientboundPacketDefinitionCatalogTest {
         assertEquals("xxxx", result.packet().orElseThrow());
         assertEquals(1, decodes.get());
         assertEquals(descriptor.packetId(), encoded.packetId());
+    }
+
+    @Test
+    void rejectsAPlayerOnlyDefinitionWithoutDeclaredRecipientCopies() {
+        var undeclared = new SimplePacketDefinition<Object>(
+                7,
+                "minecraft:sound",
+                PacketClassification.ephemeral(PacketDescriptor.PlaybackScope.SAFE));
+
+        IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
+                () -> new ClientboundPacketDefinitionCatalog<>(java.util.List.of(undeclared)));
+        assertTrue(failure.getMessage().contains("play.clientbound.minecraft:sound"));
+    }
+
+    @Test
+    void viewerLocalDefinitionsNeedNoRecipientCopies() {
+        var local = new SimplePacketDefinition<Object>(
+                7,
+                "minecraft:set_health",
+                PacketClassification.stateful(PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
+
+        assertEquals(1, new ClientboundPacketDefinitionCatalog<>(java.util.List.of(local))
+                .definitions().size());
+    }
+
+    @Test
+    void recipientCopiesNameTheEventTheirCopiesShare() {
+        assertTrue(RecipientCopies.unique().identity("packet", new byte[] {1}).isEmpty());
+        assertEquals(
+                RecipientCopies.identicalPayload().identity("a", new byte[] {1, 2}),
+                RecipientCopies.identicalPayload().identity("b", new byte[] {1, 2}));
+        assertNotEquals(
+                RecipientCopies.identicalPayload().identity("a", new byte[] {1, 2}),
+                RecipientCopies.identicalPayload().identity("a", new byte[] {1, 3}));
+
+        RecipientCopies byLength = RecipientCopies.keyedBy(String.class, String::length);
+        assertEquals(byLength.identity("abc", new byte[] {1}), byLength.identity("xyz", new byte[] {2}));
+        assertThrows(IncompatibleAdapterException.class, () -> byLength.identity(7, new byte[0]));
+
+        assertTrue(RecipientCopies.deliveredByScene().fromSceneOnly());
+        assertTrue(RecipientCopies.deliveredByScene().declared());
+        assertFalse(RecipientCopies.undeclared().declared());
+    }
+
+    private static ClientboundPacketDefinition<Object> declared(
+            int packetId, String identifier, PacketClassification classification) {
+        return new ClientboundPacketDefinition<>(packetId, identifier, classification) {
+            @Override
+            public RecipientCopies recipientCopies() {
+                return RecipientCopies.unique();
+            }
+        };
     }
 
     private static PacketDescriptor descriptor(

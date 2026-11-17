@@ -1,6 +1,7 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.definition.world;
 
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RecipientCopies;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketClassification;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RebuildingPacketDefinition;
@@ -83,5 +84,15 @@ final class Id046LevelEventPacketDefinition extends RebuildingPacketDefinition<
                 base,
                 new dev.voldechse.replayframework.api.recording.BlockPosition(
                         packet.getPos().getX(), packet.getPos().getY(), packet.getPos().getZ()));
+    }
+
+    /** A global event is placed relative to each recipient; type and data name it. A local event is one packet object. */
+    @Override
+    public RecipientCopies recipientCopies() {
+        return RecipientCopies.keyedBy(
+                net.minecraft.network.protocol.game.ClientboundLevelEventPacket.class,
+                packet -> packet.isGlobalEvent()
+                        ? java.util.List.of(packet.getType(), packet.getData(), true)
+                        : java.util.List.of(packet.getType(), packet.getPos(), packet.getData(), false));
     }
 }

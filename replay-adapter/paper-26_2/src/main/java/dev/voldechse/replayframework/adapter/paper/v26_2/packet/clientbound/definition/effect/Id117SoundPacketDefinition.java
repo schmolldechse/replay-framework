@@ -1,6 +1,7 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.definition.effect;
 
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RecipientCopies;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.codec.PacketCodec;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketClassification;
@@ -177,5 +178,11 @@ final class Id117SoundPacketDefinition extends ClientboundPacketDefinition<Paper
                 base,
                 new dev.voldechse.replayframework.api.recording.BlockPosition(
                         (int) Math.floor(packet.getX()), (int) Math.floor(packet.getY()), (int) Math.floor(packet.getZ())));
+    }
+
+    /** One packet object for every recipient in range. */
+    @Override
+    public RecipientCopies recipientCopies() {
+        return RecipientCopies.identicalPayload();
     }
 }

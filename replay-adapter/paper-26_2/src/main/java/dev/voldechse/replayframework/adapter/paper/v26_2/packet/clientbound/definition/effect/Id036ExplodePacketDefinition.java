@@ -1,6 +1,7 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.definition.effect;
 
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RecipientCopies;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketClassification;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RebuildingPacketDefinition;
@@ -195,5 +196,13 @@ final class Id036ExplodePacketDefinition extends RebuildingPacketDefinition<
                 base,
                 new dev.voldechse.replayframework.api.recording.BlockPosition(
                         (int) Math.floor(packet.center().x), (int) Math.floor(packet.center().y), (int) Math.floor(packet.center().z)));
+    }
+
+    /** Built per recipient with its own knockback; center, radius and block count name the explosion. */
+    @Override
+    public RecipientCopies recipientCopies() {
+        return RecipientCopies.keyedBy(
+                net.minecraft.network.protocol.game.ClientboundExplodePacket.class,
+                packet -> java.util.List.of(packet.center(), packet.radius(), packet.blockCount()));
     }
 }

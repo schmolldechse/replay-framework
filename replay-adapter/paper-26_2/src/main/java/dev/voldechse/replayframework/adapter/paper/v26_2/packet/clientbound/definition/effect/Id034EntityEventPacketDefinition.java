@@ -44,11 +44,6 @@ final class Id034EntityEventPacketDefinition extends RebuildingPacketDefinition<
 
 
     @Override
-    public boolean deduplicateRecipientCopies() {
-        return true;
-    }
-
-    @Override
     public CaptureContext captureContext(
             Object decodedPacket,
             PacketDescriptor descriptor,

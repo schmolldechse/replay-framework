@@ -40,11 +40,6 @@ final class Id002AnimatePacketDefinition extends RebuildingPacketDefinition<
 
 
     @Override
-    public boolean deduplicateRecipientCopies() {
-        return true;
-    }
-
-    @Override
     public CaptureContext captureContext(
             Object decodedPacket,
             PacketDescriptor descriptor,

@@ -16,6 +16,8 @@ import dev.voldechse.replayframework.adapter.PacketRegistry;
 import dev.voldechse.replayframework.adapter.SceneObservation;
 import dev.voldechse.replayframework.adapter.paper.argus.Argus;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinition;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RecipientCopies;
+import dev.voldechse.replayframework.adapter.RecipientCopy;
 import dev.voldechse.replayframework.adapter.paper.v26_2.Paper26_2PacketRegistry;
 import dev.voldechse.replayframework.adapter.paper.v26_2.actor.Paper26_2ActorEffects;
 import dev.voldechse.replayframework.adapter.paper.v26_2.argus.Paper26_2ArgusPlatform;
@@ -25,11 +27,8 @@ import dev.voldechse.replayframework.format.PacketPhase;
 import dev.voldechse.replayframework.format.RawPacketFrame;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
-import java.util.Arrays;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.Optional;
@@ -53,7 +52,6 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
     private final JavaPlugin owner;
     private final Paper26_2AuthoritativeStateIndex captureState;
     private final Paper26_2NativePacketCodec stateCodec;
-    private final PacketCopyDeduplicator packetCopyDeduplicator = new PacketCopyDeduplicator();
     private final AtomicReference<State> state = new AtomicReference<>(State.NEW);
     private final AtomicBoolean failureReported = new AtomicBoolean();
     private final Object handlerStateLock = new Object();
@@ -191,7 +189,6 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
         uninstallServerboundReceivers();
         closeArgus();
         captureState.clear();
-        packetCopyDeduplicator.clear();
     }
 
     @Override
@@ -256,11 +253,19 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
                     if (definition.suppressesRecipientState(
                             decoded, captureState, point.serverTick())) {
                         publishObserved = false;
-                    } else if (definition.deduplicateRecipientCopies()
-                            && !packetCopyDeduplicator.first(
-                                    point.serverTick(), packetId, context.world().orElse(null),
-                                    connectionId, payload)) {
-                        publishObserved = false;
+                    } else if (definition.recordedFromPlayers()) {
+                        // Each recording merges the copies other recipients
+                        // received; see RecipientCopy.
+                        RecipientCopies copies = definition.recipientCopies();
+                        if (copies.fromSceneOnly()) {
+                            publishObserved = false;
+                        } else {
+                            Optional<Object> identity = copies.identity(decoded, payload);
+                            if (identity.isPresent()) {
+                                context = context.asRecipientCopy(
+                                        new RecipientCopy(connectionId, identity.get()));
+                            }
+                        }
                     }
                 } else {
                     context = new CaptureContext(
@@ -497,7 +502,6 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
         uninstallServerboundReceivers();
         closeArgus();
         captureState.clear();
-        packetCopyDeduplicator.clear();
 
         if (failureReported.compareAndSet(false, true)) {
             CaptureBridge.FailureHandler currentFailureHandler = failureHandler;
@@ -579,72 +583,6 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
         return cause == null
                 ? new IncompatibleAdapterException(message)
                 : new IncompatibleAdapterException(message, cause);
-    }
-
-    static final class PacketCopyDeduplicator {
-        private final ConcurrentMap<Long,
-                        ConcurrentMap<PacketObservationSignature, RecipientCopySequence>>
-                byTick =
-                new ConcurrentHashMap<>();
-
-        boolean first(long tick, int packetId, Key world, UUID connectionId, byte[] payload) {
-            if (connectionId == null) {
-                return true;
-            }
-            ConcurrentMap<PacketObservationSignature, RecipientCopySequence> signatures =
-                    byTick.computeIfAbsent(tick, ignored -> new ConcurrentHashMap<>());
-            RecipientCopySequence sequence = signatures.computeIfAbsent(
-                    new PacketObservationSignature(packetId, world, payload),
-                    ignored -> new RecipientCopySequence());
-            boolean first = sequence.firstForRecipientOccurrence(connectionId);
-            byTick.keySet().removeIf(observedTick -> observedTick < tick - 1L);
-            return first;
-        }
-
-        void clear() {
-            byTick.clear();
-        }
-    }
-
-    private static final class RecipientCopySequence {
-        private final ConcurrentMap<UUID, java.util.concurrent.atomic.AtomicInteger>
-                nextOccurrenceByConnection = new ConcurrentHashMap<>();
-        private final java.util.Set<Integer> publishedOccurrences = ConcurrentHashMap.newKeySet();
-
-        private boolean firstForRecipientOccurrence(UUID connectionId) {
-            int occurrence = nextOccurrenceByConnection
-                    .computeIfAbsent(connectionId, ignored -> new java.util.concurrent.atomic.AtomicInteger())
-                    .getAndIncrement();
-            return publishedOccurrences.add(occurrence);
-        }
-    }
-
-    private static final class PacketObservationSignature {
-        private final int packetId;
-        private final Key world;
-        private final byte[] payload;
-        private final int hashCode;
-
-        private PacketObservationSignature(int packetId, Key world, byte[] payload) {
-            this.packetId = packetId;
-            this.world = world;
-            this.payload = payload.clone();
-            this.hashCode = 31 * (31 * packetId + Objects.hashCode(world))
-                    + Arrays.hashCode(this.payload);
-        }
-
-        @Override
-        public boolean equals(Object other) {
-            return this == other || other instanceof PacketObservationSignature that
-                    && packetId == that.packetId
-                    && Objects.equals(world, that.world)
-                    && Arrays.equals(payload, that.payload);
-        }
-
-        @Override
-        public int hashCode() {
-            return hashCode;
-        }
     }
 
     /** Status values document whether capture is trusted, failed or shut down. */

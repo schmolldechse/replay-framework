@@ -1,6 +1,7 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.definition.chat;
 
 import dev.voldechse.replayframework.adapter.CaptureContext;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RecipientCopies;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketClassification;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinition;
@@ -102,5 +103,18 @@ final class Id065PlayerChatPacketDefinition
     @Override
     public boolean worldWide() {
         return true;
+    }
+
+    /** Index and packed signatures are per recipient; sender, its message index and the signed body name the message. */
+    @Override
+    public RecipientCopies recipientCopies() {
+        return RecipientCopies.keyedBy(
+                net.minecraft.network.protocol.game.ClientboundPlayerChatPacket.class,
+                packet -> java.util.List.of(
+                        packet.sender(),
+                        packet.index(),
+                        packet.body().content(),
+                        packet.body().timeStamp(),
+                        packet.body().salt()));
     }
 }

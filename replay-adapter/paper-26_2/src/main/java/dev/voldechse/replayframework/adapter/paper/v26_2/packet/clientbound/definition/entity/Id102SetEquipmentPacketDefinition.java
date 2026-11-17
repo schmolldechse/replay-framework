@@ -49,11 +49,6 @@ final class Id102SetEquipmentPacketDefinition extends RebuildingPacketDefinition
 
 
     @Override
-    public boolean deduplicateRecipientCopies() {
-        return true;
-    }
-
-    @Override
     public CaptureContext captureContext(
             Object decodedPacket,
             PacketDescriptor descriptor,

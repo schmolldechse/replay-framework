@@ -34,11 +34,6 @@ final class Id054MoveEntityPosRotPacketDefinition extends RebuildingPacketDefini
 
 
     @Override
-    public boolean deduplicateRecipientCopies() {
-        return true;
-    }
-
-    @Override
     public CaptureContext captureContext(
             Object decodedPacket,
             PacketDescriptor descriptor,

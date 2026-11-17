@@ -165,21 +165,5 @@ class Paper26_2CaptureBridgeTest {
             buffer.release();
         }
     }
-
-    @Test
-    void deduplicatesRecipientCopiesWithoutDroppingRepeatedSameConnectionUpdates() {
-        Paper26_2CaptureBridge.PacketCopyDeduplicator deduplicator =
-                new Paper26_2CaptureBridge.PacketCopyDeduplicator();
-        UUID firstConnection = UUID.randomUUID();
-        UUID secondConnection = UUID.randomUUID();
-        Key world = Key.key("minecraft:overworld");
-        byte[] identicalMovement = new byte[] {1, 2, 3};
-
-        assertTrue(deduplicator.first(20L, 53, world, firstConnection, identicalMovement));
-        assertFalse(deduplicator.first(20L, 53, world, secondConnection, identicalMovement));
-        assertTrue(deduplicator.first(20L, 53, world, firstConnection, identicalMovement));
-        assertFalse(deduplicator.first(20L, 53, world, secondConnection, identicalMovement));
-        assertTrue(deduplicator.first(21L, 53, world, firstConnection, identicalMovement));
-    }
 }
 

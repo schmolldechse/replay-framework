@@ -1,6 +1,7 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.definition.world;
 
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RecipientCopies;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketClassification;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RebuildingPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ValueRewriteResult;
@@ -63,5 +64,11 @@ final class Id113SetTimePacketDefinition extends RebuildingPacketDefinition<
         Value {
             clockUpdates = Map.copyOf(Objects.requireNonNull(clockUpdates, "clockUpdates"));
         }
+    }
+
+    /** Time is sampled by the scene. */
+    @Override
+    public RecipientCopies recipientCopies() {
+        return RecipientCopies.deliveredByScene();
     }
 }

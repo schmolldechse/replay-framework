@@ -85,21 +85,43 @@ Cross-thread publication uses the adapter's capture-order allocator so
 timestamps, server ticks, sequence numbers, checkpoint barriers, and
 recording-scope filtering retain one ordering contract.
 
-## Duplicate suppression
+## Recipient copies
 
-Copies of one packet that several players received are recognized by their
-packet ID, world and payload within a server tick, when the packet's
-definition declares that recipient copies are possible. Eye packets need no
-such comparison: the server hands the same object to every eye, and Argus
-merges by object identity and reference counts.
+The server sends a player-only event, such as a sound or an explosion, to
+every player in range. A recording observes it once per recipient and must
+keep one event. Eye packets need no such step: the server hands the same
+object to every eye, and Argus merges by object identity and reference
+counts.
+
+Every definition of a packet recorded from player connections declares how
+its copies are recognized (`RecipientCopies`). There is no default; the
+catalog rejects a definition without a declaration, because only the
+packet's server code tells which kind applies:
+
+| Kind | Meaning | 26.2 examples |
+|---|---|---|
+| `identicalPayload` | equal bytes for every recipient, often one packet object | sounds, particles, block events, local level events, boss bar, tab list, border |
+| `keyedBy` | built per recipient with recipient-specific fields; the identity holds only the fields that describe the event | explosion without knockback, global level event without its projected position, player chat without its recipient index |
+| `deliveredByScene` | the scene supplies the packet itself; copies from players are dropped | time and weather, sampled by Argus |
+| `unique` | every observation is an event of its own | |
+
+The adapter attaches the identity to the packet as a `RecipientCopy`. Each
+recording merges copies itself, after deciding whether the packet belongs
+to it, so a copy outside a region never hides the copy inside it. Of all
+copies of an event a recording keeps as many as a single recipient
+received. Because each connection writes its copy on its own thread, a copy
+can be captured one tick later; an event therefore stays open for the tick
+it was first seen in and the next one.
+
+Known limit: two equal events in adjacent ticks that reached disjoint
+recipients are merged into one. Sounds carry a random seed and most events a
+position, so this practically affects only repeated identical particles.
 
 A definition may also suppress an observation that must not become part of
 the scene at all, such as a chat message addressed to one player.
 
-Known gap: in 26.2 only entity packets and system chat declare recipient
-copies. Sounds, particles, level and block events, block-break progress,
-explosions, player chat and tab-list updates are recorded once per player
-that received them; with several players in range a replay repeats them.
+A message the server sends as player chat to some recipients and as
+disguised chat to recipients that hide the sender is recorded once per form.
 
 ## Adapter responsibilities
 

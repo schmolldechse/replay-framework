@@ -1,6 +1,7 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.definition.player;
 
 import com.google.common.collect.ImmutableMultimap;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RecipientCopies;
 import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.properties.Property;
 import com.mojang.authlib.properties.PropertyMap;
@@ -241,5 +242,11 @@ final class Id070PlayerInfoUpdatePacketDefinition extends RebuildingPacketDefini
     @Override
     public boolean worldWide() {
         return true;
+    }
+
+    /** One packet object for every player. */
+    @Override
+    public RecipientCopies recipientCopies() {
+        return RecipientCopies.identicalPayload();
     }
 }

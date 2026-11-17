@@ -1,6 +1,7 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.definition.effect;
 
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RecipientCopies;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.codec.PacketCodec;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketClassification;
@@ -104,5 +105,11 @@ final class Id119StopSoundPacketDefinition extends ClientboundPacketDefinition<P
             Objects.requireNonNull(source, "source");
             Objects.requireNonNull(sound, "sound");
         }
+    }
+
+    /** Built per recipient with equal content. */
+    @Override
+    public RecipientCopies recipientCopies() {
+        return RecipientCopies.identicalPayload();
     }
 }

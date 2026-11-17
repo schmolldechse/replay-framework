@@ -1,6 +1,7 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.definition.world;
 
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RecipientCopies;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketClassification;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RebuildingPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ValueRewriteResult;
@@ -78,4 +79,10 @@ final class Id038GameEventPacketDefinition extends RebuildingPacketDefinition<
 
     /** A null event is retained only so an unknown wire ID can be safely dropped. */
     record Value(ClientboundGameEventPacket.Type event, float parameter) {}
+
+    /** Weather is sampled by the scene; every other event concerns its recipient only. */
+    @Override
+    public RecipientCopies recipientCopies() {
+        return RecipientCopies.deliveredByScene();
+    }
 }

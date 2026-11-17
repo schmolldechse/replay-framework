@@ -52,11 +52,6 @@ final class Id035EntityPositionSyncPacketDefinition extends RebuildingPacketDefi
 
 
     @Override
-    public boolean deduplicateRecipientCopies() {
-        return true;
-    }
-
-    @Override
     public CaptureContext captureContext(
             Object decodedPacket,
             PacketDescriptor descriptor,

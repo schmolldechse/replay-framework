@@ -24,6 +24,8 @@ import net.kyori.adventure.key.Key;
  *                  place in it, such as a tab-list entry or public chat
  * @param observation the scene observation an {@link CaptureOrigin#OBSERVER}
  *                    packet belongs to; empty for every other origin
+ * @param recipientCopy the event this packet is a copy of, when the server
+ *                      sends the event to several players separately
  */
 public record CaptureContext(
         Optional<PacketDisposition> disposition,
@@ -33,7 +35,8 @@ public record CaptureContext(
         Optional<Key> customPayloadChannel,
         CaptureOrigin origin,
         boolean worldWide,
-        Optional<UUID> observation) {
+        Optional<UUID> observation,
+        Optional<RecipientCopy> recipientCopy) {
 
     /** Creates a context for scene state observed through a player view. */
     public CaptureContext(
@@ -43,7 +46,7 @@ public record CaptureContext(
             Optional<String> normalizedChat,
             Optional<Key> customPayloadChannel) {
         this(disposition, world, position, normalizedChat, customPayloadChannel,
-                CaptureOrigin.PLAYER_VIEW, false, Optional.empty());
+                CaptureOrigin.PLAYER_VIEW, false, Optional.empty(), Optional.empty());
     }
 
     /**
@@ -69,6 +72,7 @@ public record CaptureContext(
         customPayloadChannel = requireOptional(customPayloadChannel, "customPayloadChannel");
         Objects.requireNonNull(origin, "origin");
         observation = requireOptional(observation, "observation");
+        recipientCopy = requireOptional(recipientCopy, "recipientCopy");
     }
 
     /**
@@ -88,14 +92,14 @@ public record CaptureContext(
     public CaptureContext withOrigin(CaptureOrigin nextOrigin) {
         return new CaptureContext(
                 disposition, world, position, normalizedChat, customPayloadChannel,
-                nextOrigin, worldWide, observation);
+                nextOrigin, worldWide, observation, recipientCopy);
     }
 
     /** Returns this context for a packet that concerns its whole world. */
     public CaptureContext asWorldWide() {
         return new CaptureContext(
                 disposition, world, position, normalizedChat, customPayloadChannel,
-                origin, true, observation);
+                origin, true, observation, recipientCopy);
     }
 
     /**
@@ -106,7 +110,16 @@ public record CaptureContext(
         return new CaptureContext(
                 disposition, world, position, normalizedChat, customPayloadChannel,
                 CaptureOrigin.OBSERVER, worldWide,
-                Optional.of(Objects.requireNonNull(observationId, "observationId")));
+                Optional.of(Objects.requireNonNull(observationId, "observationId")),
+                recipientCopy);
+    }
+
+    /** Returns this context for one copy of an event sent to several players. */
+    public CaptureContext asRecipientCopy(RecipientCopy copy) {
+        return new CaptureContext(
+                disposition, world, position, normalizedChat, customPayloadChannel,
+                origin, worldWide, observation,
+                Optional.of(Objects.requireNonNull(copy, "copy")));
     }
 
     private static <T> Optional<T> requireOptional(Optional<T> value, String name) {

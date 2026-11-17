@@ -132,7 +132,7 @@ final class Id121SystemChatPacketDefinitionTest {
         assertFalse(definition.suppressesRecipientState(
                 joined, Paper26_2CaptureTestState.create(), 0L));
         assertTrue(definition.worldWide());
-        assertTrue(definition.deduplicateRecipientCopies());
+        assertTrue(definition.recipientCopies().identity(joined, new byte[] {1}).isPresent());
     }
 
     @Test
