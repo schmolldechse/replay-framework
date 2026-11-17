@@ -1,6 +1,9 @@
 package dev.voldechse.replayframework.adapter;
 
+import dev.voldechse.replayframework.api.recording.ObserverOptions;
 import dev.voldechse.replayframework.api.recording.RecordingScope;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -25,28 +28,58 @@ public interface SceneObservation {
     boolean observes(RecordingScope scope);
 
     /**
-     * Returns the scope the observers of {@code scope} actually see: the
-     * requested regions plus the margin of their view. Checkpoints of an
-     * observed recording must cover it, because everything the observers see
-     * is part of the recording.
+     * Returns the scope a watch on this request would see if it opened now.
+     * The initial checkpoint of an observed recording covers it. May be
+     * called from any thread.
      *
-     * @throws IllegalArgumentException when the scope cannot be covered
+     * @throws IllegalArgumentException when the scope exceeds a budget
      */
-    default RecordingScope coverage(RecordingScope scope) {
-        return scope;
+    default RecordingScope coverage(Request request) {
+        return Objects.requireNonNull(request, "request").scope();
     }
 
     /**
      * Starts observing a scope. May be called from any thread.
      *
-     * @param observationId identity every packet of this watch carries in
-     *                      {@link CaptureContext#observation()}
-     * @throws IllegalArgumentException when the scope cannot be covered
+     * @throws IllegalArgumentException when the scope exceeds a budget
      */
-    Watch watch(RecordingScope scope, UUID observationId);
+    Watch watch(Request request);
+
+    /**
+     * One recording's request for observers.
+     *
+     * @param observationId identity every packet of the watch carries in
+     *                      {@link CaptureContext#observation()}
+     * @param scope what the recording covers
+     * @param participants players the recording follows; empty follows all
+     *                     players in the scope
+     * @param options grace period and budgets of the observers
+     */
+    record Request(
+            UUID observationId,
+            RecordingScope scope,
+            Set<UUID> participants,
+            ObserverOptions options) {
+
+        public Request {
+            Objects.requireNonNull(observationId, "observationId");
+            Objects.requireNonNull(scope, "scope");
+            participants = Set.copyOf(Objects.requireNonNull(participants, "participants"));
+            Objects.requireNonNull(options, "options");
+        }
+    }
 
     /** One recording's claim on its observers; closing is idempotent. */
     interface Watch extends AutoCloseable {
+
+        /**
+         * Returns what the observers see right now: the chunks of every
+         * open observer. Checkpoints of the recording cover it, so a seek
+         * restores a scene the following stream fits. May be called from any
+         * thread.
+         */
+        RecordingScope coverage();
+
         @Override
         void close();
     }
@@ -60,8 +93,18 @@ public interface SceneObservation {
             }
 
             @Override
-            public Watch watch(RecordingScope scope, UUID observationId) {
-                return () -> { };
+            public Watch watch(Request request) {
+                RecordingScope scope = Objects.requireNonNull(request, "request").scope();
+                return new Watch() {
+                    @Override
+                    public RecordingScope coverage() {
+                        return scope;
+                    }
+
+                    @Override
+                    public void close() {
+                    }
+                };
             }
         };
     }

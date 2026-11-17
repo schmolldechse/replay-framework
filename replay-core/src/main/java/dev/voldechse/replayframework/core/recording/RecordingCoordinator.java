@@ -367,27 +367,42 @@ public final class RecordingCoordinator {
     }
 
     /** Places the adapter's virtual observers when they deliver this scope's scene. */
-    private void openSceneWatch(
-            DefaultRecordingSession session,
-            dev.voldechse.replayframework.api.recording.RecordingScope scope) {
+    private void openSceneWatch(DefaultRecordingSession session, RecordingRequest request) {
         var observation = adapter.sceneObservation();
-        if (observation.observes(scope)) {
+        if (observation.observes(request.scope())) {
             // Named before the watch opens, so no observed packet can arrive
             // at a session that does not know its observation yet.
-            java.util.UUID observationId = java.util.UUID.randomUUID();
-            session.observation(observationId);
-            sceneWatches.put(session.id(), observation.watch(scope, observationId));
+            var observationRequest = observationRequest(session.id(), request);
+            session.observation(observationRequest.observationId());
+            sceneWatches.put(session.id(), observation.watch(observationRequest));
         }
+    }
+
+    /** The observation of a recording is named after its session. */
+    private static dev.voldechse.replayframework.adapter.SceneObservation.Request observationRequest(
+            RecordingSessionId sessionId, RecordingRequest request) {
+        return new dev.voldechse.replayframework.adapter.SceneObservation.Request(
+                sessionId.value(),
+                request.scope(),
+                request.participants(),
+                request.options().observers());
     }
 
     /**
      * A checkpoint must hold what the stream after it refers to. For an
-     * observed recording that is everything its observers see.
+     * observed recording that is everything its observers see at that
+     * moment; observers that follow players move, so it is asked each time.
      */
     private dev.voldechse.replayframework.api.recording.RecordingScope checkpointScope(
-            dev.voldechse.replayframework.api.recording.RecordingScope scope) {
+            RecordingSessionId sessionId, RecordingRequest request) {
+        var watch = sceneWatches.get(sessionId);
+        if (watch != null) {
+            return watch.coverage();
+        }
         var observation = adapter.sceneObservation();
-        return observation.observes(scope) ? observation.coverage(scope) : scope;
+        return observation.observes(request.scope())
+                ? observation.coverage(observationRequest(sessionId, request))
+                : request.scope();
     }
 
     private void closeSceneWatch(RecordingSessionId sessionId) {
@@ -543,7 +558,7 @@ public final class RecordingCoordinator {
         try {
             checkpointStage = Objects.requireNonNull(
                     adapter.checkpointEncoder().encode(new CheckpointEncoder.CheckpointRequest(
-                            checkpointScope(request.scope()),
+                            checkpointScope(sessionId, request),
                             0L,
                             resolvedScope.initialServerTick(),
                             CheckpointEncoder.CheckpointKind.INITIAL)),
@@ -667,7 +682,7 @@ public final class RecordingCoordinator {
                 session.activate();
                 // Opened only now: a session rejects packets until it is
                 // active, and what an observer sends first must not be lost.
-                openSceneWatch(session, request.scope());
+                openSceneWatch(session, request);
                 publishEvent(new ReplayEventPublisher.RecordingStatusChanged(
                         session.id(),
                         session.replayId(),
@@ -699,14 +714,12 @@ public final class RecordingCoordinator {
         Path workspace = Objects.requireNonNull(
                 recordingTarget.stagingDirectoryFactory().apply(session.replayId()),
                 "stagingDirectoryFactory returned null");
-        dev.voldechse.replayframework.api.recording.RecordingScope checkpointScope =
-                checkpointScope(request.scope());
         CheckpointScheduler scheduler = new CheckpointScheduler(
                 request.options().checkpointInterval(),
                 adapter.checkpointEncoder(),
-                checkpointScope,
+                request.scope(),
                 (elapsedNanos, serverTick, kind) -> new CheckpointEncoder.CheckpointRequest(
-                        checkpointScope,
+                        checkpointScope(session.id(), request),
                         elapsedNanos,
                         serverTick,
                         kind,

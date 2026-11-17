@@ -471,7 +471,19 @@ final class RecordingSegmentAppender implements AutoCloseable {
                 captured.sequence(),
                 captured.phase(),
                 captured.packetId(),
-                captured.payload());
+                captured.payload(),
+                frameWorld(captured));
+    }
+
+    /**
+     * The world a playback client must be in to apply the frame. Packets that
+     * concern no place, such as chat or the tab list, apply in every world.
+     */
+    private static java.util.Optional<String> frameWorld(CapturedPacket captured) {
+        var context = captured.context();
+        return context.worldWide()
+                ? java.util.Optional.empty()
+                : context.world().map(net.kyori.adventure.key.Key::asString);
     }
 
     private void validateOrder(RawPacketFrame frame) {

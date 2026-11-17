@@ -9,12 +9,15 @@ import java.util.Objects;
  */
 public final class RecordingOptions {
     private static final Duration DEFAULT_CHECKPOINT_INTERVAL = Duration.ofSeconds(30);
-    private static final RecordingOptions DEFAULT = new RecordingOptions(DEFAULT_CHECKPOINT_INTERVAL);
+    private static final RecordingOptions DEFAULT =
+            new RecordingOptions(DEFAULT_CHECKPOINT_INTERVAL, ObserverOptions.defaults());
 
     private final Duration checkpointInterval;
+    private final ObserverOptions observers;
 
-    private RecordingOptions(Duration checkpointInterval) {
+    private RecordingOptions(Duration checkpointInterval, ObserverOptions observers) {
         this.checkpointInterval = checkpointInterval;
+        this.observers = observers;
     }
 
     /** Returns a builder initialized with the framework defaults. */
@@ -27,6 +30,11 @@ public final class RecordingOptions {
         return checkpointInterval;
     }
 
+    /** Returns how the recording's virtual observers behave. */
+    public ObserverOptions observers() {
+        return observers;
+    }
+
     /** Returns the immutable default option snapshot. */
     public static RecordingOptions defaults() {
         return DEFAULT;
@@ -35,6 +43,7 @@ public final class RecordingOptions {
     /** Builder for an immutable recording option snapshot. */
     public static final class Builder {
         private Duration checkpointInterval = DEFAULT_CHECKPOINT_INTERVAL;
+        private ObserverOptions observers = ObserverOptions.defaults();
 
         private Builder() {
         }
@@ -42,6 +51,12 @@ public final class RecordingOptions {
         /** Sets the positive, nanosecond-representable checkpoint interval. */
         public Builder checkpointInterval(Duration interval) {
             this.checkpointInterval = Objects.requireNonNull(interval, "checkpointInterval");
+            return this;
+        }
+
+        /** Sets how the recording's virtual observers behave. */
+        public Builder observers(ObserverOptions observers) {
+            this.observers = Objects.requireNonNull(observers, "observers");
             return this;
         }
 
@@ -59,7 +74,7 @@ public final class RecordingOptions {
                 throw new IllegalArgumentException(
                         "checkpointInterval must be representable in nanoseconds", overflow);
             }
-            return new RecordingOptions(interval);
+            return new RecordingOptions(interval, observers);
         }
     }
 }

@@ -5,17 +5,22 @@ import dev.voldechse.replayframework.adapter.paper.argus.AmbientSource;
 import dev.voldechse.replayframework.adapter.paper.argus.ArgusEye;
 import dev.voldechse.replayframework.adapter.paper.argus.ArgusPlatform;
 import dev.voldechse.replayframework.adapter.paper.argus.EyeSpec;
+import dev.voldechse.replayframework.adapter.paper.argus.PlayerAnchor;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.Paper26_2ClientboundPacketCatalog;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.function.Consumer;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientboundBundlePacket;
 import net.minecraft.network.protocol.game.ClientboundForgetLevelChunkPacket;
+import net.minecraft.network.protocol.game.ClientboundPlayerInfoRemovePacket;
 import net.minecraft.network.protocol.game.ClientboundRemoveEntitiesPacket;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.ChunkPos;
 import org.bukkit.Bukkit;
 import org.bukkit.NamespacedKey;
@@ -76,6 +81,28 @@ public final class Paper26_2ArgusPlatform implements ArgusPlatform {
     @Override
     public AmbientSource ambient(String world) {
         return new Paper26_2AmbientSource(level(world));
+    }
+
+    @Override
+    public List<PlayerAnchor> players() {
+        List<PlayerAnchor> players = new ArrayList<>();
+        for (ServerPlayer player : MinecraftServer.getServer().getPlayerList().getPlayers()) {
+            players.add(new PlayerAnchor(
+                    player.getUUID(),
+                    player.level().getWorld().getKey().asString(),
+                    player.getX(),
+                    player.getY(),
+                    player.getZ(),
+                    player.isAlive(),
+                    // Paper's per-player send distance: what this player receives.
+                    player.getBukkitEntity().getSendViewDistance()));
+        }
+        return players;
+    }
+
+    @Override
+    public Object removePlayerInfo(List<UUID> players) {
+        return new ClientboundPlayerInfoRemovePacket(List.copyOf(players));
     }
 
     private static ServerLevel level(String worldKey) {

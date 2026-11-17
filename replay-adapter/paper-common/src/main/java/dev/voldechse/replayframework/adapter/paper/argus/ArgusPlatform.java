@@ -3,6 +3,7 @@ package dev.voldechse.replayframework.adapter.paper.argus;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinition;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.function.Consumer;
 
 /**
@@ -39,4 +40,13 @@ public interface ArgusPlatform {
 
     /** Opens the sampled time and weather source of a world. */
     AmbientSource ambient(String world);
+
+    /** Returns every online player, read on the server thread. */
+    List<PlayerAnchor> players();
+
+    /**
+     * Builds the native packet that removes players from the tab list. The
+     * server sends it only to the players that stay online.
+     */
+    Object removePlayerInfo(List<UUID> players);
 }

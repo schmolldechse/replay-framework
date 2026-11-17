@@ -32,6 +32,7 @@ final class ReplayFrameCodec {
                 SegmentWire.sizeOfUnsignedVarInt(frame.phase().wireCode()));
         recordLength = addLength(recordLength,
                 SegmentWire.sizeOfUnsignedVarInt(frame.packetId()));
+        recordLength = addLength(recordLength, worldLength(frame));
         recordLength = addLength(recordLength,
                 SegmentWire.sizeOfUnsignedVarInt(payload.length));
         recordLength = addLength(recordLength, payload.length);
@@ -53,6 +54,10 @@ final class ReplayFrameCodec {
         SegmentWire.writeUnsignedVarInt(output, frame.sequence());
         SegmentWire.writeUnsignedVarInt(output, frame.phase().wireCode());
         SegmentWire.writeUnsignedVarInt(output, frame.packetId());
+        // The world key, or length zero for a frame of no world.
+        byte[] world = worldBytes(frame);
+        SegmentWire.writeUnsignedVarInt(output, world.length);
+        output.write(world);
         SegmentWire.writeUnsignedVarInt(output, payload.length);
         output.write(payload);
     }
@@ -76,6 +81,15 @@ final class ReplayFrameCodec {
             throw corrupt("unknown frame phase code: " + phaseCode, exception);
         }
         int packetId = readUnsignedVarInt(record, "frame packet id");
+        int worldLength = readUnsignedVarInt(record, "frame world length");
+        if (worldLength > RawPacketFrame.MAX_WORLD_LENGTH || worldLength > record.remaining()) {
+            throw corrupt("frame world key exceeds its frame record");
+        }
+        java.util.Optional<String> world = worldLength == 0
+                ? java.util.Optional.empty()
+                : java.util.Optional.of(new String(
+                        readBytes(record, worldLength, "frame world"),
+                        java.nio.charset.StandardCharsets.UTF_8));
         int payloadLength = readUnsignedVarInt(record, "frame payload length");
         if (payloadLength > MAX_PAYLOAD_LENGTH) {
             throw corrupt("frame payload exceeds maximum length");
@@ -89,7 +103,7 @@ final class ReplayFrameCodec {
         }
         try {
             return new RawPacketFrame(
-                    elapsedNanos, serverTick, sequence, phase, packetId, payload);
+                    elapsedNanos, serverTick, sequence, phase, packetId, payload, world);
         } catch (IllegalArgumentException | NullPointerException exception) {
             throw corrupt("decoded frame values are invalid", exception);
         }
@@ -183,6 +197,7 @@ final class ReplayFrameCodec {
                 SegmentWire.sizeOfUnsignedVarInt(frame.phase().wireCode()));
         recordLength = addLength(recordLength,
                 SegmentWire.sizeOfUnsignedVarInt(frame.packetId()));
+        recordLength = addLength(recordLength, worldLength(frame));
         recordLength = addLength(recordLength,
                 SegmentWire.sizeOfUnsignedVarInt(payload.length));
         recordLength = addLength(recordLength, payload.length);
@@ -190,6 +205,17 @@ final class ReplayFrameCodec {
             throw new IllegalArgumentException("frame record is too large");
         }
         return recordLength;
+    }
+
+    private static byte[] worldBytes(RawPacketFrame frame) {
+        return frame.world()
+                .map(world -> world.getBytes(java.nio.charset.StandardCharsets.UTF_8))
+                .orElse(new byte[0]);
+    }
+
+    private static long worldLength(RawPacketFrame frame) {
+        int length = worldBytes(frame).length;
+        return SegmentWire.sizeOfUnsignedVarInt(length) + (long) length;
     }
 
     private static long addLength(long left, long right) {

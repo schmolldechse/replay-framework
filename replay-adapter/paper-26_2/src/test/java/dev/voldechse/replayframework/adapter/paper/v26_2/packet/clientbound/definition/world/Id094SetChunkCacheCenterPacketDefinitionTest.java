@@ -58,7 +58,7 @@ final class Id094SetChunkCacheCenterPacketDefinitionTest {
     }
 
     @Test
-    void classifiesChunkCacheCenterAsSafeCheckpointedWorldState() {
+    void classifiesChunkCacheCenterAsViewerLocalWorldState() {
         var definition = new Id094SetChunkCacheCenterPacketDefinition();
 
         assertEquals(PACKET_ID, definition.packetId());
@@ -69,11 +69,9 @@ final class Id094SetChunkCacheCenterPacketDefinitionTest {
         assertEquals(PacketDisposition.STATEFUL, definition.classification().disposition());
         assertTrue(definition.classification().captureByDefault());
         assertTrue(definition.classification().replayable());
-        assertTrue(definition.classification().checkpointRelevant());
-        assertEquals(PacketDescriptor.PlaybackScope.SAFE,
+        assertFalse(definition.classification().checkpointRelevant());
+        assertEquals(PacketDescriptor.PlaybackScope.VIEWER_LOCAL,
                 definition.classification().playbackScope());
-        assertEquals(Paper26_2CheckpointEncoder.CheckpointPacketFamily.GLOBAL_STATE,
-                Paper26_2CheckpointEncoder.familyFor(TYPE_NAME));
 
         assertEquals(1, WorldPacketDefinitions.definitions().stream()
                 .filter(candidate -> TYPE_NAME.equals(candidate.typeName()))
@@ -89,8 +87,8 @@ final class Id094SetChunkCacheCenterPacketDefinitionTest {
         assertEquals(PacketDisposition.STATEFUL, descriptor.disposition());
         assertTrue(descriptor.captureByDefault());
         assertTrue(descriptor.replayable());
-        assertTrue(descriptor.checkpointRelevant());
-        assertEquals(PacketDescriptor.PlaybackScope.SAFE, descriptor.playbackScope());
+        assertFalse(descriptor.checkpointRelevant());
+        assertEquals(PacketDescriptor.PlaybackScope.VIEWER_LOCAL, descriptor.playbackScope());
         assertTrue(Paper26_2ClientboundPacketCatalog.explicitlyClassifies(TYPE_NAME));
     }
 
@@ -178,27 +176,14 @@ final class Id094SetChunkCacheCenterPacketDefinitionTest {
     }
 
     @Test
-    void playbackPreservesBothChunkCoordinatesAndRebuildsTheNativePacket() {
+    void dropsRecordedCentersBecauseTheViewerOwnsItsView() {
         var definition = new Id094SetChunkCacheCenterPacketDefinition();
-        PacketCodec<Object> codec = codec();
 
-        for (int[] coordinates : new int[][] {
-            {0, 0}, {-1, 1}, {128, -16_384}, {Integer.MIN_VALUE, Integer.MAX_VALUE}
-        }) {
-            ClientboundSetChunkCacheCenterPacket original = packet(coordinates[0], coordinates[1]);
-            byte[] payload = nativePayload(original);
-            PacketRewriteResult result = definition.handlePlayback(
-                    frame(payload), descriptor(), codec, rewriter());
-            ClientboundSetChunkCacheCenterPacket rebuilt = assertInstanceOf(
-                    ClientboundSetChunkCacheCenterPacket.class, result.packet().orElseThrow());
+        PacketRewriteResult result = definition.handlePlayback(
+                frame(nativePayload(packet(4, -7))), descriptor(), codec(), rewriter());
 
-            assertEquals(PacketRewriteResult.Decision.SEND, result.decision());
-            assertEquals(coordinates[0], rebuilt.getX());
-            assertEquals(coordinates[1], rebuilt.getZ());
-            var encoded = definition.encode(rebuilt, descriptor(), codec);
-            assertEquals(PACKET_ID, encoded.packetId());
-            assertArrayEquals(payload, encoded.payload());
-        }
+        assertEquals(PacketRewriteResult.Decision.DROP_LOCAL, result.decision());
+        assertTrue(result.packet().isEmpty());
     }
 
     @Test
@@ -237,10 +222,7 @@ final class Id094SetChunkCacheCenterPacketDefinitionTest {
                     ClientboundSetChunkCacheCenterPacket.class, decode(protocol, encoded));
             assertEquals(original.getX(), decoded.getX());
             assertEquals(original.getZ(), decoded.getZ());
-
-            var definition = new Id094SetChunkCacheCenterPacketDefinition();
-            assertEquals(definition.read(original), definition.read(decoded));
-            ByteBuf rebuilt = encodePacket(protocol, definition.rebuild(definition.read(decoded)));
+            ByteBuf rebuilt = encodePacket(protocol, decoded);
             try {
                 assertArrayEquals(originalWire, bytes(rebuilt));
             } finally {
@@ -376,7 +358,7 @@ final class Id094SetChunkCacheCenterPacketDefinitionTest {
                 replayable,
                 true,
                 "paper-26.2/" + typeName,
-                PacketDescriptor.PlaybackScope.SAFE);
+                PacketDescriptor.PlaybackScope.VIEWER_LOCAL);
     }
 
     private static RawPacketFrame frame(byte[] payload) {

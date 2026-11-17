@@ -4,6 +4,7 @@ import dev.voldechse.replayframework.api.recording.CuboidRegion;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.OptionalInt;
 
 /**
  * Covers a region with a rectangular lattice of static eyes.
@@ -18,15 +19,16 @@ public final class LatticeEyePlacement implements EyePlacement {
 
     private static final int CHUNK_BLOCKS = 16;
 
-    private final int maxEyes;
+    private final OptionalInt maxEyes;
     private final int maxViewDistance;
 
     /**
-     * @param maxEyes eye budget of one region
+     * @param maxEyes eye budget of one region; empty means unlimited
      * @param maxViewDistance largest chunk radius a single eye may load
      */
-    public LatticeEyePlacement(int maxEyes, int maxViewDistance) {
-        if (maxEyes < 1) {
+    public LatticeEyePlacement(OptionalInt maxEyes, int maxViewDistance) {
+        Objects.requireNonNull(maxEyes, "maxEyes");
+        if (maxEyes.isPresent() && maxEyes.getAsInt() < 1) {
             throw new IllegalArgumentException("maxEyes must be positive");
         }
         if (maxViewDistance < 3 || maxViewDistance > 32) {
@@ -53,9 +55,10 @@ public final class LatticeEyePlacement implements EyePlacement {
 
         long columns = (long) Math.ceil(width / maxCellSide);
         long rows = (long) Math.ceil(depth / maxCellSide);
-        if (columns * rows > maxEyes) {
+        if (maxEyes.isPresent() && columns * rows > maxEyes.getAsInt()) {
             throw new IllegalArgumentException(
-                    "region needs " + (columns * rows) + " eyes but the budget is " + maxEyes);
+                    "region needs " + (columns * rows) + " eyes but the budget is "
+                            + maxEyes.getAsInt());
         }
         double cellWidth = width / columns;
         double cellDepth = depth / rows;

@@ -7,7 +7,13 @@ public record ObserverAnchor(
         double y,
         double z,
         float yaw,
-        float pitch) {
+        float pitch,
+        java.util.Optional<String> world) {
+
+    /** Creates an anchor whose recorded world is unknown. */
+    public ObserverAnchor(Kind kind, double x, double y, double z, float yaw, float pitch) {
+        this(kind, x, y, z, yaw, pitch, java.util.Optional.empty());
+    }
 
     public ObserverAnchor {
         if (kind == null) {
@@ -16,6 +22,9 @@ public record ObserverAnchor(
         if (!Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(z)
                 || !Float.isFinite(yaw) || !Float.isFinite(pitch)) {
             throw new IllegalArgumentException("observer anchor must be finite");
+        }
+        if (world == null) {
+            throw new NullPointerException("world");
         }
     }
 

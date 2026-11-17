@@ -69,6 +69,17 @@ public interface PlaybackBridge {
     void resetView();
 
     /**
+     * Chooses the recorded world the viewer watches. A recording can span
+     * several worlds, and a client can only apply the frames of one: a chunk
+     * of another dimension has a different height and breaks the client's
+     * connection. Frames of other worlds are not sent; frames of no world,
+     * such as chat, always are. The viewer's own live world does not matter,
+     * because playback places the viewer in a world of its own.
+     */
+    default void viewWorld(String recordedWorld) {
+    }
+
+    /**
      * Completes after all previously queued view packets have been processed
      * by the adapter and flushed to the viewer connection.
      *

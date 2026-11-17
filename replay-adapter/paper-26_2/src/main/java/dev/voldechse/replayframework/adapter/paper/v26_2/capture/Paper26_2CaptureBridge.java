@@ -15,7 +15,6 @@ import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.PacketRegistry;
 import dev.voldechse.replayframework.adapter.SceneObservation;
 import dev.voldechse.replayframework.adapter.paper.argus.Argus;
-import dev.voldechse.replayframework.adapter.paper.argus.LatticeEyePlacement;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.DerivedScenePacket;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ViewTeardownState;
@@ -56,11 +55,6 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
 
     private static final net.kyori.adventure.key.Key SERVERBOUND_RECEIVER_KEY =
             net.kyori.adventure.key.Key.key("replayframework", "serverbound_receiver");
-
-    /** Eye budget of one recorded region. */
-    private static final int ARGUS_MAX_EYES_PER_REGION = 64;
-    /** Largest chunk radius a single eye loads and keeps simulated. */
-    private static final int ARGUS_MAX_VIEW_DISTANCE = 8;
 
     private final PaperConnectionAccessor accessor;
     private final PacketRegistry registry;
@@ -148,7 +142,6 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
                 this::hasActiveRecording, this::publishActorEffect, this::fail);
         this.argus = new Argus(
                 new Paper26_2ArgusPlatform(),
-                new LatticeEyePlacement(ARGUS_MAX_EYES_PER_REGION, ARGUS_MAX_VIEW_DISTANCE),
                 new dev.voldechse.replayframework.adapter.paper.argus.ArgusPublisher() {
                     @Override
                     public void publish(

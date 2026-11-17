@@ -55,7 +55,7 @@ final class Id095SetChunkCacheRadiusPacketDefinitionTest {
     }
 
     @Test
-    void classifiesCacheRadiusAsSafeCheckpointedWorldState() {
+    void classifiesCacheRadiusAsViewerLocalWorldState() {
         var definition = new Id095SetChunkCacheRadiusPacketDefinition();
 
         assertEquals(PACKET_ID, definition.packetId());
@@ -66,11 +66,9 @@ final class Id095SetChunkCacheRadiusPacketDefinitionTest {
         assertEquals(PacketDisposition.STATEFUL, definition.classification().disposition());
         assertTrue(definition.classification().captureByDefault());
         assertTrue(definition.classification().replayable());
-        assertTrue(definition.classification().checkpointRelevant());
-        assertEquals(PacketDescriptor.PlaybackScope.SAFE,
+        assertFalse(definition.classification().checkpointRelevant());
+        assertEquals(PacketDescriptor.PlaybackScope.VIEWER_LOCAL,
                 definition.classification().playbackScope());
-        assertEquals(Paper26_2CheckpointEncoder.CheckpointPacketFamily.GLOBAL_STATE,
-                Paper26_2CheckpointEncoder.familyFor(TYPE_NAME));
 
         assertEquals(1, WorldPacketDefinitions.definitions().stream()
                 .filter(candidate -> TYPE_NAME.equals(candidate.typeName()))
@@ -86,8 +84,8 @@ final class Id095SetChunkCacheRadiusPacketDefinitionTest {
         assertEquals(PacketDisposition.STATEFUL, descriptor.disposition());
         assertTrue(descriptor.captureByDefault());
         assertTrue(descriptor.replayable());
-        assertTrue(descriptor.checkpointRelevant());
-        assertEquals(PacketDescriptor.PlaybackScope.SAFE, descriptor.playbackScope());
+        assertFalse(descriptor.checkpointRelevant());
+        assertEquals(PacketDescriptor.PlaybackScope.VIEWER_LOCAL, descriptor.playbackScope());
         assertTrue(Paper26_2ClientboundPacketCatalog.explicitlyClassifies(TYPE_NAME));
     }
 
@@ -108,10 +106,7 @@ final class Id095SetChunkCacheRadiusPacketDefinitionTest {
                 ClientboundSetChunkCacheRadiusPacket decoded = assertInstanceOf(
                         ClientboundSetChunkCacheRadiusPacket.class, decode(protocol, encoded));
                 assertEquals(radius, decoded.getRadius());
-
-                var definition = new Id095SetChunkCacheRadiusPacketDefinition();
-                assertEquals(definition.read(original), definition.read(decoded));
-                ByteBuf rebuilt = encodePacket(protocol, definition.rebuild(definition.read(decoded)));
+                ByteBuf rebuilt = encodePacket(protocol, decoded);
                 try {
                     assertArrayEquals(expectedWire, bytes(rebuilt));
                 } finally {
@@ -191,24 +186,14 @@ final class Id095SetChunkCacheRadiusPacketDefinitionTest {
     }
 
     @Test
-    void playbackPreservesTheRadiusAndNativePayload() {
+    void dropsRecordedRadiiBecauseTheViewerOwnsItsView() {
         var definition = new Id095SetChunkCacheRadiusPacketDefinition();
-        PacketCodec<Object> codec = codec();
 
-        for (int radius : new int[] {Integer.MIN_VALUE, -1, 0, 128, Integer.MAX_VALUE}) {
-            ClientboundSetChunkCacheRadiusPacket original = packet(radius);
-            byte[] payload = nativePayload(original);
-            PacketRewriteResult result = definition.handlePlayback(
-                    frame(payload), descriptor(), codec, rewriter());
-            ClientboundSetChunkCacheRadiusPacket rebuilt = assertInstanceOf(
-                    ClientboundSetChunkCacheRadiusPacket.class, result.packet().orElseThrow());
+        PacketRewriteResult result = definition.handlePlayback(
+                frame(nativePayload(packet(12))), descriptor(), codec(), rewriter());
 
-            assertEquals(PacketRewriteResult.Decision.SEND, result.decision());
-            assertEquals(radius, rebuilt.getRadius());
-            var encoded = definition.encode(rebuilt, descriptor(), codec);
-            assertEquals(PACKET_ID, encoded.packetId());
-            assertArrayEquals(payload, encoded.payload());
-        }
+        assertEquals(PacketRewriteResult.Decision.DROP_LOCAL, result.decision());
+        assertTrue(result.packet().isEmpty());
     }
 
     @Test
@@ -356,7 +341,7 @@ final class Id095SetChunkCacheRadiusPacketDefinitionTest {
                 replayable,
                 true,
                 "paper-26.2/" + typeName,
-                PacketDescriptor.PlaybackScope.SAFE);
+                PacketDescriptor.PlaybackScope.VIEWER_LOCAL);
     }
 
     private static RawPacketFrame frame(byte[] payload) {

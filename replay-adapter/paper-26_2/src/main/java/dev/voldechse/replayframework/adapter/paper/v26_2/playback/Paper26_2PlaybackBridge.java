@@ -55,6 +55,8 @@ public final class Paper26_2PlaybackBridge implements PlaybackBridge {
     private final ArrayDeque<Runnable> outboundOperations = new ArrayDeque<>();
     private final ArrayDeque<CompletableFuture<Void>> outboundIdleWaiters = new ArrayDeque<>();
     private boolean outboundDrainScheduled;
+    /** The recorded world the viewer watches; only its frames are sent. */
+    private final AtomicReference<String> viewedWorld = new AtomicReference<>();
 
     /**
      * Opens one channel-local playback boundary and schedules gate
@@ -156,7 +158,8 @@ public final class Paper26_2PlaybackBridge implements PlaybackBridge {
                 anchors.add(new ObserverAnchor(
                         kind,
                         packet.getX(), packet.getY(), packet.getZ(),
-                        packet.getYRot(), packet.getXRot()));
+                        packet.getYRot(), packet.getXRot(),
+                        frame.world()));
             }
         }
         anchors.sort(Comparator.comparing(ObserverAnchor::kind));
@@ -246,6 +249,11 @@ public final class Paper26_2PlaybackBridge implements PlaybackBridge {
             // Channel teardown is best effort during quit and server shutdown.
         }
         state.set(State.CLOSED);
+    }
+
+    @Override
+    public void viewWorld(String recordedWorld) {
+        viewedWorld.set(Objects.requireNonNull(recordedWorld, "recordedWorld"));
     }
 
     private void gateReady() {
@@ -373,6 +381,12 @@ public final class Paper26_2PlaybackBridge implements PlaybackBridge {
 
     private void processFrame(RawPacketFrame frame) {
         if (isTerminal()) {
+            return;
+        }
+        // A client can only apply packets of the world it is in; a chunk of
+        // another dimension has a different height and breaks the connection.
+        String world = viewedWorld.get();
+        if (world != null && !frame.appliesTo(world)) {
             return;
         }
         Paper26_2ReplayPacketRewriter currentRewriter = rewriter.get();

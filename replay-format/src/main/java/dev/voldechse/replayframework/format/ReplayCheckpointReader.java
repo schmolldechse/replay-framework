@@ -21,7 +21,7 @@ import java.util.Objects;
 public final class ReplayCheckpointReader {
 
     private static final byte[] MAGIC = "RFC1".getBytes(StandardCharsets.US_ASCII);
-    private static final int FORMAT_VERSION = 3;
+    private static final int FORMAT_VERSION = 4;
 
     /** Creates a stateless checkpoint reader. */
     public ReplayCheckpointReader() {

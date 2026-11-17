@@ -15,7 +15,7 @@ class LatticeEyePlacementTest {
     private static final Key WORLD = Key.key("minecraft:overworld");
     private static final int TRACKING_RANGE = 64;
 
-    private final LatticeEyePlacement placement = new LatticeEyePlacement(64, 8);
+    private final LatticeEyePlacement placement = new LatticeEyePlacement(java.util.OptionalInt.of(64), 8);
 
     @Test
     void coversASmallArenaWithOneCenteredEye() {
@@ -58,7 +58,7 @@ class LatticeEyePlacementTest {
 
     @Test
     void neverExceedsTheViewDistanceLimit() {
-        LatticeEyePlacement narrow = new LatticeEyePlacement(64, 4);
+        LatticeEyePlacement narrow = new LatticeEyePlacement(java.util.OptionalInt.of(64), 4);
 
         List<EyeSpec> eyes = narrow.plan(region(0, 0, 0, 399, 64, 399), 128);
 
@@ -67,7 +67,7 @@ class LatticeEyePlacementTest {
 
     @Test
     void rejectsARegionBeyondTheEyeBudget() {
-        LatticeEyePlacement small = new LatticeEyePlacement(4, 8);
+        LatticeEyePlacement small = new LatticeEyePlacement(java.util.OptionalInt.of(4), 8);
 
         IllegalArgumentException failure = assertThrows(
                 IllegalArgumentException.class,

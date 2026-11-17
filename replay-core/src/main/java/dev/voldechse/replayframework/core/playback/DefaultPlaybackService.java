@@ -325,6 +325,13 @@ final class DefaultPlaybackService implements PlaybackService {
                 return CompletableFuture.failedFuture(new IllegalStateException(
                         "Replay contains no safe observer anchor"));
             }
+            // The viewer watches the recorded world of the best anchor, and
+            // only anchors of that world are candidates for the placement.
+            java.util.Optional<String> viewedWorld = anchors.get(0).world();
+            viewedWorld.ifPresent(bridge::viewWorld);
+            anchors = anchors.stream()
+                    .filter(anchor -> anchor.world().equals(viewedWorld))
+                    .toList();
             List<Location> derived = new ArrayList<>(anchors.size() * 2);
             for (ObserverAnchor anchor : anchors) {
                 derived.add(new Location(

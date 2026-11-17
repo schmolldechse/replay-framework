@@ -1,8 +1,9 @@
 # Argus: virtual observers
 
-Status: phase 1 is implemented for Paper 26.2. Recordings with bounded
-regions take their scene from eyes; recordings of whole worlds still use
-player views. Playback is unchanged. See [Implementation](#implementation).
+Status: phases 1 and 2a are implemented for Paper 26.2. Every 26.2
+recording takes its scene from eyes: fixed eyes for regions, companion eyes
+for worlds. The compensation logic of the player-view source is still in
+place and is removed next. See [Implementation](#implementation).
 
 Argus is the internal codename of the observer system. One virtual observer
 is an **eye**; a real player whose connection contributes ambient effects is
@@ -104,11 +105,24 @@ least one observer. Each observer uses the smallest view distance that
 closes the lattice, which keeps the number of loaded chunks close to the
 region itself. Small arenas need one observer.
 
-**Whole worlds.** A world has no position, so observers follow anchors. Each
-player in the world gets a companion observer that moves with the player but
-does not share its fate: it stays in place through death, and for a grace
-period after logout. Overlapping companions cost nothing in the stream
-because of the reference counts.
+**Whole worlds.** A world has no position, so observers follow players. The
+recording's participants get a companion eye, or every player in the
+recorded worlds when it has none; an empty scope follows every player. A
+companion moves with its player but does not share its fate:
+
+| Player | Companion |
+|---|---|
+| alive and online | follows every tick |
+| dead | stays at the place of death until the respawn |
+| respawns in the same world | moves to the player |
+| changes the world | closes, and a new one opens in the new world |
+| logs out or leaves the recorded worlds | stays for the grace period, then closes |
+| returns within the grace period | follows again with the same eye |
+
+A companion uses the player's own view distance, so it loads nothing the
+player would not load, except during death and the grace period.
+Overlapping companions cost nothing in the stream because of the reference
+counts.
 
 **Developer anchors.** A scope may add fixed points and entities to follow
 (a boss, a moving platform, a spectator camera path). They are planned like
@@ -118,9 +132,12 @@ regions and companions.
 keep their area loaded and simulated. `LOADED_ONLY` maps to companions only:
 the recording never loads anything a player would not have loaded.
 
-**Budget.** Observer count and loaded chunks are bounded per recording and
-per server. A scope that cannot be covered within the budget is rejected
-when the recording starts, not silently recorded with holes.
+**Options and budgets.** `RecordingOptions.observers()` (`ObserverOptions`)
+sets the grace period (30 seconds by default, zero closes at once), the
+largest view distance of a fixed eye (8 by default) and two budgets that
+are unlimited by default: fixed eyes per region and followed players. A
+region beyond its budget fails the start of the recording; players beyond
+the companion budget are not followed and are reported in the log.
 
 ## Ambient packets
 
@@ -233,8 +250,35 @@ change is therefore recorded from two sources.
 **Lifecycle.** The core opens the watch when a recording becomes active and
 closes it when the recording leaves the capture route. Eyes open on the
 next server tick. Closing an eye publishes the unloads of what only it was
-holding. A scope beyond the eye budget (64 eyes per region, view distance
-8) fails the start of the recording.
+holding.
+
+**Moving coverage.** A watch reports its coverage, one rectangle per open
+eye over the full height of its world, and refreshes it every tick. Every
+checkpoint asks for it at the moment it is taken; the initial checkpoint
+uses the planned fixed eyes and the positions of the followed players.
+While a watch has no eye, its coverage is the requested scope.
+
+**Tab-list departures.** The server removes a leaving player from the tab
+list only for the players that stay. When nobody is left online, Argus
+publishes the removal from the server's player list instead.
+
+**Worlds.** A recording can span several worlds, because companions follow
+players through portals. Every frame in segments and checkpoints therefore
+carries the world it belongs to; chat, the tab list and other world-wide
+packets carry none and apply everywhere. Playback sends a viewer only the
+frames of one recorded world: a chunk of another dimension has a different
+height and breaks the client's connection. The viewer's live world does not
+decide it, because playback places the viewer in a world of its own. The
+viewed world is the recorded world of the anchor the viewer is placed at.
+The viewer is never moved to another world automatically; switching the
+viewed world, for example from a player selection, is not implemented yet.
+
+**Playback center.** A client keeps only chunks around the center its server
+announces. Chunk-cache center and radius are therefore viewer-local: recorded
+copies are dropped, and the playback gate passes the viewer's own live
+packets, so the client's center follows the viewer. A viewer that moves far
+away and back loses the chunks it left behind until the next seek; a
+playback scene server removes that limit later.
 
 **The eyes define the scope.** Every watch has scenes of its own, and each
 scene packet carries the identity of its watch. A recording accepts every
@@ -319,12 +363,14 @@ writes as plain text is therefore treated as private.
 
 1. Done: scene model, lattice placement, sampled time and weather, and the
    distribution kind on packet definitions, for bounded regions.
-2. Companion eyes for whole worlds; then remove the compensation logic of
-   the player-view source.
-3. Developer anchors and a configurable budget.
+2. Done (2a): companion eyes for whole worlds, configurable grace period and
+   budgets, moving coverage, tab-list departures, viewer-centered playback.
+   Next (2b): remove the compensation logic of the player-view source and
+   delete the old adapters.
+3. Developer anchors.
 4. Developer API.
 5. Playback scene server and scene-model checkpoints.
 
 The 26.3 adapter keeps the default `SceneObservation.none()` and records
-from player views as before. It and the player-view capture path can move
-to a legacy location once phase 2 removes that path from 26.2.
+from player views as before. It is deleted in phase 2b; a 26.3 adapter is
+built again on this concept later.

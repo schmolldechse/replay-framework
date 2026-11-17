@@ -181,10 +181,21 @@ public final class Paper26_2CheckpointEncoder implements CheckpointEncoder {
                     index,
                     encoded.phase(),
                     encoded.packetId(),
-                    encoded.payload()));
+                    encoded.payload(),
+                    frameWorld(encoded)));
         }
 
         return List.copyOf(frames);
+    }
+
+    /** Packets that concern no place, such as tab-list entries, apply in every world. */
+    private static java.util.Optional<String> frameWorld(EncodedPacket encoded) {
+        boolean worldWide = dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound
+                .Paper26_2ClientboundPacketCatalog.catalog()
+                .find(encoded.descriptorTypeName())
+                .map(definition -> definition.worldWide())
+                .orElse(false);
+        return worldWide ? java.util.Optional.empty() : java.util.Optional.of(encoded.worldKey());
     }
 
     private boolean isCheckpointEligible(PacketBlueprint blueprint) {
