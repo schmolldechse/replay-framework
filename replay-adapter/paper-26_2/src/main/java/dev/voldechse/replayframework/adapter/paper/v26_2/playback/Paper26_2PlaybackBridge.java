@@ -299,6 +299,17 @@ public final class Paper26_2PlaybackBridge implements PlaybackBridge {
         return scene.players();
     }
 
+    /** Reads the players of frames that are not played, with a tracker of their own. */
+    @Override
+    public List<dev.voldechse.replayframework.api.playback.RecordedPlayer> players(List<RawPacketFrame> frames) {
+        Paper26_2SceneEntityTracker tracker = new Paper26_2SceneEntityTracker();
+        for (RawPacketFrame frame : frames) {
+            registry.find(frame.phase(), PacketDescriptor.Direction.CLIENTBOUND, frame.packetId())
+                    .ifPresent(descriptor -> tracker.observe(frame, descriptor.typeName(), codec::decode));
+        }
+        return tracker.players();
+    }
+
     @Override
     public java.util.Optional<dev.voldechse.replayframework.api.playback.RecordedEntity> entity(int clientEntityId) {
         Paper26_2ReplayPacketRewriter current = rewriter.get();

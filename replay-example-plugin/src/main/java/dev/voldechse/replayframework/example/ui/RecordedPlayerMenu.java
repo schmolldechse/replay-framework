@@ -51,14 +51,19 @@ public final class RecordedPlayerMenu {
 
     /** Opens the menu with the players of a session at its current position. */
     void open(Player viewer, PlaybackSession session) {
-        MenuHolder holder = new MenuHolder(viewer.getUniqueId());
-        Inventory inventory = Bukkit.createInventory(holder, SIZE, Component.text("Players"));
-        holder.inventory = inventory;
-        List<RecordedPlayer> players = session.recordedPlayers();
-        for (int slot = 0; slot < Math.min(players.size(), SIZE); slot++) {
-            inventory.setItem(slot, item(players.get(slot)));
-        }
-        viewer.openInventory(inventory);
+        // Players in other worlds are read from those worlds' recordings.
+        session.recordedPlayers().whenComplete((players, failure) -> Bukkit.getScheduler().runTask(plugin, () -> {
+            if (failure != null || !viewer.isOnline()) {
+                return;
+            }
+            MenuHolder holder = new MenuHolder(viewer.getUniqueId());
+            Inventory inventory = Bukkit.createInventory(holder, SIZE, Component.text("Players"));
+            holder.inventory = inventory;
+            for (int slot = 0; slot < Math.min(players.size(), SIZE); slot++) {
+                inventory.setItem(slot, item(players.get(slot)));
+            }
+            viewer.openInventory(inventory);
+        }));
     }
 
     /** Whether an inventory is this menu opened for the viewer. */
@@ -80,10 +85,17 @@ public final class RecordedPlayerMenu {
         }
         // The position of the player is read again: playback went on since
         // the menu opened.
-        RecordedPlayer target = session.recordedPlayers().stream()
-                .filter(player -> player.id().equals(playerId))
-                .findFirst()
-                .orElse(null);
+        session.recordedPlayers().whenComplete((players, failure) -> Bukkit.getScheduler().runTask(plugin, () -> {
+            if (failure == null && viewer.isOnline()) {
+                handle(viewer, session, players.stream()
+                        .filter(player -> player.id().equals(playerId))
+                        .findFirst()
+                        .orElse(null), rightClick);
+            }
+        }));
+    }
+
+    private void handle(Player viewer, PlaybackSession session, RecordedPlayer target, boolean rightClick) {
         if (rightClick && target != null) {
             subjectMenu.open(viewer, session, target.id(), target.name());
             return;

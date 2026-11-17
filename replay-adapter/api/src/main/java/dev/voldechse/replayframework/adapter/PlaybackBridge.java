@@ -135,7 +135,21 @@ public interface PlaybackBridge {
         }
     }
 
+    /**
+     * The players of the replay as the frames played so far show them: every
+     * known name, and the location of the players in the viewed world.
+     */
     default java.util.List<dev.voldechse.replayframework.api.playback.RecordedPlayer> recordedPlayers() {
+        return java.util.List.of();
+    }
+
+    /**
+     * The players found in frames of one world that are not played, such as a
+     * world's checkpoint and the frames up to the playback position. Used to
+     * locate players in worlds the viewer does not watch.
+     */
+    default java.util.List<dev.voldechse.replayframework.api.playback.RecordedPlayer> players(
+            List<RawPacketFrame> frames) {
         return java.util.List.of();
     }
 

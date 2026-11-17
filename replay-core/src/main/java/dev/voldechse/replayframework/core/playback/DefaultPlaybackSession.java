@@ -20,6 +20,7 @@ final class DefaultPlaybackSession implements PlaybackSession {
     private final PlaybackTimeline timeline;
     private final PlaybackCoordinator coordinator;
     private final StateTracks stateTracks;
+    private final SceneTracks sceneTracks;
     private final AtomicBoolean released = new AtomicBoolean();
 
     DefaultPlaybackSession(
@@ -28,7 +29,7 @@ final class DefaultPlaybackSession implements PlaybackSession {
             UUID viewerId,
             PlaybackTimeline timeline,
             PlaybackCoordinator coordinator) {
-        this(id, replayId, viewerId, timeline, coordinator, null);
+        this(id, replayId, viewerId, timeline, coordinator, null, null);
     }
 
     DefaultPlaybackSession(
@@ -37,7 +38,9 @@ final class DefaultPlaybackSession implements PlaybackSession {
             UUID viewerId,
             PlaybackTimeline timeline,
             PlaybackCoordinator coordinator,
-            StateTracks stateTracks) {
+            StateTracks stateTracks,
+            SceneTracks sceneTracks) {
+        this.sceneTracks = sceneTracks;
         this.id = Objects.requireNonNull(id, "id");
         this.replayId = Objects.requireNonNull(replayId, "replayId");
         this.viewerId = Objects.requireNonNull(viewerId, "viewerId");
@@ -121,8 +124,11 @@ final class DefaultPlaybackSession implements PlaybackSession {
     }
 
     @Override
-    public java.util.List<dev.voldechse.replayframework.api.playback.RecordedPlayer> recordedPlayers() {
-        return timeline.recordedPlayers();
+    public CompletionStage<java.util.List<dev.voldechse.replayframework.api.playback.RecordedPlayer>> recordedPlayers() {
+        if (sceneTracks == null) {
+            return java.util.concurrent.CompletableFuture.completedFuture(timeline.recordedPlayers());
+        }
+        return sceneTracks.players(timeline.snapshot().position());
     }
 
     @Override
@@ -132,7 +138,12 @@ final class DefaultPlaybackSession implements PlaybackSession {
 
     @Override
     public CompletionStage<PlaybackSnapshot> viewWorld(net.kyori.adventure.key.Key world) {
-        return timeline.viewWorld(Objects.requireNonNull(world, "world"));
+        Objects.requireNonNull(world, "world");
+        if (sceneTracks != null) {
+            // The timeline plays the new world's track; the view is rebuilt next.
+            sceneTracks.view(world.asString());
+        }
+        return timeline.viewWorld(world);
     }
 
     @Override
@@ -141,6 +152,9 @@ final class DefaultPlaybackSession implements PlaybackSession {
         closeStage.whenComplete((ignored, failure) -> {
             if (stateTracks != null) {
                 stateTracks.close();
+            }
+            if (sceneTracks != null) {
+                sceneTracks.close();
             }
             release();
         });

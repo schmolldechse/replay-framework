@@ -406,8 +406,8 @@ final class PlaybackSessionIsolationTest {
             }
 
             @Override
-            public List<dev.voldechse.replayframework.api.playback.RecordedPlayer> recordedPlayers() {
-                return List.of();
+            public CompletionStage<List<dev.voldechse.replayframework.api.playback.RecordedPlayer>> recordedPlayers() {
+                return CompletableFuture.completedFuture(List.of());
             }
 
             @Override

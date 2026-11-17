@@ -61,14 +61,27 @@ public final class SubjectMenu implements AutoCloseable {
 
     /** Opens the menu of a replay entity for a viewer. */
     void open(Player viewer, PlaybackSession session, RecordedEntity entity) {
-        String title = entity.customName()
+        Optional<String> customName = entity.customName()
                 .map(name -> net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
-                        .plainText().serialize(name))
-                .orElseGet(() -> entity.subject().isPresent()
-                        && entity.subject().get().kind() == RecordedSubject.Kind.PLAYER
-                        ? playerName(session, entity.id())
-                        : typeName(entity.type().value()));
-        open(viewer, session, entity.id(), entity.subject(), title);
+                        .plainText().serialize(name));
+        boolean player = entity.subject().isPresent()
+                && entity.subject().get().kind() == RecordedSubject.Kind.PLAYER;
+        if (customName.isPresent() || !player) {
+            open(viewer, session, entity.id(), entity.subject(),
+                    customName.orElseGet(() -> typeName(entity.type().value())));
+            return;
+        }
+        session.recordedPlayers().whenComplete((players, failure) -> Bukkit.getScheduler().runTask(plugin, () -> {
+            if (!viewer.isOnline()) {
+                return;
+            }
+            String name = failure != null ? entity.id().toString() : players.stream()
+                    .filter(candidate -> candidate.id().equals(entity.id()))
+                    .map(dev.voldechse.replayframework.api.playback.RecordedPlayer::name)
+                    .findFirst()
+                    .orElse(entity.id().toString());
+            open(viewer, session, entity.id(), entity.subject(), name);
+        }));
     }
 
     /** Opens the menu of a recorded player, also one in another world. */
@@ -223,14 +236,6 @@ public final class SubjectMenu implements AutoCloseable {
                     .filter(session -> session.id().equals(interacted.sessionId()))
                     .ifPresent(session -> open(viewer, session, interacted.entity()));
         });
-    }
-
-    private static String playerName(PlaybackSession session, UUID id) {
-        return session.recordedPlayers().stream()
-                .filter(player -> player.id().equals(id))
-                .map(dev.voldechse.replayframework.api.playback.RecordedPlayer::name)
-                .findFirst()
-                .orElse(id.toString());
     }
 
     private static String typeName(String key) {

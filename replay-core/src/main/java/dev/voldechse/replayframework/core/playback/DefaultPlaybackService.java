@@ -257,7 +257,8 @@ final class DefaultPlaybackService implements PlaybackService {
                             .filter(track -> track.track().kind() == TrackKind.GLOBAL)
                             .findFirst()
                             .orElseThrow(() -> corrupt("replay has no global track"));
-                    List<MergedTrackData.Track> tracks = new ArrayList<>(prepared.size());
+                    MergedTrackData.Track globalTrack = null;
+                    Map<String, MergedTrackData.Track> worldTracks = new java.util.LinkedHashMap<>();
                     List<PlaybackBuffer> buffers = new ArrayList<>(prepared.size());
                     for (PreparedArtifacts track : prepared) {
                         PlaybackBuffer buffer = new PlaybackBuffer(
@@ -272,14 +273,18 @@ final class DefaultPlaybackService implements PlaybackService {
                         buffers.add(buffer);
                         Map<SeekPoint, CompletionStage<List<RawPacketFrame>>> cache =
                                 new ConcurrentHashMap<>();
-                        tracks.add(MergedTrackData.Track.of(
+                        MergedTrackData.Track opened = MergedTrackData.Track.of(
                                 PlaybackTimeline.adapt(
                                         buffer,
                                         point -> cachedCheckpoint(cache, verified, track, point)),
-                                track.index()));
+                                track.index());
+                        if (track.track().kind() == TrackKind.GLOBAL) {
+                            globalTrack = opened;
+                        } else {
+                            worldTracks.put(track.track().world().orElseThrow(), opened);
+                        }
                     }
                     resources.buffers.set(List.copyOf(buffers));
-                    MergedTrackData data = new MergedTrackData(tracks);
 
                     PlaybackBridge bridge = Objects.requireNonNull(
                             adapter.openPlayback(
@@ -288,6 +293,9 @@ final class DefaultPlaybackService implements PlaybackService {
                                             viewerId, sessionId.value())),
                             "adapter.openPlayback result");
                     resources.bridge.set(bridge);
+                    SceneTracks scene = new SceneTracks(
+                            globalTrack, worldTracks, reference.index(), manifest.durationNanos(), bridge);
+                    resources.sceneTracks.set(scene);
 
                     PlaybackTimeline.Listener listener = timelineListener(
                             sessionId,
@@ -296,7 +304,7 @@ final class DefaultPlaybackService implements PlaybackService {
                     PlaybackTimeline timeline = new PlaybackTimeline(
                             Duration.ofNanos(manifest.durationNanos()),
                             reference.index(),
-                            data,
+                            scene.timeline(),
                             bridge,
                             request.bufferOptions(),
                             commandExecutor,
@@ -320,8 +328,21 @@ final class DefaultPlaybackService implements PlaybackService {
                     SeekPoint initialPoint = reference.index()
                             .seekCheckpointFloor(Duration.ZERO)
                             .orElseThrow(() -> corrupt("replay has no initial checkpoint"));
-                    return data.checkpointFrames(initialPoint)
+                    return scene.all().checkpointFrames(initialPoint)
                             .thenCompose(frames -> placeObserver(request, bridge, frames))
+                            .thenRun(() -> {
+                                // The timeline plays the world the viewer was placed in.
+                                String world = bridge.viewedWorld().orElseGet(() -> {
+                                    String first = worldTracks.keySet().stream().findFirst().orElse(null);
+                                    if (first != null) {
+                                        bridge.viewWorld(first);
+                                    }
+                                    return first;
+                                });
+                                if (world != null) {
+                                    scene.view(world);
+                                }
+                            })
                             .thenRun(bridge::activateReplayIsolation)
                             .thenCompose(ignored -> timeline.prepare());
                 })
@@ -333,7 +354,8 @@ final class DefaultPlaybackService implements PlaybackService {
                             viewerId,
                             resources.timeline.get(),
                             coordinator,
-                            resources.stateTracks.get());
+                            resources.stateTracks.get(),
+                            resources.sceneTracks.get());
                     coordinator.register(session);
                     diagnostics.playbackStarted(session);
                     return (PlaybackSession) session;
@@ -775,6 +797,7 @@ final class DefaultPlaybackService implements PlaybackService {
                 new AtomicReference<>(List.of());
         private final AtomicReference<PlaybackBridge> bridge = new AtomicReference<>();
         private final AtomicReference<StateTracks> stateTracks = new AtomicReference<>();
+        private final AtomicReference<SceneTracks> sceneTracks = new AtomicReference<>();
         private final AtomicReference<PlaybackTimeline> timeline = new AtomicReference<>();
 
         private void closeAfterFailure() {

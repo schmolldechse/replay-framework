@@ -1,10 +1,10 @@
 # Recording tracks
 
-Status: parts A, B and D are implemented. A recording is written as a
-global track, one track per world and one state track per subject in format
-v5; playback merges the global and world tracks into one timeline and opens
-a state track when its subject's state is asked for. Loading the other world
-tracks on demand (C) follows.
+Status: parts A to D are implemented. A recording is written as a global
+track, one track per world and one state track per subject in format v5.
+Playback plays the global track and the viewed world's track, reads other
+world tracks only when players there are asked for, and opens a state track
+when its subject's state is asked for.
 
 A recording is a set of **tracks**, like a media container holds video,
 audio and subtitle tracks. Each track is a time-ordered stream of packet
@@ -147,14 +147,19 @@ for all open tracks at every checkpoint barrier.
 
 - `GLOBAL` and the viewed `WORLD` track are always open and merged into one
   timeline.
-- Switching the viewed world opens the other world's track at the current
-  position (keyframe floor, then frames up to the position) and closes the
-  previous one.
-- Other tracks open on demand: a subject's `STATE` track when its state is
-  queried, other `WORLD` tracks when the positions of players there are
-  needed. They follow the playback clock while in use and close afterwards.
-- Queries that may need a closed track are asynchronous, for example the
-  list of recorded players with their positions.
+- Switching the viewed world replaces the world track of the timeline
+  (`SceneTracks.view`); the scene is then rebuilt at the current position
+  like a seek: keyframe floor, then frames up to the position.
+- Every track's index is read when the playback opens; its segments are only
+  read when its frames are requested. The timeline requests frames of the
+  global and the viewed world track only.
+- Other tracks are read on demand: a subject's `STATE` track when its state
+  is queried (`StateTracks`), other `WORLD` tracks when the positions of
+  players there are needed. For those, the world's keyframe at the barrier
+  before the position and its frames up to the position are scanned by the
+  adapter (`PlaybackBridge.players(frames)`); nothing of them is sent.
+- Queries that may read such a track are asynchronous:
+  `PlaybackSession.recordedPlayers()` and `state(RecordedSubject)`.
 
 ## API
 

@@ -81,16 +81,12 @@ public interface PlaybackSession {
     CompletionStage<PlaybackSnapshot> seekBy(Duration delta);
 
     /**
-     * Closes this session and releases internal playback resources. Repeated
-     * calls are idempotent.
-     *
-     * @return stage completed with a closed snapshot
-     */
-    /**
      * Returns every player of the replay with its location at the current
-     * playback position, across all recorded worlds.
+     * playback position, across all recorded worlds. Players in worlds the
+     * viewer does not watch are read from those worlds' recordings, so the
+     * result is asynchronous.
      */
-    java.util.List<RecordedPlayer> recordedPlayers();
+    CompletionStage<java.util.List<RecordedPlayer>> recordedPlayers();
 
     /**
      * Returns the recorded world the viewer watches. A replay can span several
@@ -129,5 +125,11 @@ public interface PlaybackSession {
     /** Returns every entity of the viewed world at the current position. */
     java.util.List<RecordedEntity> entities();
 
+    /**
+     * Closes this session and releases internal playback resources. Repeated
+     * calls are idempotent.
+     *
+     * @return stage completed with a closed snapshot
+     */
     CompletionStage<PlaybackSnapshot> close();
 }

@@ -33,13 +33,23 @@ final class MergedTrackData implements PlaybackTimeline.PlaybackData {
                     .thenComparingLong(RawPacketFrame::serverTick)
                     .thenComparingInt(RawPacketFrame::sequence);
 
-    private final List<Track> tracks;
+    private volatile List<Track> tracks;
 
     MergedTrackData(List<Track> tracks) {
-        this.tracks = List.copyOf(Objects.requireNonNull(tracks, "tracks"));
-        if (this.tracks.isEmpty()) {
+        tracks(tracks);
+    }
+
+    /**
+     * Replaces the tracks of the timeline, for example the world track when
+     * the viewer watches another world. The next seek rebuilds the view from
+     * the new tracks; requests already running finish with the old ones.
+     */
+    void tracks(List<Track> next) {
+        List<Track> copy = List.copyOf(Objects.requireNonNull(next, "tracks"));
+        if (copy.isEmpty()) {
             throw new IllegalArgumentException("at least one track is required");
         }
+        tracks = copy;
     }
 
     @Override
