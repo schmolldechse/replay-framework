@@ -12,8 +12,8 @@ import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.PacketDisposition;
 import dev.voldechse.replayframework.adapter.codec.PacketCodec;
-import dev.voldechse.replayframework.adapter.paper.packet.PacketDefinition;
-import dev.voldechse.replayframework.adapter.paper.packet.PacketRewriteResult;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinition;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketRewriteResult;
 import dev.voldechse.replayframework.adapter.paper.v26_3.playback.Paper26_3ReplayPacketRewriter;
 import dev.voldechse.replayframework.adapter.playback.PlaybackIdentityContext;
 import dev.voldechse.replayframework.format.PacketPhase;
@@ -68,7 +68,7 @@ final class Id017To020ContainerPacketDefinitionsTest {
     void classifiesEveryContainerPacketAsViewerLocalState() {
         assertConstants();
         for (PacketCase packetCase : packetCases()) {
-            PacketDefinition<Paper26_3ReplayPacketRewriter> definition =
+            ClientboundPacketDefinition<Paper26_3ReplayPacketRewriter> definition =
                     packetCase.definition();
             assertEquals(packetCase.packetId(), definition.packetId());
             assertEquals(packetCase.typeName(), definition.typeName());
@@ -600,7 +600,7 @@ final class Id017To020ContainerPacketDefinitionsTest {
     private record PacketCase(
             int packetId,
             String identifier,
-            PacketDefinition<Paper26_3ReplayPacketRewriter> definition) {
+            ClientboundPacketDefinition<Paper26_3ReplayPacketRewriter> definition) {
 
         String typeName() {
             return "play.clientbound." + identifier;

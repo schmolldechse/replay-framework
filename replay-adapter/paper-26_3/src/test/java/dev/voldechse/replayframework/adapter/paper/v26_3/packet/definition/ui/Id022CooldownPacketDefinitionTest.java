@@ -10,7 +10,7 @@ import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.PacketDisposition;
 import dev.voldechse.replayframework.adapter.codec.PacketCodec;
-import dev.voldechse.replayframework.adapter.paper.packet.PacketRewriteResult;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketRewriteResult;
 import dev.voldechse.replayframework.adapter.paper.v26_3.packet.Paper26_3PacketCatalog;
 import dev.voldechse.replayframework.adapter.paper.v26_3.playback.Paper26_3ReplayPacketRewriter;
 import dev.voldechse.replayframework.adapter.playback.PlaybackIdentityContext;

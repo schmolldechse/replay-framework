@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.PacketDisposition;
 import dev.voldechse.replayframework.adapter.codec.PacketCodec;
-import dev.voldechse.replayframework.adapter.paper.packet.PacketRewriteResult;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketRewriteResult;
 import dev.voldechse.replayframework.adapter.paper.v26_3.playback.Paper26_3ReplayPacketRewriter;
 import dev.voldechse.replayframework.adapter.playback.PlaybackIdentityContext;
 import dev.voldechse.replayframework.format.PacketPhase;

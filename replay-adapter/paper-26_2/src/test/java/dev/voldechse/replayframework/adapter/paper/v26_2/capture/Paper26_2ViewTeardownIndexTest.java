@@ -6,10 +6,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.PacketDisposition;
-import dev.voldechse.replayframework.adapter.paper.packet.PacketDefinition;
-import dev.voldechse.replayframework.adapter.paper.packet.ViewTeardownState;
-import dev.voldechse.replayframework.adapter.paper.packet.ViewTeardownState.ChunkCoordinate;
-import dev.voldechse.replayframework.adapter.paper.v26_2.packet.Paper26_2PacketCatalog;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinition;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ViewTeardownState;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ViewTeardownState.ChunkCoordinate;
+import dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.Paper26_2ClientboundPacketCatalog;
 import dev.voldechse.replayframework.format.PacketPhase;
 import java.util.List;
 import java.util.Optional;
@@ -190,7 +190,7 @@ final class Paper26_2ViewTeardownIndexTest {
 
     private static void observe(
             int packetId, Object packet, UUID connectionId, Paper26_2AuthoritativeStateIndex state) {
-        PacketDefinition<?> definition = definition(packetId);
+        ClientboundPacketDefinition<?> definition = definition(packetId);
         definition.captureContext(packet, descriptor(definition), connectionId, state, 1L);
     }
 
@@ -199,11 +199,11 @@ final class Paper26_2ViewTeardownIndexTest {
         return definition(packetId).suppressesRecipientState(packet, connectionId, state, 1L);
     }
 
-    private static PacketDefinition<?> definition(int packetId) {
-        return Paper26_2PacketCatalog.catalog().find(packetId).orElseThrow();
+    private static ClientboundPacketDefinition<?> definition(int packetId) {
+        return Paper26_2ClientboundPacketCatalog.catalog().find(packetId).orElseThrow();
     }
 
-    private static PacketDescriptor descriptor(PacketDefinition<?> definition) {
+    private static PacketDescriptor descriptor(ClientboundPacketDefinition<?> definition) {
         return new PacketDescriptor(
                 definition.typeName(),
                 PacketPhase.PLAY,

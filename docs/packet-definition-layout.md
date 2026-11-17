@@ -3,6 +3,12 @@
 This document defines only the naming and filesystem layout of version-specific
 PLAY packet definitions.
 
+Clientbound and serverbound packets are strictly separated. They have their
+own base classes, catalogs and packages, and a definition never handles both
+directions. The rules below apply to both; each direction reads its numeric
+IDs and identifiers from its own registry (`play.clientbound.` or
+`play.serverbound.`).
+
 ## Class names
 
 Every concrete packet class uses this form:
@@ -54,8 +60,19 @@ Shared NMS-free abstractions live in:
 ```text
 replay-adapter/paper-common/src/main/java/
 └── dev/voldechse/replayframework/adapter/paper/packet/
-    └── definition/
+    ├── clientbound/
+    │   ├── ClientboundPacketDefinition.java
+    │   ├── ClientboundPacketDefinitionCatalog.java
+    │   └── definition/
+    └── serverbound/
+        ├── ServerboundPacketDefinition.java
+        ├── ServerboundPacketDefinitionCatalog.java
+        └── ServerboundReaction.java
 ```
+
+The 26.2 adapter uses this split. The 26.3 adapter keeps its previous
+layout, with only the shared types renamed, until it moves to a legacy
+location.
 
 Each version adapter exposes `packet` as a sibling of the runtime consumers:
 
@@ -82,12 +99,24 @@ replay-adapter/paper-26_3/src/main/java/
 
 replay-adapter/paper-26_2/src/main/java/
 └── dev/voldechse/replayframework/adapter/paper/v26_2/
+    ├── actor/
     ├── capture/
     ├── checkpoint/
     ├── packet/
-    │   ├── Paper26_2PacketCatalog.java
-    │   ├── Paper26_2PacketCodec.java
-    │   └── definition/
+    │   ├── serverbound/
+    │   │   ├── Paper26_2ServerboundPacketCatalog.java
+    │   │   └── definition/
+    │   │       ├── connection/
+    │   │       ├── diagnostic/
+    │   │       ├── world/
+    │   │       ├── entity/
+    │   │       ├── player/
+    │   │       ├── inventory/
+    │   │       ├── chat/
+    │   │       └── ui/
+    │   └── clientbound/
+    │       ├── Paper26_2ClientboundPacketCatalog.java
+    │       └── definition/
     │       ├── connection/
     │       ├── diagnostic/
     │       ├── world/
@@ -125,17 +154,26 @@ gains capture-specific metadata.
 | `ui` | titles, action bar, screens, dialogs, tab list, advancements, links and waypoints |
 | `effect` | animations, particles, sounds, explosions, boss bars and other ordered scene effects |
 
+Serverbound definitions use the same domains where they apply; the 26.2
+serverbound registry has no `scoreboard` or `effect` packets.
+
 Each `definition.<domain>` package contains one public aggregator named after
-the domain, for example `EntityPacketDefinitions`. Concrete definitions
+the domain, for example `EntityPacketDefinitions` for clientbound and
+`EntityServerboundPacketDefinitions` for serverbound definitions. Concrete definitions
 remain package-private; the aggregator exposes their immutable list to the
 version catalog. No aggregator contains packet behavior.
 
 Example:
 
 ```text
-packet/definition/connection/
+packet/clientbound/definition/connection/
 ├── ConnectionPacketDefinitions.java
 └── Id000BundleDelimiterPacketDefinition.java
+
+packet/serverbound/definition/world/
+├── WorldServerboundPacketDefinitions.java
+├── Id041PlayerActionPacketDefinition.java
+└── Id066UseItemOnPacketDefinition.java
 ```
 
 ## Ownership boundary

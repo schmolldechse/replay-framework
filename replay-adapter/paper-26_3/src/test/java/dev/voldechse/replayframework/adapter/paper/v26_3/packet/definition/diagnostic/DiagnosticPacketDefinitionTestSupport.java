@@ -9,7 +9,7 @@ import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.PacketDisposition;
 import dev.voldechse.replayframework.adapter.codec.PacketCodec;
-import dev.voldechse.replayframework.adapter.paper.packet.PacketDefinition;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinition;
 import dev.voldechse.replayframework.format.PacketPhase;
 import dev.voldechse.replayframework.format.RawPacketFrame;
 import io.netty.buffer.ByteBuf;
@@ -36,8 +36,8 @@ final class DiagnosticPacketDefinitionTestSupport {
     }
 
     static void assertDefinition(
-            PacketDefinition<?> definition,
-            List<? extends PacketDefinition<?>> definitions,
+            ClientboundPacketDefinition<?> definition,
+            List<? extends ClientboundPacketDefinition<?>> definitions,
             int expectedId,
             String identifier) {
         assertEquals(expectedId, definition.packetId());
@@ -56,7 +56,7 @@ final class DiagnosticPacketDefinitionTestSupport {
                         .count());
     }
 
-    static void assertPlaybackBlockedBeforeCodec(PacketDefinition<?> definition) {
+    static void assertPlaybackBlockedBeforeCodec(ClientboundPacketDefinition<?> definition) {
         AtomicInteger encodeCalls = new AtomicInteger();
         AtomicInteger decodeCalls = new AtomicInteger();
         PacketCodec<Object> codec = new PacketCodec<>() {
@@ -160,7 +160,7 @@ final class DiagnosticPacketDefinitionTestSupport {
         throw new IllegalArgumentException("VarInt is longer than five bytes");
     }
 
-    private static PacketDescriptor descriptor(PacketDefinition<?> definition) {
+    private static PacketDescriptor descriptor(ClientboundPacketDefinition<?> definition) {
         return new PacketDescriptor(
                 definition.typeName(),
                 PacketPhase.PLAY,

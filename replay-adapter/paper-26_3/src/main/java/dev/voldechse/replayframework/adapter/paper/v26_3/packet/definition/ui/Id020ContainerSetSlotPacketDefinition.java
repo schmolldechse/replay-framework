@@ -1,8 +1,8 @@
 package dev.voldechse.replayframework.adapter.paper.v26_3.packet.definition.ui;
 
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
-import dev.voldechse.replayframework.adapter.paper.packet.PacketClassification;
-import dev.voldechse.replayframework.adapter.paper.packet.PacketDefinition;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketClassification;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.v26_3.playback.Paper26_3ReplayPacketRewriter;
 
 /**
@@ -17,7 +17,7 @@ import dev.voldechse.replayframework.adapter.paper.v26_3.playback.Paper26_3Repla
  * the observer's live menu or cursor/inventory synchronization.</p>
  */
 final class Id020ContainerSetSlotPacketDefinition
-        extends PacketDefinition<Paper26_3ReplayPacketRewriter> {
+        extends ClientboundPacketDefinition<Paper26_3ReplayPacketRewriter> {
 
     static final int PACKET_ID = 0x14;
     static final String IDENTIFIER = "minecraft:container_set_slot";

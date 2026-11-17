@@ -24,7 +24,10 @@ NMS-independent contracts live in `replay-adapter:paper-common` and
 The version module is divided by responsibility:
 
 - `packet` owns protocol discovery, native codec access, classifications, and
-  version-local packet definitions.
+  version-local packet definitions, strictly separated into
+  `packet.clientbound` and `packet.serverbound`.
+- `actor` owns the effects the server sends to everyone except the acting
+  player, derived from serverbound packets.
 - `capture` owns outbound observation, semantic capture context, source
   selection, ordering, and frame emission.
 - `checkpoint` owns scoped Paper snapshots, deterministic assembly, and the
@@ -290,3 +293,88 @@ test status.
 | 139 | `minecraft:clear_dialog` | Empty marker that closes the active server-shown dialog on the receiving client. Keep the observer's current dialog unchanged | DROP_LOCAL | no |
 | 140 | `minecraft:show_dialog` | Opens a server-authored dialog from a registry reference or inline dialog definition, with content, inputs and actions. Keep the recorded connection's screen local to preserve the observer's current UI | DROP_LOCAL | no |
 
+
+### PLAY serverbound
+
+Serverbound packets are never recorded or replayed. Each has a definition in
+`packet.serverbound.definition.<domain>` that decides what it triggers:
+
+- **nothing**: whatever the packet changes reaches the recording as
+  clientbound packets;
+- **own state**: the sender's own position, rotation or equipment may have
+  changed and is sampled on the server thread;
+- **actor effect**: the server answers the packet with an effect it sends to
+  everyone except the sender, which is derived for the recording (see
+  [capture source policy](../capture-source-policy.md#effects-that-bypass-their-actor)).
+
+| ID | Identifier | Domain | Triggers | Reason |
+|---:|---|---|---|---|
+| 0 | `minecraft:accept_teleportation` | player | own state | Confirms a server-side teleport. The confirmed position is the sender's own entity position, which the player-state sampler reads. |
+| 1 | `minecraft:attack` | entity | nothing | Attacks an entity. Hit, critical and sweep sounds, the damage event and the victim's reaction reach every recipient, including the attacker. Known gap: a piercing weapon (spear) plays its sound to everyone except the attacker; it is not derived yet. |
+| 2 | `minecraft:block_entity_tag_query` | diagnostic | nothing | Debug query for block-entity data. Changes nothing. |
+| 3 | `minecraft:bundle_item_selected` | inventory | nothing | Selects a slot inside a bundle. Inventory state of the sender only. |
+| 4 | `minecraft:change_difficulty` | player | nothing | Changes the difficulty. The server announces the result with a clientbound change_difficulty packet to every player. |
+| 5 | `minecraft:change_game_mode` | player | nothing | Switches the sender's game mode. Every player receives the result as a clientbound player_info_update. |
+| 6 | `minecraft:chat_ack` | chat | nothing | Acknowledges received chat messages for the signature chain. Connection state only. |
+| 7 | `minecraft:chat_command` | chat | nothing | Runs an unsigned command. Whatever the command changes reaches the recording as clientbound packets. |
+| 8 | `minecraft:chat_command_signed` | chat | nothing | Runs a signed command. Whatever the command changes reaches the recording as clientbound packets. |
+| 9 | `minecraft:chat` | chat | nothing | Sends a chat message. The server sends the message to every recipient, including the sender. |
+| 10 | `minecraft:chat_session_update` | chat | nothing | Publishes the sender's chat key. Other players receive it as a clientbound player_info_update. |
+| 11 | `minecraft:chunk_batch_received` | connection | nothing | Reports the client's chunk throughput. Connection state only. |
+| 12 | `minecraft:client_command` | player | nothing | Requests a respawn or statistics. A respawn reaches the recording through the clientbound respawn sequence. |
+| 13 | `minecraft:client_tick_end` | connection | own state | Ends one client tick. It arrives every tick and drives the regular sample of the sender's own state, including changes the server makes without a client action, such as equipment breaking. |
+| 14 | `minecraft:client_information` | connection | nothing | Language, view distance, skin parts and main hand. Skin parts and main hand reach other recipients as entity metadata through the tracker. |
+| 15 | `minecraft:command_suggestion` | chat | nothing | Requests tab completion. Changes nothing. |
+| 16 | `minecraft:configuration_acknowledged` | connection | nothing | Confirms the switch into the configuration phase. Connection state only. |
+| 17 | `minecraft:container_button_click` | inventory | nothing | Clicks a menu button such as an enchantment option, loom pattern or stonecutter recipe. Resulting sounds are sent to every player. |
+| 18 | `minecraft:container_click` | inventory | own state | Moves items in an open container. The sender's equipment may change, for example when armor is put on. |
+| 19 | `minecraft:container_close` | inventory | nothing | Closes a container. Chest, barrel and shulker box sounds and lid animations are sent to every player. |
+| 20 | `minecraft:container_slot_state_changed` | inventory | nothing | Toggles a crafter slot. The block change is sent as a clientbound block update. |
+| 21 | `minecraft:cookie_response` | connection | nothing | Answers a cookie request. Connection state only. |
+| 22 | `minecraft:custom_payload` | connection | nothing | Plugin channel message. Whatever a plugin changes in response reaches the recording as clientbound packets. |
+| 23 | `minecraft:debug_subscription_request` | diagnostic | nothing | Subscribes to debug data. Changes nothing in the scene. |
+| 24 | `minecraft:edit_book` | inventory | nothing | Edits a book in the sender's inventory. Not part of the scene. |
+| 25 | `minecraft:entity_tag_query` | diagnostic | nothing | Debug query for entity data. Changes nothing. |
+| 26 | `minecraft:interact` | entity | nothing | Uses or aims at an entity. Most results reach the recording as clientbound packets. Known gap: igniting a creeper, giving an item to an allay, dyeing a sheep, waxing or scraping a copper golem and milking play their sound to everyone except the sender; they are not derived yet. |
+| 27 | `minecraft:jigsaw_generate` | diagnostic | nothing | Generates a jigsaw structure. The placed blocks are sent as clientbound block updates. |
+| 28 | `minecraft:keep_alive` | connection | nothing | Answers a keep-alive. Connection state only. |
+| 29 | `minecraft:lock_difficulty` | player | nothing | Locks the difficulty. A setting, not part of the scene. |
+| 30 | `minecraft:move_player_pos` | player | own state | Moves the sender. Known gap: step, swim, splash and landing sounds are played to everyone except the sender; they are not derived yet. |
+| 31 | `minecraft:move_player_pos_rot` | player | own state | Moves and turns the sender. Known gap: step, swim, splash and landing sounds are played to everyone except the sender; they are not derived yet. |
+| 32 | `minecraft:move_player_rot` | player | own state | Turns the sender. |
+| 33 | `minecraft:move_player_status_only` | player | own state | Reports ground and wall contact of the sender. |
+| 34 | `minecraft:move_vehicle` | player | own state | Moves the vehicle the sender rides. The vehicle reaches the recording through the tracker; the rider is sampled. |
+| 35 | `minecraft:paddle_boat` | player | nothing | Reports paddle state. Paddle sounds are played to every player. |
+| 36 | `minecraft:pick_item_from_block` | inventory | own state | Picks the block's item into the hand. The sender's held item may change. |
+| 37 | `minecraft:pick_item_from_entity` | inventory | own state | Picks the entity's item into the hand. The sender's held item may change. |
+| 38 | `minecraft:ping_request` | connection | nothing | Measures latency. Connection state only. |
+| 39 | `minecraft:place_recipe` | inventory | nothing | Fills a crafting grid from the recipe book. Not part of the scene. |
+| 40 | `minecraft:player_abilities` | player | nothing | Starts or stops creative flight. The resulting movement arrives with movement packets. |
+| 41 | `minecraft:player_action` | world | actor effect, own state | Digging, dropping items, releasing a used item, swapping hands and stabbing. Starting or finishing to dig can break a block; the server sends the break particles and sound to everyone except the digger, so this packet derives them. All other actions may change the sender's own equipment. |
+| 42 | `minecraft:player_command` | player | nothing | Sprinting, elytra flight, horse jumps, leaving a bed. The results are entity metadata sent through the tracker. |
+| 43 | `minecraft:player_input` | player | nothing | Movement keys, sneaking and jumping. The results are entity metadata sent through the tracker. |
+| 44 | `minecraft:player_loaded` | connection | nothing | Reports that the client finished loading. Connection state only. |
+| 45 | `minecraft:pong` | connection | nothing | Answers a ping. Connection state only. |
+| 46 | `minecraft:recipe_book_change_settings` | inventory | nothing | Changes recipe book settings. Not part of the scene. |
+| 47 | `minecraft:recipe_book_seen_recipe` | inventory | nothing | Marks a recipe as seen. Not part of the scene. |
+| 48 | `minecraft:rename_item` | inventory | nothing | Sets the anvil name. The anvil sound on taking the result is sent to every player. |
+| 49 | `minecraft:resource_pack` | connection | nothing | Reports resource pack status. Connection state only. |
+| 50 | `minecraft:seen_advancements` | ui | nothing | Opens an advancement tab. Not part of the scene. |
+| 51 | `minecraft:select_trade` | inventory | nothing | Selects a merchant offer. Not part of the scene. |
+| 52 | `minecraft:set_beacon` | inventory | nothing | Selects beacon effects. The beacon sound is sent to every player. |
+| 53 | `minecraft:set_carried_item` | inventory | own state | Selects a hotbar slot. The sender's held item changes. |
+| 54 | `minecraft:set_command_block` | diagnostic | nothing | Configures a command block. Its block entity data is sent as a clientbound packet. |
+| 55 | `minecraft:set_command_minecart` | diagnostic | nothing | Configures a command minecart. Its metadata is sent through the tracker. |
+| 56 | `minecraft:set_creative_mode_slot` | inventory | own state | Sets an inventory slot in creative mode. The sender's equipment may change. |
+| 57 | `minecraft:set_game_rule` | world | nothing | Changes a game rule. A setting; its effects reach the recording as clientbound packets. |
+| 58 | `minecraft:set_jigsaw_block` | diagnostic | nothing | Configures a jigsaw block. Its block entity data is sent as a clientbound packet. |
+| 59 | `minecraft:set_structure_block` | diagnostic | nothing | Configures a structure block. Its block entity data is sent as a clientbound packet. |
+| 60 | `minecraft:set_test_block` | diagnostic | nothing | Configures a test block. Its block entity data is sent as a clientbound packet. |
+| 61 | `minecraft:sign_update` | world | nothing | Sets the text of a sign. The sign's block entity data is sent to every player. |
+| 62 | `minecraft:spectator_action` | player | own state | Spectator teleport. The sender's position changes. |
+| 63 | `minecraft:swing` | entity | own state with swing | Swings a hand. The server sends the animation to everyone except the sender, so the swing is emitted with the sender's sampled state. |
+| 64 | `minecraft:teleport_to_entity` | player | own state | Spectator teleport to an entity. The sender's position changes. |
+| 65 | `minecraft:test_instance_block_action` | diagnostic | nothing | Operates a test instance block. Its block entity data is sent as a clientbound packet. |
+| 66 | `minecraft:use_item_on` | world | actor effect, own state | Uses an item on a block face. Placing a block, opening a door, trapdoor or fence gate, pulling a lever and pressing a button play their sound to everyone except the sender, so this packet derives them. Known gap: tool, bucket, flint and steel, honeycomb, brush and comparator sounds are not derived yet. |
+| 67 | `minecraft:use_item` | entity | own state | Uses the held item in the air. The sender's equipment may change. Known gap: bucket and bottle filling, goat horns, lance sounds and eating or drinking are played to everyone except the sender; they are not derived yet. |
+| 68 | `minecraft:custom_click_action` | connection | nothing | Clicks a custom dialog action. Whatever a plugin changes in response reaches the recording as clientbound packets. |

@@ -3,7 +3,7 @@ package dev.voldechse.replayframework.adapter.paper.v26_3;
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.PacketRegistry;
-import dev.voldechse.replayframework.adapter.paper.packet.PacketClassification;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketClassification;
 import dev.voldechse.replayframework.adapter.paper.v26_3.packet.Paper26_3PacketCatalog;
 import dev.voldechse.replayframework.format.PacketPhase;
 import java.util.ArrayList;

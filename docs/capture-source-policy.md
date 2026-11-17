@@ -27,7 +27,8 @@ Capture sources are selected in the following order:
    player can have changed. The adapter coalesces the signal and samples the
    authoritative player state on the server thread, then emits the corresponding
    version-specific clientbound representation into the neutral recording
-   stream.
+   stream. Every serverbound packet has its own definition that decides what
+   it triggers; serverbound packets themselves are never recorded.
 3. **Channel handler boundary.** A channel handler is used where the exact
    transport boundary is the required contract, such as preventing replay
    packets and live connection-local packets from affecting one another. A
@@ -87,13 +88,41 @@ resolved afterwards:
 Unloads of living players, and removals observed between death and the
 teardown, remain ordinary scene changes.
 
+## Effects that bypass their actor
+
+The server sends many effects of a player's action to everyone except that
+player, because the player's client plays them itself: the break particles
+and sound of a block, the place sound of a block, the sound of a door,
+trapdoor, fence gate, lever or button. With no other player in range no
+connection receives them, so no clientbound packet can be captured.
+
+The serverbound packet that reports the action is the trigger. Its
+definition names the action and the positions involved. The adapter then
+queues one task directly before and one directly after that packet in the
+server's queue of received packets, so the blocks are read on the server
+thread exactly before and after the server handles the action. An effect
+family per kind of effect compares both reads and rebuilds the clientbound
+packet the server sent to other players.
+
+The derived packet is published only when no other player would have
+received the original, using the server's own recipient test. Otherwise
+that player's connection delivers the real packet. Derived packets pass
+through their clientbound definition like any captured packet.
+
+Derived today: breaking (level event 2001), placing, doors, trapdoors,
+fence gates, levers and buttons. Every serverbound definition documents the
+effects of its packet that are not derived yet.
+
 ## Thread boundary
 
-PacketEvents callbacks can execute on a Netty event-loop thread. They must not
-read mutable Bukkit, Paper, CraftBukkit, or NMS world state. A receive callback
-may copy only immutable protocol semantics needed to schedule work, such as:
+PacketEvents callbacks and the serverbound receiver execute on a Netty
+event-loop thread. They must not read mutable Bukkit, Paper, CraftBukkit, or
+NMS world state. Serverbound packets are seen as decoded objects by a channel
+handler directly before the server's packet handler; it never changes, drops
+or delays a packet. A serverbound definition may copy only immutable
+protocol semantics needed to schedule work, such as:
 
-- the PacketEvents user UUID and protocol entity ID;
+- the player UUID and protocol entity ID;
 - the packet type;
 - a decoded hand or other self-contained packet field; and
 - the current capture tick used for bounded duplicate suppression.

@@ -19,8 +19,8 @@ import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.PacketDisposition;
 import dev.voldechse.replayframework.adapter.codec.PacketCodec;
-import dev.voldechse.replayframework.adapter.paper.packet.PacketDefinition;
-import dev.voldechse.replayframework.adapter.paper.packet.PacketRewriteResult;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinition;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketRewriteResult;
 import dev.voldechse.replayframework.adapter.paper.v26_3.playback.Paper26_3ReplayPacketRewriter;
 import dev.voldechse.replayframework.adapter.playback.PlaybackIdentityContext;
 import dev.voldechse.replayframework.format.PacketPhase;
@@ -411,7 +411,7 @@ final class Id015And016CommandPacketDefinitionsTest {
     }
 
     private static void assertClassification(
-            PacketDefinition<Paper26_3ReplayPacketRewriter> definition,
+            ClientboundPacketDefinition<Paper26_3ReplayPacketRewriter> definition,
             int decimalId,
             int hexadecimalId,
             String typeName,
@@ -542,7 +542,7 @@ final class Id015And016CommandPacketDefinitionsTest {
     }
 
     private record PacketCase(
-            PacketDefinition<Paper26_3ReplayPacketRewriter> definition,
+            ClientboundPacketDefinition<Paper26_3ReplayPacketRewriter> definition,
             int packetId,
             String identifier,
             String typeName,

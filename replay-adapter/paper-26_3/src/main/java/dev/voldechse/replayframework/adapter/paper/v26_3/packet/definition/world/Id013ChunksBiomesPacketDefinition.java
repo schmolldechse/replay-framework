@@ -2,9 +2,9 @@ package dev.voldechse.replayframework.adapter.paper.v26_3.packet.definition.worl
 
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
-import dev.voldechse.replayframework.adapter.paper.packet.PacketClassification;
-import dev.voldechse.replayframework.adapter.paper.packet.RebuildingPacketDefinition;
-import dev.voldechse.replayframework.adapter.paper.packet.ValueRewriteResult;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketClassification;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RebuildingPacketDefinition;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ValueRewriteResult;
 import dev.voldechse.replayframework.adapter.paper.v26_3.playback.Paper26_3ReplayPacketRewriter;
 import java.util.List;
 import java.util.Objects;

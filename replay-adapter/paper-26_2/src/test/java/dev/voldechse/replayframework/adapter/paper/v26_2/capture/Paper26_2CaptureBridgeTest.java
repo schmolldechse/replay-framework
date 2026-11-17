@@ -7,8 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.PacketDisposition;
-import dev.voldechse.replayframework.adapter.paper.packet.PacketDefinition;
-import dev.voldechse.replayframework.adapter.paper.v26_2.packet.Paper26_2PacketCatalog;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinition;
+import dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.Paper26_2ClientboundPacketCatalog;
 import dev.voldechse.replayframework.api.recording.BlockPosition;
 import dev.voldechse.replayframework.format.PacketPhase;
 import io.netty.buffer.ByteBuf;
@@ -140,7 +140,7 @@ class Paper26_2CaptureBridgeTest {
         UUID connectionId = UUID.randomUUID();
         var state = new Paper26_2AuthoritativeStateIndex();
         state.world(connectionId, world.toString());
-        PacketDefinition<?> definition = Paper26_2PacketCatalog.catalog()
+        ClientboundPacketDefinition<?> definition = Paper26_2ClientboundPacketCatalog.catalog()
                 .require(descriptor.typeName());
         return definition.captureContext(packet, descriptor, connectionId, state, 0L);
     }

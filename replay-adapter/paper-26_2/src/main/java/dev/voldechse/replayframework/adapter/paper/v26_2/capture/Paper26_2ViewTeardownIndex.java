@@ -1,6 +1,6 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.capture;
 
-import dev.voldechse.replayframework.adapter.paper.packet.ViewTeardownState;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ViewTeardownState;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;

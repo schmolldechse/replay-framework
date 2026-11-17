@@ -9,10 +9,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.SceneObservation;
-import dev.voldechse.replayframework.adapter.paper.packet.PacketClassification;
-import dev.voldechse.replayframework.adapter.paper.packet.PacketDefinition;
-import dev.voldechse.replayframework.adapter.paper.packet.PacketDistribution;
-import dev.voldechse.replayframework.adapter.paper.packet.SceneMembership;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketClassification;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinition;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketDistribution;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.SceneMembership;
 import dev.voldechse.replayframework.api.recording.BlockPosition;
 import dev.voldechse.replayframework.api.recording.CuboidRegion;
 import dev.voldechse.replayframework.api.recording.RecordingScope;
@@ -316,7 +316,7 @@ class ArgusTest {
         }
 
         @Override
-        public Optional<PacketDefinition<?>> definition(Object packet) {
+        public Optional<ClientboundPacketDefinition<?>> definition(Object packet) {
             return switch (packet) {
                 case Chunk chunk -> Optional.of(new Definition(
                         PacketDistribution.VIEW_MEMBERSHIP,
@@ -360,7 +360,7 @@ class ArgusTest {
         }
     }
 
-    private static final class Definition extends PacketDefinition<Object> {
+    private static final class Definition extends ClientboundPacketDefinition<Object> {
         private final PacketDistribution distribution;
         private final SceneMembership membership;
 

@@ -1,7 +1,7 @@
 package dev.voldechse.replayframework.adapter.paper.v26_3.packet;
 
-import dev.voldechse.replayframework.adapter.paper.packet.PacketDefinition;
-import dev.voldechse.replayframework.adapter.paper.packet.PacketDefinitionCatalog;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinition;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinitionCatalog;
 import dev.voldechse.replayframework.adapter.paper.v26_3.packet.definition.chat.ChatPacketDefinitions;
 import dev.voldechse.replayframework.adapter.paper.v26_3.packet.definition.connection.ConnectionPacketDefinitions;
 import dev.voldechse.replayframework.adapter.paper.v26_3.packet.definition.diagnostic.DiagnosticPacketDefinitions;
@@ -18,8 +18,8 @@ import java.util.stream.Stream;
 /** Version-local catalog of explicit Paper 26.3 PLAY packet definitions. */
 public final class Paper26_3PacketCatalog {
 
-    private static final PacketDefinitionCatalog<Paper26_3ReplayPacketRewriter> CATALOG =
-            new PacketDefinitionCatalog<>(Stream.of(
+    private static final ClientboundPacketDefinitionCatalog<Paper26_3ReplayPacketRewriter> CATALOG =
+            new ClientboundPacketDefinitionCatalog<>(Stream.of(
                             ChatPacketDefinitions.definitions(),
                             ConnectionPacketDefinitions.definitions(),
                             DiagnosticPacketDefinitions.definitions(),
@@ -29,12 +29,12 @@ public final class Paper26_3PacketCatalog {
                             UiPacketDefinitions.definitions(),
                             WorldPacketDefinitions.definitions())
                     .flatMap(Collection::stream)
-                    .sorted(Comparator.comparingInt(PacketDefinition::packetId))
+                    .sorted(Comparator.comparingInt(ClientboundPacketDefinition::packetId))
                     .toList());
 
     private Paper26_3PacketCatalog() {}
 
-    public static PacketDefinitionCatalog<Paper26_3ReplayPacketRewriter> catalog() {
+    public static ClientboundPacketDefinitionCatalog<Paper26_3ReplayPacketRewriter> catalog() {
         return CATALOG;
     }
 

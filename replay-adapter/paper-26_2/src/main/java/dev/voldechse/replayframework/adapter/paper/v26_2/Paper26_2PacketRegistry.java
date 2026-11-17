@@ -3,8 +3,8 @@ package dev.voldechse.replayframework.adapter.paper.v26_2;
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.PacketRegistry;
-import dev.voldechse.replayframework.adapter.paper.packet.PacketClassification;
-import dev.voldechse.replayframework.adapter.paper.v26_2.packet.Paper26_2PacketCatalog;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketClassification;
+import dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.Paper26_2ClientboundPacketCatalog;
 import dev.voldechse.replayframework.format.PacketPhase;
 import java.util.ArrayList;
 import java.util.List;
@@ -68,7 +68,7 @@ public final class Paper26_2PacketRegistry implements PacketRegistry {
     }
 
     static boolean explicitlyClassifies(String typeName) {
-        return Paper26_2PacketCatalog.explicitlyClassifies(typeName);
+        return Paper26_2ClientboundPacketCatalog.explicitlyClassifies(typeName);
     }
 
     private static PacketClassification classificationFor(
@@ -76,7 +76,7 @@ public final class Paper26_2PacketRegistry implements PacketRegistry {
         if (packet.phase() != PacketPhase.PLAY) {
             return PacketClassification.control();
         }
-        var definition = Paper26_2PacketCatalog.catalog().find(packet.typeName());
+        var definition = Paper26_2ClientboundPacketCatalog.catalog().find(packet.typeName());
         if (definition.isEmpty()) {
             throw incompatible(
                     "Paper PLAY clientbound packet has no explicit definition: "

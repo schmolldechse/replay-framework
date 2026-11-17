@@ -2,9 +2,9 @@ package dev.voldechse.replayframework.adapter.paper.v26_3.packet.definition.effe
 
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
-import dev.voldechse.replayframework.adapter.paper.packet.PacketClassification;
-import dev.voldechse.replayframework.adapter.paper.packet.RebuildingPacketDefinition;
-import dev.voldechse.replayframework.adapter.paper.packet.ValueRewriteResult;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketClassification;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RebuildingPacketDefinition;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ValueRewriteResult;
 import dev.voldechse.replayframework.adapter.paper.v26_3.playback.Paper26_3ReplayPacketRewriter;
 import io.netty.buffer.Unpooled;
 import net.minecraft.network.FriendlyByteBuf;

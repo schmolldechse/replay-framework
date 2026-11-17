@@ -1,13 +1,13 @@
 package dev.voldechse.replayframework.adapter.paper.v26_3.packet.definition.world;
 
-import dev.voldechse.replayframework.adapter.paper.packet.PacketDefinition;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.v26_3.playback.Paper26_3ReplayPacketRewriter;
 import java.util.List;
 
 /** Immutable Paper 26.3 definitions owned by the world protocol domain. */
 public final class WorldPacketDefinitions {
 
-    private static final List<PacketDefinition<Paper26_3ReplayPacketRewriter>> DEFINITIONS =
+    private static final List<ClientboundPacketDefinition<Paper26_3ReplayPacketRewriter>> DEFINITIONS =
             List.of(
                     new Id004BlockChangedAckPacketDefinition(),
                     new Id006BlockEntityDataPacketDefinition(),
@@ -18,7 +18,7 @@ public final class WorldPacketDefinitions {
 
     private WorldPacketDefinitions() {}
 
-    public static List<PacketDefinition<Paper26_3ReplayPacketRewriter>> definitions() {
+    public static List<ClientboundPacketDefinition<Paper26_3ReplayPacketRewriter>> definitions() {
         return DEFINITIONS;
     }
 }

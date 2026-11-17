@@ -1,8 +1,8 @@
 package dev.voldechse.replayframework.adapter.paper.v26_3.packet.definition.ui;
 
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
-import dev.voldechse.replayframework.adapter.paper.packet.PacketClassification;
-import dev.voldechse.replayframework.adapter.paper.packet.PacketDefinition;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketClassification;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.v26_3.playback.Paper26_3ReplayPacketRewriter;
 
 /**
@@ -13,12 +13,12 @@ import dev.voldechse.replayframework.adapter.paper.v26_3.playback.Paper26_3Repla
  * are reset as well; the action bar is a separate protocol feature. Both
  * variants mutate only UI state owned by the recorded connection, so applying
  * either one would erase or alter the neutral observer's live presentation.
- * The {@link PacketDefinition} base therefore drops every recorded payload
+ * The {@link ClientboundPacketDefinition} base therefore drops every recorded payload
  * before decode while the outbound gate continues to allow the observer's
  * genuine live UI packets.</p>
  */
 final class Id014ClearTitlesPacketDefinition
-        extends PacketDefinition<Paper26_3ReplayPacketRewriter> {
+        extends ClientboundPacketDefinition<Paper26_3ReplayPacketRewriter> {
 
     static final int PACKET_ID = 0x0E;
     static final String IDENTIFIER = "minecraft:clear_titles";

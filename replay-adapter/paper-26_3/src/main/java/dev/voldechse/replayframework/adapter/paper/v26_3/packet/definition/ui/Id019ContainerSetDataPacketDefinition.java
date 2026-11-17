@@ -1,8 +1,8 @@
 package dev.voldechse.replayframework.adapter.paper.v26_3.packet.definition.ui;
 
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
-import dev.voldechse.replayframework.adapter.paper.packet.PacketClassification;
-import dev.voldechse.replayframework.adapter.paper.packet.PacketDefinition;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketClassification;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.v26_3.playback.Paper26_3ReplayPacketRewriter;
 
 /**
@@ -17,7 +17,7 @@ import dev.voldechse.replayframework.adapter.paper.v26_3.playback.Paper26_3Repla
  * decode instead of being applied to a possibly unrelated observer menu.</p>
  */
 final class Id019ContainerSetDataPacketDefinition
-        extends PacketDefinition<Paper26_3ReplayPacketRewriter> {
+        extends ClientboundPacketDefinition<Paper26_3ReplayPacketRewriter> {
 
     static final int PACKET_ID = 0x13;
     static final String IDENTIFIER = "minecraft:container_set_data";

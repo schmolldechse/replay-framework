@@ -1,15 +1,14 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.capture;
 
-import com.github.retrooper.packetevents.event.PacketReceiveEvent;
-import com.github.retrooper.packetevents.protocol.packettype.PacketType;
 import com.github.retrooper.packetevents.protocol.player.InteractionHand;
-import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientAnimation;
+import dev.voldechse.replayframework.adapter.paper.packet.serverbound.ServerboundReaction;
 import dev.voldechse.replayframework.adapter.paper.v26_2.checkpoint.Paper26_2NativePacketCodec;
 import dev.voldechse.replayframework.api.recording.BlockPosition;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -62,27 +61,29 @@ final class Paper26_2PlayerStateCapture implements AutoCloseable {
         this.stateIndex = Objects.requireNonNull(stateIndex, "stateIndex");
     }
 
-    /** Accepts one verified PLAY serverbound packet without reading world state off-thread. */
-    void capture(PacketReceiveEvent event) {
-        Objects.requireNonNull(event, "event");
-        if (closed.get() || !active.getAsBoolean() || event.isCancelled()) {
-            return;
-        }
-
-        UUID playerId = event.getUser().getUUID();
-        if (playerId == null) {
+    /**
+     * Requests a sample after a serverbound definition reported that the
+     * sender's own state may have changed. Called on the network thread; it
+     * reads no world state.
+     */
+    void request(UUID playerId, int entityId, Optional<ServerboundReaction.SwingHand> swingHand) {
+        Objects.requireNonNull(playerId, "playerId");
+        Objects.requireNonNull(swingHand, "swingHand");
+        if (closed.get() || !active.getAsBoolean()) {
             return;
         }
 
         try {
-            int entityId = event.getUser().getEntityId();
             stateIndex.connectionEntityId(playerId, entityId);
             stateIndex.markMovementAuthoritative(entityId);
             stateIndex.markEquipmentAuthoritative(entityId);
 
-            InteractionHand swing = null;
-            if (event.getPacketType() == PacketType.Play.Client.ANIMATION) {
-                swing = new WrapperPlayClientAnimation(event).getHand();
+            InteractionHand swing = swingHand
+                    .map(hand -> hand == ServerboundReaction.SwingHand.OFF_HAND
+                            ? InteractionHand.OFF_HAND
+                            : InteractionHand.MAIN_HAND)
+                    .orElse(null);
+            if (swing != null) {
                 stateIndex.markSwingAuthoritative(entityId, serverTick.getAsLong());
             }
             requestSample(playerId, swing);

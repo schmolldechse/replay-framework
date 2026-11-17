@@ -1,6 +1,6 @@
 package dev.voldechse.replayframework.adapter.paper.argus;
 
-import dev.voldechse.replayframework.adapter.paper.packet.PacketDefinition;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinition;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -23,7 +23,7 @@ public interface ArgusPlatform {
     List<Object> unbundle(Object packet);
 
     /** Returns the definition of a native packet, or empty when it is never captured. */
-    Optional<PacketDefinition<?>> definition(Object packet);
+    Optional<ClientboundPacketDefinition<?>> definition(Object packet);
 
     /** Builds the native packet that unloads one chunk. */
     Object forgetChunk(int chunkX, int chunkZ);

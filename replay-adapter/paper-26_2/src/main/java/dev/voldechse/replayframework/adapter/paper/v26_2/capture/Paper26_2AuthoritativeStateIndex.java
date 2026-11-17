@@ -1,7 +1,7 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.capture;
 
-import dev.voldechse.replayframework.adapter.paper.packet.PacketCaptureState;
-import dev.voldechse.replayframework.adapter.paper.packet.ViewTeardownState;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketCaptureState;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ViewTeardownState;
 import dev.voldechse.replayframework.adapter.CaptureContext;
 import dev.voldechse.replayframework.adapter.PacketDisposition;
 import java.util.Map;

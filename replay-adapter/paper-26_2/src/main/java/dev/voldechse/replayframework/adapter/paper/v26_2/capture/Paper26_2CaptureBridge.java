@@ -4,7 +4,6 @@ import com.github.retrooper.packetevents.PacketEvents;
 import com.github.retrooper.packetevents.event.PacketListener;
 import com.github.retrooper.packetevents.event.PacketListenerCommon;
 import com.github.retrooper.packetevents.event.PacketListenerPriority;
-import com.github.retrooper.packetevents.event.PacketReceiveEvent;
 import com.github.retrooper.packetevents.event.PacketSendEvent;
 import com.github.retrooper.packetevents.event.UserDisconnectEvent;
 import dev.voldechse.replayframework.adapter.CaptureBridge;
@@ -17,12 +16,13 @@ import dev.voldechse.replayframework.adapter.PacketRegistry;
 import dev.voldechse.replayframework.adapter.SceneObservation;
 import dev.voldechse.replayframework.adapter.paper.argus.Argus;
 import dev.voldechse.replayframework.adapter.paper.argus.LatticeEyePlacement;
-import dev.voldechse.replayframework.adapter.paper.packet.DerivedScenePacket;
-import dev.voldechse.replayframework.adapter.paper.packet.PacketDefinition;
-import dev.voldechse.replayframework.adapter.paper.packet.ViewTeardownState;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.DerivedScenePacket;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinition;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ViewTeardownState;
 import dev.voldechse.replayframework.adapter.paper.v26_2.Paper26_2PacketRegistry;
+import dev.voldechse.replayframework.adapter.paper.v26_2.actor.Paper26_2ActorEffects;
 import dev.voldechse.replayframework.adapter.paper.v26_2.argus.Paper26_2ArgusPlatform;
-import dev.voldechse.replayframework.adapter.paper.v26_2.packet.Paper26_2PacketCatalog;
+import dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.Paper26_2ClientboundPacketCatalog;
 import dev.voldechse.replayframework.adapter.paper.v26_2.checkpoint.Paper26_2CheckpointEncoder;
 import dev.voldechse.replayframework.adapter.paper.v26_2.checkpoint.Paper26_2NativePacketCodec;
 import dev.voldechse.replayframework.api.recording.BlockPosition;
@@ -54,6 +54,9 @@ import org.bukkit.scheduler.BukkitTask;
  */
 public final class Paper26_2CaptureBridge implements CaptureBridge {
 
+    private static final net.kyori.adventure.key.Key SERVERBOUND_RECEIVER_KEY =
+            net.kyori.adventure.key.Key.key("replayframework", "serverbound_receiver");
+
     /** Eye budget of one recorded region. */
     private static final int ARGUS_MAX_EYES_PER_REGION = 64;
     /** Largest chunk radius a single eye loads and keeps simulated. */
@@ -71,16 +74,12 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
     private final Object handlerStateLock = new Object();
     private final Paper26_2CaptureOrder captureOrder;
     private final Argus argus;
+    private final Paper26_2ActorEffects actorEffects;
     private volatile BukkitTask argusTask;
     private final PacketListener packetListener = new PacketListener() {
         @Override
         public void onPacketSend(PacketSendEvent event) {
             scheduleCapture(event);
-        }
-
-        @Override
-        public void onPacketReceive(PacketReceiveEvent event) {
-            capture(event);
         }
 
         @Override
@@ -121,6 +120,7 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
         this.captureOrder = new Paper26_2CaptureOrder(
                 System::nanoTime, this.accessor::currentServerTick);
         this.argus = null;
+        this.actorEffects = null;
     }
 
     /** Creates the production bridge with definition-owned packet capture and player self-sampling. */
@@ -144,6 +144,8 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
                 this::captureSyntheticEntityState,
                 this::fail,
                 captureState);
+        this.actorEffects = new Paper26_2ActorEffects(
+                this::hasActiveRecording, this::publishActorEffect, this::fail);
         this.argus = new Argus(
                 new Paper26_2ArgusPlatform(),
                 new LatticeEyePlacement(ARGUS_MAX_EYES_PER_REGION, ARGUS_MAX_VIEW_DISTANCE),
@@ -191,6 +193,7 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
 
         try {
             seedOnlineConnections();
+            installServerboundReceivers();
             if (argus != null) {
                 argusTask = Bukkit.getScheduler().runTaskTimer(owner, argus::tick, 1L, 1L);
             }
@@ -213,6 +216,7 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
 
         // UNINSTALLED is an expected lifecycle end, not an integrity failure.
         unregisterPacketListener();
+        uninstallServerboundReceivers();
         closeArgus();
         closePlayerStateCapture();
         captureState.clear();
@@ -288,7 +292,7 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
                     if (!(rawChannel instanceof Channel channel) || connectionId == null) {
                         throw incompatible("PLAY capture did not expose its Paper connection", null);
                     }
-                    PacketDefinition<?> definition = Paper26_2PacketCatalog.catalog()
+                    ClientboundPacketDefinition<?> definition = Paper26_2ClientboundPacketCatalog.catalog()
                             .find(packetId)
                             .orElseThrow(() -> incompatible(
                                     "PLAY packet has no definition for ID " + packetId, null));
@@ -459,7 +463,7 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
             return;
         }
         Paper26_2NativePacketCodec.EncodedStatePacket encoded = observed.get();
-        PacketDefinition<?> definition = Paper26_2PacketCatalog.catalog()
+        ClientboundPacketDefinition<?> definition = Paper26_2ClientboundPacketCatalog.catalog()
                 .find(encoded.packetId())
                 .orElseThrow(() -> incompatible(
                         "PLAY packet has no definition for ID " + encoded.packetId(), null));
@@ -496,17 +500,85 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
         }
     }
 
-    private void capture(PacketReceiveEvent event) {
-        if (state.get() != State.INSTALLED || event.isCancelled()
-                || playerStateCapture == null
-                || !"PLAY".equals(event.getConnectionState().name())) {
+    /**
+     * Installs the serverbound receiver on every connection, present and
+     * future. Serverbound packets are seen as decoded objects directly before
+     * the server queues them; nothing else in the pipeline changes.
+     */
+    private void installServerboundReceivers() {
+        if (owner == null || playerStateCapture == null) {
             return;
         }
+        io.papermc.paper.network.ChannelInitializeListenerHolder.addListener(
+                SERVERBOUND_RECEIVER_KEY, this::installServerboundReceiver);
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            Channel channel = accessor.connectionFor(player).channel();
+            channel.eventLoop().execute(() -> installServerboundReceiver(channel));
+        }
+    }
+
+    private void installServerboundReceiver(Channel channel) {
         try {
-            playerStateCapture.capture(event);
+            var pipeline = channel.pipeline();
+            if (pipeline.get(Paper26_2ServerboundReceiver.HANDLER_NAME) != null
+                    || !(pipeline.get(Paper26_2ServerboundReceiver.SERVER_HANDLER_NAME)
+                            instanceof net.minecraft.network.Connection connection)) {
+                return;
+            }
+            pipeline.addBefore(
+                    Paper26_2ServerboundReceiver.SERVER_HANDLER_NAME,
+                    Paper26_2ServerboundReceiver.HANDLER_NAME,
+                    new Paper26_2ServerboundReceiver(
+                            connection, this::installed, playerStateCapture, actorEffects, this::fail));
         } catch (Throwable failure) {
             fail(failure);
         }
+    }
+
+    private void uninstallServerboundReceivers() {
+        if (owner == null) {
+            return;
+        }
+        io.papermc.paper.network.ChannelInitializeListenerHolder.removeListener(SERVERBOUND_RECEIVER_KEY);
+        try {
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                accessor.uninstallHandler(
+                        accessor.connectionFor(player), Paper26_2ServerboundReceiver.HANDLER_NAME);
+            }
+        } catch (Throwable ignored) {
+            // Receivers left on closing connections pass every packet through.
+        }
+    }
+
+    /**
+     * Publishes a clientbound packet the server sent to everyone except the
+     * acting player. Its definition supplies the capture context; the
+     * packet is one only players receive, so every recording may accept it.
+     */
+    private void publishActorEffect(Object packet, UUID actorConnectionId) {
+        CaptureBridge.PacketSink currentSink = sink;
+        if (state.get() != State.INSTALLED || currentSink == null || !currentSink.hasActiveSinks()) {
+            return;
+        }
+        if (!(packet instanceof net.minecraft.network.protocol.Packet<?> nativePacket)) {
+            throw incompatible("actor effect is not a Paper 26.2 packet", null);
+        }
+        Paper26_2NativePacketCodec.EncodedStatePacket encoded = stateCodec.encodeState(nativePacket);
+        ClientboundPacketDefinition<?> definition = Paper26_2ClientboundPacketCatalog.catalog()
+                .find(encoded.packetId())
+                .orElseThrow(() -> incompatible(
+                        "PLAY packet has no definition for ID " + encoded.packetId(), null));
+        captureOrder.publish(point -> currentSink.accept(new CaptureBridge.CapturePacket(
+                point.captureTimeNanos(),
+                point.serverTick(),
+                point.sequence(),
+                PacketPhase.PLAY,
+                encoded.packetId(),
+                encoded.payload(),
+                definition.captureContext(
+                                nativePacket, encoded.descriptor(), actorConnectionId,
+                                captureState, point.serverTick())
+                        .withOrigin(CaptureOrigin.PLAYER_ONLY))));
     }
 
     private static PacketPhase phaseOf(PacketSendEvent event) {
@@ -576,6 +648,7 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
         }
 
         unregisterPacketListener();
+        uninstallServerboundReceivers();
         closeArgus();
         closePlayerStateCapture();
         captureState.clear();

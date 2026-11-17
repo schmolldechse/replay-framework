@@ -5,8 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.PacketDisposition;
-import dev.voldechse.replayframework.adapter.paper.packet.PacketDefinition;
-import dev.voldechse.replayframework.adapter.paper.v26_2.packet.Paper26_2PacketCatalog;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinition;
+import dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.Paper26_2ClientboundPacketCatalog;
 import dev.voldechse.replayframework.format.PacketPhase;
 import java.util.List;
 import java.util.Map;
@@ -169,11 +169,11 @@ class PacketCoverageTest {
         net.minecraft.SharedConstants.tryDetectVersion();
         net.minecraft.server.Bootstrap.bootStrap();
 
-        var catalog = Paper26_2PacketCatalog.catalog();
+        var catalog = Paper26_2ClientboundPacketCatalog.catalog();
         assertEquals(141, catalog.definitions().size());
         assertEquals(
                 IMPLEMENTED_PACKETS.stream().map(ExpectedPacket::typeName).toList(),
-                catalog.definitions().stream().map(PacketDefinition::typeName).toList());
+                catalog.definitions().stream().map(ClientboundPacketDefinition::typeName).toList());
 
         var registry = Paper26_2PacketRegistry.discover();
         for (ExpectedPacket expected : IMPLEMENTED_PACKETS) {

@@ -1,6 +1,6 @@
 package dev.voldechse.replayframework.adapter.paper.v26_3.packet.definition.connection;
 
-import dev.voldechse.replayframework.adapter.paper.packet.definition.AbstractBlockedPacketDefinition;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.definition.AbstractBlockedPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.v26_3.playback.Paper26_3ReplayPacketRewriter;
 
 /**

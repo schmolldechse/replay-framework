@@ -5,8 +5,8 @@ import dev.voldechse.replayframework.adapter.paper.argus.AmbientSource;
 import dev.voldechse.replayframework.adapter.paper.argus.ArgusEye;
 import dev.voldechse.replayframework.adapter.paper.argus.ArgusPlatform;
 import dev.voldechse.replayframework.adapter.paper.argus.EyeSpec;
-import dev.voldechse.replayframework.adapter.paper.packet.PacketDefinition;
-import dev.voldechse.replayframework.adapter.paper.v26_2.packet.Paper26_2PacketCatalog;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinition;
+import dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.Paper26_2ClientboundPacketCatalog;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -45,13 +45,13 @@ public final class Paper26_2ArgusPlatform implements ArgusPlatform {
     }
 
     @Override
-    public Optional<PacketDefinition<?>> definition(Object packet) {
+    public Optional<ClientboundPacketDefinition<?>> definition(Object packet) {
         if (!(packet instanceof Packet<?> nativePacket) || nativePacket.type() == null) {
             return Optional.empty();
         }
-        return Paper26_2PacketCatalog.catalog()
+        return Paper26_2ClientboundPacketCatalog.catalog()
                 .find(TYPE_PREFIX + nativePacket.type().id())
-                .map(definition -> (PacketDefinition<?>) definition);
+                .map(definition -> (ClientboundPacketDefinition<?>) definition);
     }
 
     @Override

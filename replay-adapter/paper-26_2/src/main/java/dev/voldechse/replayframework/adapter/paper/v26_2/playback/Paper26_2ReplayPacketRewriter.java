@@ -2,9 +2,9 @@ package dev.voldechse.replayframework.adapter.paper.v26_2.playback;
 
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.codec.PacketCodec;
-import dev.voldechse.replayframework.adapter.paper.packet.PacketRewriteResult;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketRewriteResult;
 import dev.voldechse.replayframework.adapter.paper.playback.ReplayIdentityMap;
-import dev.voldechse.replayframework.adapter.paper.v26_2.packet.Paper26_2PacketCatalog;
+import dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.Paper26_2ClientboundPacketCatalog;
 import dev.voldechse.replayframework.adapter.playback.PlaybackIdentityContext;
 import dev.voldechse.replayframework.format.RawPacketFrame;
 import java.util.HashMap;
@@ -38,7 +38,7 @@ public final class Paper26_2ReplayPacketRewriter {
             RawPacketFrame frame,
             PacketDescriptor descriptor,
             PacketCodec<Object> codec) {
-        PacketRewriteResult result = Paper26_2PacketCatalog.catalog()
+        PacketRewriteResult result = Paper26_2ClientboundPacketCatalog.catalog()
                 .require(Objects.requireNonNull(descriptor, "descriptor").typeName())
                 .handlePlayback(
                         Objects.requireNonNull(frame, "frame"),
@@ -52,7 +52,7 @@ public final class Paper26_2ReplayPacketRewriter {
             Object rebuiltPacket,
             PacketDescriptor descriptor,
             PacketCodec<Object> codec) {
-        return Paper26_2PacketCatalog.catalog()
+        return Paper26_2ClientboundPacketCatalog.catalog()
                 .require(Objects.requireNonNull(descriptor, "descriptor").typeName())
                 .encode(
                         Objects.requireNonNull(rebuiltPacket, "rebuiltPacket"),

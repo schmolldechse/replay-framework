@@ -1,8 +1,8 @@
 package dev.voldechse.replayframework.adapter.paper.argus;
 
 import dev.voldechse.replayframework.adapter.SceneObservation;
-import dev.voldechse.replayframework.adapter.paper.packet.PacketDefinition;
-import dev.voldechse.replayframework.adapter.paper.packet.SceneMembership;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinition;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.SceneMembership;
 import dev.voldechse.replayframework.api.recording.BlockPosition;
 import dev.voldechse.replayframework.api.recording.CuboidRegion;
 import dev.voldechse.replayframework.api.recording.RecordingScope;
@@ -225,7 +225,7 @@ public final class Argus implements SceneObservation, AutoCloseable {
 
         /** @return {@code false} only when an entity spawn was a duplicate */
         private boolean merge(UUID eye, Object packet) {
-            Optional<PacketDefinition<?>> definition = platform.definition(packet);
+            Optional<ClientboundPacketDefinition<?>> definition = platform.definition(packet);
             if (definition.isEmpty()) {
                 return true;
             }

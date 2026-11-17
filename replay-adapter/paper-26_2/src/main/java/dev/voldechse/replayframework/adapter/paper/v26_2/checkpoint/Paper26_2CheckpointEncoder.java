@@ -331,8 +331,8 @@ public final class Paper26_2CheckpointEncoder implements CheckpointEncoder {
     /** Returns the checkpoint family declared by the matching packet definition. */
     public static CheckpointPacketFamily familyFor(String descriptorTypeName) {
         Objects.requireNonNull(descriptorTypeName, "descriptorTypeName");
-        var definition = dev.voldechse.replayframework.adapter.paper.v26_2.packet
-                .Paper26_2PacketCatalog.catalog().require(descriptorTypeName);
+        var definition = dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound
+                .Paper26_2ClientboundPacketCatalog.catalog().require(descriptorTypeName);
         return definition.checkpointFamily()
                 .map(family -> CheckpointPacketFamily.valueOf(family.name()))
                 .orElseThrow(() -> incompatible(
