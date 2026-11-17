@@ -86,5 +86,28 @@ public interface PlaybackSession {
      *
      * @return stage completed with a closed snapshot
      */
+    /**
+     * Returns every player of the replay with its location at the current
+     * playback position, across all recorded worlds.
+     */
+    java.util.List<RecordedPlayer> recordedPlayers();
+
+    /**
+     * Returns the recorded world the viewer watches. A replay can span several
+     * worlds; the viewer's client shows one of them at a time.
+     */
+    net.kyori.adventure.key.Key viewedWorld();
+
+    /**
+     * Switches the viewer to another recorded world and builds its scene at
+     * the current position, as a seek does. The viewer is not moved: the
+     * caller places the viewer in a world whose dimension matches the
+     * recorded one before switching, because the client applies chunks with
+     * the height of its own dimension.
+     *
+     * @param world a recorded world
+     */
+    CompletionStage<PlaybackSnapshot> viewWorld(net.kyori.adventure.key.Key world);
+
     CompletionStage<PlaybackSnapshot> close();
 }

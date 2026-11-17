@@ -365,8 +365,9 @@ writes as plain text is therefore treated as private.
    budgets, moving coverage, tab-list departures, worlds per frame,
    viewer-centered playback; the compensation logic of the player-view
    source and the old 26.3 adapter are removed.
-3. Observer menu: switch the viewed world and go to a recorded player,
-   later further player details such as the inventory.
+3. Done: observer menu. Playback knows where every recorded player is and
+   can switch the viewed world; the example plugin goes to a player in any
+   world. Next: further player details such as the inventory.
 4. Developer anchors.
 5. Developer API.
 6. Playback scene server and scene-model checkpoints.

@@ -28,19 +28,22 @@ public final class PlaybackHotbar implements AutoCloseable {
     private final JavaPlugin plugin;
     private final ExampleViewerEnvironment environment;
     private final ExampleItemModels models;
+    private final RecordedPlayerMenu playerMenu;
     private final Map<UUID, PlaybackSessionId> activeSessions = new ConcurrentHashMap<>();
     private final AtomicBoolean closed = new AtomicBoolean();
 
     public PlaybackHotbar(
             JavaPlugin plugin,
             ExampleViewerEnvironment environment,
-            ExampleItemModels models) {
+            ExampleItemModels models,
+            RecordedPlayerMenu playerMenu) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.environment = Objects.requireNonNull(environment, "environment");
         this.models = Objects.requireNonNull(models, "models");
+        this.playerMenu = Objects.requireNonNull(playerMenu, "playerMenu");
     }
 
-    /** Installs the six configured controls for one newly opened playback session. */
+    /** Installs the configured controls for one newly opened playback session. */
     public void install(Player player, PlaybackSession session) {
         Objects.requireNonNull(player, "player");
         Objects.requireNonNull(session, "session");
@@ -105,6 +108,7 @@ public final class PlaybackHotbar implements AutoCloseable {
                     case FORWARD -> seek(player, session, Duration.ofSeconds(models.hotbar().forwardSeconds()));
                     case RESTART -> complete(player, session, session.restart());
                     case SPEED_CYCLE -> session.speed(nextSpeed(snapshot.speed()));
+                    case PLAYERS -> playerMenu.open(player, session);
                     case LEAVE -> environment.leave(viewerId).whenComplete((ignored, failure) -> onMain(() -> {
                         if (failure != null) {
                             player.sendMessage(Component.text(
@@ -187,10 +191,12 @@ public final class PlaybackHotbar implements AutoCloseable {
         }
         if (status == PlaybackStatus.BUFFERING) {
             return action == ExampleItemModels.HotbarAction.TOGGLE_PLAY
+                    || action == ExampleItemModels.HotbarAction.PLAYERS
                     || action == ExampleItemModels.HotbarAction.LEAVE;
         }
         return status != PlaybackStatus.ENDED
                 || action == ExampleItemModels.HotbarAction.RESTART
+                || action == ExampleItemModels.HotbarAction.PLAYERS
                 || action == ExampleItemModels.HotbarAction.LEAVE;
     }
 
@@ -217,6 +223,7 @@ public final class PlaybackHotbar implements AutoCloseable {
             case FORWARD -> "Forward " + models.hotbar().forwardSeconds() + "s";
             case RESTART -> "Restart";
             case SPEED_CYCLE -> "Speed " + snapshot.speed().multiplier() + "x";
+            case PLAYERS -> "Players";
             case LEAVE -> "Leave replay";
         };
     }

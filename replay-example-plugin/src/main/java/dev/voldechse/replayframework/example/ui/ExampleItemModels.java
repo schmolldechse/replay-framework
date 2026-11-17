@@ -21,12 +21,15 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.function.Consumer;
 import net.kyori.adventure.text.Component;
+import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.SkullMeta;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -44,6 +47,9 @@ public final class ExampleItemModels {
     /** PDC value containing a browser navigation action. */
     public static final NamespacedKey BROWSER_NAVIGATION_KEY =
             new NamespacedKey("replay_example", "browser_navigation");
+    /** PDC value containing the profile ID of a recorded player. */
+    public static final NamespacedKey RECORDED_PLAYER_ID_KEY =
+            new NamespacedKey("replay_example", "recorded_player_id");
     /** PDC value containing a hotbar control action. */
     public static final NamespacedKey CONTROL_ACTION_KEY =
             new NamespacedKey("replay_example", "control_action");
@@ -183,7 +189,9 @@ public final class ExampleItemModels {
             } catch (RuntimeException failure) {
                 throw invalid(sourcePath, path + ".material is invalid", failure);
             }
-            ExamplePackAsset model = assetForModel(rawItem.model, sourcePath, path + ".model");
+            Optional<ExamplePackAsset> model = rawItem.model == null
+                    ? Optional.empty()
+                    : Optional.of(assetForModel(rawItem.model, sourcePath, path + ".model"));
             Optional<ExamplePackAsset> alternateModel = rawItem.alternateModel == null
                     ? Optional.empty()
                     : Optional.of(assetForModel(
@@ -393,6 +401,39 @@ public final class ExampleItemModels {
                         summary.replayId().toString()));
     }
 
+    /** Returns the recorded player's profile ID on a recorded-player menu item. */
+    public Optional<UUID> recordedPlayerId(ItemStack item) {
+        if (item == null || item.getType() != Material.PLAYER_HEAD || item.getItemMeta() == null) {
+            return Optional.empty();
+        }
+        String value = item.getItemMeta().getPersistentDataContainer().get(
+                RECORDED_PLAYER_ID_KEY, PersistentDataType.STRING);
+        if (value == null) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(UUID.fromString(value));
+        } catch (IllegalArgumentException ignored) {
+            return Optional.empty();
+        }
+    }
+
+    /** Creates one recorded-player menu item: the player's head with its profile ID. */
+    public ItemStack recordedPlayerItem(
+            UUID playerId, String playerName, Component displayName, List<Component> lore) {
+        Objects.requireNonNull(playerId, "playerId");
+        Objects.requireNonNull(playerName, "playerName");
+        return createItem(Material.PLAYER_HEAD, null, displayName, lore, meta -> {
+            if (meta instanceof SkullMeta skull) {
+                // Name and ID only: the head shows the default skin and the
+                // server never looks the profile up.
+                skull.setPlayerProfile(Bukkit.createProfile(playerId, playerName));
+            }
+            meta.getPersistentDataContainer().set(
+                    RECORDED_PLAYER_ID_KEY, PersistentDataType.STRING, playerId.toString());
+        });
+    }
+
     /** Creates one browser navigation item. */
     public ItemStack navigationItem(
             String navigation, Material material, Component displayName, List<Component> lore) {
@@ -412,7 +453,7 @@ public final class ExampleItemModels {
             Component displayName,
             List<Component> lore) {
         ItemDefinition definition = item(action);
-        ExamplePackAsset model = definition.modelFor(playing, speed);
+        ExamplePackAsset model = definition.modelFor(playing, speed).orElse(null);
         return createItem(definition.material(), model, displayName, lore, meta ->
                 meta.getPersistentDataContainer().set(
                         CONTROL_ACTION_KEY, PersistentDataType.STRING, action.name()));
@@ -499,12 +540,15 @@ public final class ExampleItemModels {
         }
     }
 
-    /** One immutable configured hotbar item. */
+    /**
+     * One immutable configured hotbar item. Without a model the item keeps
+     * the look of its material.
+     */
     public record ItemDefinition(
             HotbarAction action,
             int slot,
             Material material,
-            ExamplePackAsset model,
+            Optional<ExamplePackAsset> model,
             Optional<ExamplePackAsset> alternateModel,
             Map<PlaybackSpeed, ExamplePackAsset> speedModels) {
         /** Defensively copies optional model mappings. */
@@ -516,12 +560,12 @@ public final class ExampleItemModels {
             speedModels = Map.copyOf(Objects.requireNonNull(speedModels, "speedModels"));
         }
 
-        private ExamplePackAsset modelFor(boolean playing, PlaybackSpeed speed) {
-            if (action == HotbarAction.TOGGLE_PLAY && !playing) {
-                return alternateModel.orElse(model);
+        private Optional<ExamplePackAsset> modelFor(boolean playing, PlaybackSpeed speed) {
+            if (action == HotbarAction.TOGGLE_PLAY && !playing && alternateModel.isPresent()) {
+                return alternateModel;
             }
-            if (action == HotbarAction.SPEED_CYCLE) {
-                return speedModels.getOrDefault(speed, model);
+            if (action == HotbarAction.SPEED_CYCLE && speedModels.containsKey(speed)) {
+                return Optional.of(speedModels.get(speed));
             }
             return model;
         }
@@ -539,6 +583,8 @@ public final class ExampleItemModels {
         RESTART,
         /** Cycles through all supported playback speeds. */
         SPEED_CYCLE,
+        /** Opens the menu of the replay's players. */
+        PLAYERS,
         /** Leaves the current viewer environment. */
         LEAVE
     }

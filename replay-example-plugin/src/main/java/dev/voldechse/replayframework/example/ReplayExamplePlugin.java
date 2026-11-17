@@ -13,6 +13,7 @@ import dev.voldechse.replayframework.example.command.ReplayCommand;
 import dev.voldechse.replayframework.example.resourcepack.ExampleResourcePackService;
 import dev.voldechse.replayframework.example.ui.ExampleItemModels;
 import dev.voldechse.replayframework.example.ui.PlaybackHotbar;
+import dev.voldechse.replayframework.example.ui.RecordedPlayerMenu;
 import dev.voldechse.replayframework.example.ui.PlaybackStatusRenderer;
 import dev.voldechse.replayframework.example.ui.ReplayBrowser;
 import dev.voldechse.replayframework.example.ui.ReplayBrowserListener;
@@ -136,7 +137,8 @@ public final class ReplayExamplePlugin extends JavaPlugin {
         try {
             ExampleItemModels models = ExampleItemModels.load(this);
             ExampleViewerEnvironment createdEnvironment = createViewerEnvironment(framework, models);
-            PlaybackHotbar hotbar = new PlaybackHotbar(this, createdEnvironment, models);
+            RecordedPlayerMenu playerMenu = new RecordedPlayerMenu(this, createdEnvironment, models);
+            PlaybackHotbar hotbar = new PlaybackHotbar(this, createdEnvironment, models, playerMenu);
             playbackHotbar = hotbar;
             PlaybackStatusRenderer renderer = new PlaybackStatusRenderer(
                     this, framework.events(), createdEnvironment, hotbar);
@@ -150,7 +152,7 @@ public final class ReplayExamplePlugin extends JavaPlugin {
                     renderer);
             replayBrowser = browser;
             ReplayBrowserListener listener = new ReplayBrowserListener(
-                    this, browser, hotbar, renderer, createdEnvironment, models);
+                    this, browser, hotbar, renderer, createdEnvironment, models, playerMenu);
             browserListener = listener;
             listener.register();
 

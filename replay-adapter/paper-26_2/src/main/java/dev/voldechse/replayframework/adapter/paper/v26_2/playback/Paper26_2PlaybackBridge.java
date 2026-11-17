@@ -57,6 +57,7 @@ public final class Paper26_2PlaybackBridge implements PlaybackBridge {
     private boolean outboundDrainScheduled;
     /** The recorded world the viewer watches; only its frames are sent. */
     private final AtomicReference<String> viewedWorld = new AtomicReference<>();
+    private final Paper26_2PlaybackPlayerTracker players = new Paper26_2PlaybackPlayerTracker();
 
     /**
      * Opens one channel-local playback boundary and schedules gate
@@ -199,6 +200,7 @@ public final class Paper26_2PlaybackBridge implements PlaybackBridge {
 
         enqueueOutbound(() -> {
             resetter.reset();
+            players.clear();
             Paper26_2ReplayPacketRewriter currentRewriter = rewriter.get();
             if (currentRewriter != null) {
                 currentRewriter.resetView();
@@ -254,6 +256,16 @@ public final class Paper26_2PlaybackBridge implements PlaybackBridge {
     @Override
     public void viewWorld(String recordedWorld) {
         viewedWorld.set(Objects.requireNonNull(recordedWorld, "recordedWorld"));
+    }
+
+    @Override
+    public java.util.Optional<String> viewedWorld() {
+        return java.util.Optional.ofNullable(viewedWorld.get());
+    }
+
+    @Override
+    public List<dev.voldechse.replayframework.api.playback.RecordedPlayer> recordedPlayers() {
+        return players.players();
     }
 
     private void gateReady() {
@@ -383,6 +395,12 @@ public final class Paper26_2PlaybackBridge implements PlaybackBridge {
         if (isTerminal()) {
             return;
         }
+        PacketDescriptor descriptor = registry.find(
+                        frame.phase(), PacketDescriptor.Direction.CLIENTBOUND, frame.packetId())
+                .orElseThrow(() -> incompatible(
+                        "replay packet descriptor disappeared from the verified registry", null));
+        // Players are followed in every world, before the world filter.
+        players.observe(frame, descriptor.typeName(), codec::decode);
         // A client can only apply packets of the world it is in; a chunk of
         // another dimension has a different height and breaks the connection.
         String world = viewedWorld.get();
@@ -393,10 +411,6 @@ public final class Paper26_2PlaybackBridge implements PlaybackBridge {
         if (currentRewriter == null) {
             throw incompatible("Paper playback identity context is not bound", null);
         }
-        PacketDescriptor descriptor = registry.find(
-                        frame.phase(), PacketDescriptor.Direction.CLIENTBOUND, frame.packetId())
-                .orElseThrow(() -> incompatible(
-                        "replay packet descriptor disappeared from the verified registry", null));
         Paper26_2ReplayPacketRewriter.RewriteResult result = currentRewriter.rewrite(
                 frame, descriptor, codec);
         if (result.decision() == Paper26_2ReplayPacketRewriter.RewriteResult.Decision.FAIL) {

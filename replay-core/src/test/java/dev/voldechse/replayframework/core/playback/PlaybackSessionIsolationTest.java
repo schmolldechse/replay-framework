@@ -258,6 +258,23 @@ final class PlaybackSessionIsolationTest {
     }
 
     @Test
+    void viewingAnotherWorldRebuildsTheViewAtTheSamePosition() {
+        TrackingBridge bridge = new TrackingBridge();
+        PlaybackTimeline timeline = timeline(new TrackingPlaybackData(), bridge);
+        timeline.prepare().toCompletableFuture().join();
+        timeline.seekTo(Duration.ofSeconds(5L)).toCompletableFuture().join();
+        int resets = bridge.resetCount.get();
+
+        PlaybackSnapshot snapshot = timeline.viewWorld(net.kyori.adventure.key.Key.key("minecraft:the_nether"))
+                .toCompletableFuture().join();
+
+        assertEquals(Duration.ofSeconds(5L), snapshot.position());
+        assertEquals(net.kyori.adventure.key.Key.key("minecraft:the_nether"), timeline.viewedWorld());
+        assertEquals(resets + 1, bridge.resetCount.get());
+        timeline.closeAsync().toCompletableFuture().join();
+    }
+
+    @Test
     void sessionsKeepTimelineStateAndResourcesIndependent() {
         PlaybackCoordinator coordinator = new PlaybackCoordinator();
         TrackingPlaybackData firstData = new TrackingPlaybackData();
@@ -385,6 +402,21 @@ final class PlaybackSessionIsolationTest {
 
             @Override
             public CompletionStage<PlaybackSnapshot> seekBy(Duration delta) {
+                return CompletableFuture.completedFuture(snapshot);
+            }
+
+            @Override
+            public List<dev.voldechse.replayframework.api.playback.RecordedPlayer> recordedPlayers() {
+                return List.of();
+            }
+
+            @Override
+            public net.kyori.adventure.key.Key viewedWorld() {
+                return net.kyori.adventure.key.Key.key("minecraft:overworld");
+            }
+
+            @Override
+            public CompletionStage<PlaybackSnapshot> viewWorld(net.kyori.adventure.key.Key world) {
                 return CompletableFuture.completedFuture(snapshot);
             }
 
@@ -585,6 +617,18 @@ final class PlaybackSessionIsolationTest {
 
     private static final class TrackingBridge implements PlaybackBridge {
         private final AtomicInteger closeCount = new AtomicInteger();
+        private final AtomicInteger resetCount = new AtomicInteger();
+        private volatile String viewedWorld;
+
+        @Override
+        public void viewWorld(String recordedWorld) {
+            viewedWorld = recordedWorld;
+        }
+
+        @Override
+        public java.util.Optional<String> viewedWorld() {
+            return java.util.Optional.ofNullable(viewedWorld);
+        }
 
         @Override
 
@@ -603,6 +647,7 @@ final class PlaybackSessionIsolationTest {
 
         @Override
         public void resetView() {
+            resetCount.incrementAndGet();
         }
 
         @Override

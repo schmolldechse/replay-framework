@@ -140,6 +140,30 @@ session.close();
 - `restart()` preserves the current play intent.
 - Repeated `close()` calls are idempotent.
 
+## Worlds and recorded players
+
+A recording can span several worlds. Every frame carries its recorded world,
+and a session shows one of them at a time: `viewedWorld()` names it. It
+starts as the world of the placement anchor.
+
+```java
+for (RecordedPlayer player : session.recordedPlayers()) {
+    player.location().ifPresent(location -> { /* world, x, y, z, yaw, pitch */ });
+}
+session.viewWorld(Key.key("minecraft:the_nether"));
+```
+
+- `recordedPlayers()` lists every player the replay knows at the current
+  position, sorted by name. A player that is not part of the scene right now,
+  for example after logging out, has no location.
+- `viewWorld(...)` rebuilds the view at the current position from the frames
+  of another recorded world. A client applies chunks with the height of its
+  own dimension, so the caller first places the viewer in a world of the same
+  dimension. The framework never moves the viewer itself.
+
+The example plugin shows one way to do this: it keeps one viewer world per
+dimension and offers a hotbar menu that moves the viewer to a recorded player.
+
 Supported speeds are `QUARTER` (0.25x), `HALF` (0.5x), `NORMAL` (1x),
 `DOUBLE` (2x), and `QUADRUPLE` (4x). Pause is an explicit state, not a
 zero-speed setting.

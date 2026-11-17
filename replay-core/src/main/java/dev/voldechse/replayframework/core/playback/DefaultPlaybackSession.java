@@ -85,6 +85,21 @@ final class DefaultPlaybackSession implements PlaybackSession {
     }
 
     @Override
+    public java.util.List<dev.voldechse.replayframework.api.playback.RecordedPlayer> recordedPlayers() {
+        return timeline.recordedPlayers();
+    }
+
+    @Override
+    public net.kyori.adventure.key.Key viewedWorld() {
+        return timeline.viewedWorld();
+    }
+
+    @Override
+    public CompletionStage<PlaybackSnapshot> viewWorld(net.kyori.adventure.key.Key world) {
+        return timeline.viewWorld(Objects.requireNonNull(world, "world"));
+    }
+
+    @Override
     public CompletionStage<PlaybackSnapshot> close() {
         CompletionStage<PlaybackSnapshot> closeStage = timeline.closeAsync();
         closeStage.whenComplete((ignored, failure) -> release());

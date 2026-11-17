@@ -188,11 +188,15 @@ public final class ViewerProtectionListener implements Listener {
     }
 
     /**
-     * Cancels inventory opens by a protected viewer.
+     * Cancels inventory opens by a protected viewer, except the plugin's own
+     * viewer menus.
      * @param event event being inspected
      */
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
     public void onInventoryOpen(InventoryOpenEvent event) {
+        if (event.getInventory().getHolder(false) instanceof ViewerMenuHolder) {
+            return;
+        }
         cancelIfProtected(event.getPlayer(), event);
     }
 

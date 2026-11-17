@@ -79,6 +79,19 @@ public interface PlaybackBridge {
     default void viewWorld(String recordedWorld) {
     }
 
+    /** Returns the recorded world the viewer watches, when one was chosen. */
+    default java.util.Optional<String> viewedWorld() {
+        return java.util.Optional.empty();
+    }
+
+    /**
+     * Returns the players of the replay at the current playback position,
+     * across all recorded worlds. The default bridge knows none.
+     */
+    default java.util.List<dev.voldechse.replayframework.api.playback.RecordedPlayer> recordedPlayers() {
+        return java.util.List.of();
+    }
+
     /**
      * Completes after all previously queued view packets have been processed
      * by the adapter and flushed to the viewer connection.

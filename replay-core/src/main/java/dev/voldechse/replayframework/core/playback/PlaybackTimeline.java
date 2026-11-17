@@ -353,6 +353,26 @@ final class PlaybackTimeline implements AutoCloseable {
         return seek(Duration.ZERO);
     }
 
+    java.util.List<dev.voldechse.replayframework.api.playback.RecordedPlayer> recordedPlayers() {
+        return bridge.recordedPlayers();
+    }
+
+    net.kyori.adventure.key.Key viewedWorld() {
+        return bridge.viewedWorld()
+                .map(net.kyori.adventure.key.Key::key)
+                .orElseThrow(() -> new IllegalStateException("playback has no viewed world"));
+    }
+
+    /**
+     * Switches the recorded world the viewer watches and builds its scene at
+     * the current position. A seek to the current position is never
+     * incremental, so it resets the view first.
+     */
+    CompletionStage<PlaybackSnapshot> viewWorld(net.kyori.adventure.key.Key world) {
+        bridge.viewWorld(world.asString());
+        return seekBy(Duration.ZERO);
+    }
+
     CompletionStage<PlaybackSnapshot> seekTo(Duration position) {
         Objects.requireNonNull(position, "position");
         return seek(position);
