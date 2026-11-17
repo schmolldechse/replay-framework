@@ -1,0 +1,837 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1140 560" width="1140" height="560" role="img" aria-labelledby="t d">
+<title id="t">Tracks of a recording during playback</title>
+<desc id="d">Five tracks over two and a half minutes with checkpoints at every 30-second barrier. Tracks created later have empty checkpoints before their first packet. A viewer watching the nether seeks to 1:45: the timeline reads checkpoint 3 and the frames up to 1:45 of the global and the nether track. The overworld track is scanned for players only when the player list is requested, the state track of player A only when its state is requested, and the donkey's state track is not read.</desc>
+<style>
+  svg { --bg:#ffffff; --panel:#f6f8fa; --fg:#1f2328; --muted:#59636e; --grid:#d1d9e0; --on:#ffffff;
+        --blue:#0969da; --blue-fill:#ddf4ff; --amber:#9a6700; --amber-fill:#fff8c5;
+        --pink:#bf3989; --pink-fill:#ffeff7; --muted-fill:#f6f8fa; --tick:#8c959f; }
+  @media (prefers-color-scheme: dark) {
+    svg { --bg:#0d1117; --panel:#151b23; --fg:#f0f6fc; --muted:#9198a1; --grid:#3d444d; --on:#0d1117;
+          --blue:#4493f8; --blue-fill:#0f2445; --amber:#d29922; --amber-fill:#272115;
+          --pink:#f778ba; --pink-fill:#3a1b2c; --muted-fill:#151b23; --tick:#656c76; }
+  }
+  text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif; fill: var(--fg); }
+  .bg { fill: var(--bg); }
+  .panel { fill: var(--panel); stroke: var(--grid); }
+  .title { font-size: 20px; font-weight: 600; }
+  .sub { font-size: 13px; fill: var(--muted); }
+  .lane-t { font-size: 13px; font-weight: 600; }
+  .m { font-size: 12px; fill: var(--muted); }
+  .tick-t { font-size: 11px; fill: var(--muted); font-variant-numeric: tabular-nums; }
+  .barrier { stroke: var(--grid); stroke-width: 1; }
+  .frame { stroke: var(--tick); stroke-width: 1.4; }
+  .base { stroke: var(--grid); stroke-width: 1; }
+  .cp { stroke-width: 2; }
+  .playhead { stroke: var(--pink); stroke-width: 2; }
+  .role { font-size: 12px; font-weight: 600; }
+</style>
+
+<rect class="bg" width="1140" height="560" rx="12"/>
+<text class="title" x="32" y="42">Tracks during playback</text>
+<text class="sub" x="32" y="66">A viewer in the nether seeks to 1:45. Every track has a checkpoint at each barrier; playback reads only the tracks it needs.</text>
+<line class="barrier" x1="270" y1="102" x2="270" y2="392"/>
+<text class="tick-t" x="270" y="94" text-anchor="middle">#0  0:00</text>
+<line class="barrier" x1="396" y1="102" x2="396" y2="392"/>
+<text class="tick-t" x="396" y="94" text-anchor="middle">#1  0:30</text>
+<line class="barrier" x1="522" y1="102" x2="522" y2="392"/>
+<text class="tick-t" x="522" y="94" text-anchor="middle">#2  1:00</text>
+<line class="barrier" x1="648" y1="102" x2="648" y2="392"/>
+<text class="tick-t" x="648" y="94" text-anchor="middle">#3  1:30</text>
+<line class="barrier" x1="774" y1="102" x2="774" y2="392"/>
+<text class="tick-t" x="774" y="94" text-anchor="middle">#4  2:00</text>
+<g>
+<rect x="648" y="110" width="63" height="42" rx="6" style="fill:var(--blue-fill);stroke:var(--blue);stroke-width:1.2"/>
+<text class="lane-t" x="32" y="128">GLOBAL</text>
+<text class="m" x="32" y="145">track 0 · chat, tab list</text>
+<line class="base" x1="270" y1="131" x2="900" y2="131"/>
+<line class="frame" x1="271.7" y1="123" x2="271.7" y2="139"/>
+<line class="frame" x1="285.4" y1="123" x2="285.4" y2="139"/>
+<line class="frame" x1="287.1" y1="121" x2="287.1" y2="141"/>
+<line class="frame" x1="291.3" y1="124" x2="291.3" y2="138"/>
+<line class="frame" x1="306.6" y1="125" x2="306.6" y2="137"/>
+<line class="frame" x1="307.8" y1="118" x2="307.8" y2="144"/>
+<line class="frame" x1="334.4" y1="121" x2="334.4" y2="141"/>
+<line class="frame" x1="360.7" y1="123" x2="360.7" y2="139"/>
+<line class="frame" x1="367.1" y1="125" x2="367.1" y2="137"/>
+<line class="frame" x1="367.8" y1="122" x2="367.8" y2="140"/>
+<line class="frame" x1="375.8" y1="120" x2="375.8" y2="142"/>
+<line class="frame" x1="396.2" y1="119" x2="396.2" y2="143"/>
+<line class="frame" x1="409.4" y1="124" x2="409.4" y2="138"/>
+<line class="frame" x1="421.3" y1="125" x2="421.3" y2="137"/>
+<line class="frame" x1="423.6" y1="125" x2="423.6" y2="137"/>
+<line class="frame" x1="439.5" y1="123" x2="439.5" y2="139"/>
+<line class="frame" x1="489.6" y1="125" x2="489.6" y2="137"/>
+<line class="frame" x1="494.2" y1="123" x2="494.2" y2="139"/>
+<line class="frame" x1="503.7" y1="120" x2="503.7" y2="142"/>
+<line class="frame" x1="508.5" y1="118" x2="508.5" y2="144"/>
+<line class="frame" x1="519.5" y1="118" x2="519.5" y2="144"/>
+<line class="frame" x1="522.8" y1="120" x2="522.8" y2="142"/>
+<line class="frame" x1="530.5" y1="119" x2="530.5" y2="143"/>
+<line class="frame" x1="534.8" y1="118" x2="534.8" y2="144"/>
+<line class="frame" x1="535.6" y1="125" x2="535.6" y2="137"/>
+<line class="frame" x1="545.6" y1="124" x2="545.6" y2="138"/>
+<line class="frame" x1="556.2" y1="123" x2="556.2" y2="139"/>
+<line class="frame" x1="560.4" y1="120" x2="560.4" y2="142"/>
+<line class="frame" x1="581.6" y1="119" x2="581.6" y2="143"/>
+<line class="frame" x1="585.2" y1="124" x2="585.2" y2="138"/>
+<line class="frame" x1="585.4" y1="125" x2="585.4" y2="137"/>
+<line class="frame" x1="601.6" y1="124" x2="601.6" y2="138"/>
+<line class="frame" x1="621.1" y1="120" x2="621.1" y2="142"/>
+<line class="frame" x1="654.8" y1="125" x2="654.8" y2="137"/>
+<line class="frame" x1="657.8" y1="124" x2="657.8" y2="138"/>
+<line class="frame" x1="662.1" y1="120" x2="662.1" y2="142"/>
+<line class="frame" x1="689.6" y1="119" x2="689.6" y2="143"/>
+<line class="frame" x1="695.9" y1="122" x2="695.9" y2="140"/>
+<line class="frame" x1="709.1" y1="117" x2="709.1" y2="145"/>
+<line class="frame" x1="712.5" y1="124" x2="712.5" y2="138"/>
+<line class="frame" x1="716.1" y1="125" x2="716.1" y2="137"/>
+<line class="frame" x1="754.2" y1="119" x2="754.2" y2="143"/>
+<line class="frame" x1="756.7" y1="119" x2="756.7" y2="143"/>
+<line class="frame" x1="761.3" y1="124" x2="761.3" y2="138"/>
+<line class="frame" x1="787.2" y1="125" x2="787.2" y2="137"/>
+<line class="frame" x1="787.7" y1="121" x2="787.7" y2="141"/>
+<line class="frame" x1="807.9" y1="125" x2="807.9" y2="137"/>
+<line class="frame" x1="824.9" y1="123" x2="824.9" y2="139"/>
+<line class="frame" x1="829.9" y1="125" x2="829.9" y2="137"/>
+<line class="frame" x1="846.0" y1="120" x2="846.0" y2="142"/>
+<line class="frame" x1="847.0" y1="124" x2="847.0" y2="138"/>
+<line class="frame" x1="848.0" y1="117" x2="848.0" y2="145"/>
+<line class="frame" x1="849.4" y1="118" x2="849.4" y2="144"/>
+<line class="frame" x1="862.8" y1="125" x2="862.8" y2="137"/>
+<line class="frame" x1="883.5" y1="120" x2="883.5" y2="142"/>
+<line class="frame" x1="899.4" y1="120" x2="899.4" y2="142"/>
+<path class="cp" d="M270 123 l8 8 l-8 8 l-8 -8z" style="fill:var(--fg);stroke:var(--bg)"/>
+<path class="cp" d="M396 123 l8 8 l-8 8 l-8 -8z" style="fill:var(--fg);stroke:var(--bg)"/>
+<path class="cp" d="M522 123 l8 8 l-8 8 l-8 -8z" style="fill:var(--fg);stroke:var(--bg)"/>
+<path class="cp" d="M648 123 l8 8 l-8 8 l-8 -8z" style="fill:var(--fg);stroke:var(--bg)"/>
+<path class="cp" d="M774 123 l8 8 l-8 8 l-8 -8z" style="fill:var(--fg);stroke:var(--bg)"/>
+<text class="role" x="924" y="128" style="fill:var(--blue)">timeline</text>
+<text class="m" x="924" y="145">sent to the viewer</text>
+</g>
+<g>
+<rect x="648" y="168" width="63" height="42" rx="6" style="fill:var(--amber-fill);stroke:var(--amber);stroke-width:1.2"/>
+<text class="lane-t" x="32" y="186">WORLD minecraft:overworld</text>
+<text class="m" x="32" y="203">track 1</text>
+<line class="base" x1="270" y1="189" x2="900" y2="189"/>
+<line class="frame" x1="271.7" y1="180" x2="271.7" y2="198"/>
+<line class="frame" x1="272.2" y1="182" x2="272.2" y2="196"/>
+<line class="frame" x1="274.3" y1="178" x2="274.3" y2="200"/>
+<line class="frame" x1="275.1" y1="175" x2="275.1" y2="203"/>
+<line class="frame" x1="275.2" y1="180" x2="275.2" y2="198"/>
+<line class="frame" x1="276.0" y1="177" x2="276.0" y2="201"/>
+<line class="frame" x1="279.6" y1="175" x2="279.6" y2="203"/>
+<line class="frame" x1="281.6" y1="181" x2="281.6" y2="197"/>
+<line class="frame" x1="282.6" y1="183" x2="282.6" y2="195"/>
+<line class="frame" x1="283.2" y1="180" x2="283.2" y2="198"/>
+<line class="frame" x1="283.8" y1="183" x2="283.8" y2="195"/>
+<line class="frame" x1="284.3" y1="180" x2="284.3" y2="198"/>
+<line class="frame" x1="287.2" y1="183" x2="287.2" y2="195"/>
+<line class="frame" x1="287.7" y1="181" x2="287.7" y2="197"/>
+<line class="frame" x1="289.3" y1="176" x2="289.3" y2="202"/>
+<line class="frame" x1="291.9" y1="182" x2="291.9" y2="196"/>
+<line class="frame" x1="293.2" y1="179" x2="293.2" y2="199"/>
+<line class="frame" x1="296.4" y1="178" x2="296.4" y2="200"/>
+<line class="frame" x1="298.6" y1="175" x2="298.6" y2="203"/>
+<line class="frame" x1="298.9" y1="182" x2="298.9" y2="196"/>
+<line class="frame" x1="299.0" y1="177" x2="299.0" y2="201"/>
+<line class="frame" x1="299.5" y1="180" x2="299.5" y2="198"/>
+<line class="frame" x1="300.8" y1="177" x2="300.8" y2="201"/>
+<line class="frame" x1="302.0" y1="180" x2="302.0" y2="198"/>
+<line class="frame" x1="302.3" y1="179" x2="302.3" y2="199"/>
+<line class="frame" x1="304.0" y1="178" x2="304.0" y2="200"/>
+<line class="frame" x1="304.8" y1="176" x2="304.8" y2="202"/>
+<line class="frame" x1="306.4" y1="182" x2="306.4" y2="196"/>
+<line class="frame" x1="307.9" y1="175" x2="307.9" y2="203"/>
+<line class="frame" x1="310.0" y1="177" x2="310.0" y2="201"/>
+<line class="frame" x1="311.6" y1="177" x2="311.6" y2="201"/>
+<line class="frame" x1="312.4" y1="177" x2="312.4" y2="201"/>
+<line class="frame" x1="313.0" y1="183" x2="313.0" y2="195"/>
+<line class="frame" x1="315.1" y1="175" x2="315.1" y2="203"/>
+<line class="frame" x1="316.6" y1="178" x2="316.6" y2="200"/>
+<line class="frame" x1="317.8" y1="175" x2="317.8" y2="203"/>
+<line class="frame" x1="318.0" y1="177" x2="318.0" y2="201"/>
+<line class="frame" x1="319.2" y1="178" x2="319.2" y2="200"/>
+<line class="frame" x1="319.7" y1="180" x2="319.7" y2="198"/>
+<line class="frame" x1="320.6" y1="181" x2="320.6" y2="197"/>
+<line class="frame" x1="321.5" y1="180" x2="321.5" y2="198"/>
+<line class="frame" x1="322.5" y1="176" x2="322.5" y2="202"/>
+<line class="frame" x1="323.3" y1="175" x2="323.3" y2="203"/>
+<line class="frame" x1="323.6" y1="178" x2="323.6" y2="200"/>
+<line class="frame" x1="324.6" y1="182" x2="324.6" y2="196"/>
+<line class="frame" x1="324.9" y1="175" x2="324.9" y2="203"/>
+<line class="frame" x1="325.3" y1="181" x2="325.3" y2="197"/>
+<line class="frame" x1="325.9" y1="182" x2="325.9" y2="196"/>
+<line class="frame" x1="329.3" y1="183" x2="329.3" y2="195"/>
+<line class="frame" x1="330.0" y1="176" x2="330.0" y2="202"/>
+<line class="frame" x1="331.0" y1="176" x2="331.0" y2="202"/>
+<line class="frame" x1="331.2" y1="175" x2="331.2" y2="203"/>
+<line class="frame" x1="331.9" y1="178" x2="331.9" y2="200"/>
+<line class="frame" x1="332.2" y1="179" x2="332.2" y2="199"/>
+<line class="frame" x1="332.8" y1="176" x2="332.8" y2="202"/>
+<line class="frame" x1="335.2" y1="182" x2="335.2" y2="196"/>
+<line class="frame" x1="335.7" y1="177" x2="335.7" y2="201"/>
+<line class="frame" x1="336.3" y1="182" x2="336.3" y2="196"/>
+<line class="frame" x1="336.4" y1="180" x2="336.4" y2="198"/>
+<line class="frame" x1="342.1" y1="178" x2="342.1" y2="200"/>
+<line class="frame" x1="353.0" y1="182" x2="353.0" y2="196"/>
+<line class="frame" x1="355.6" y1="176" x2="355.6" y2="202"/>
+<line class="frame" x1="356.6" y1="179" x2="356.6" y2="199"/>
+<line class="frame" x1="359.1" y1="183" x2="359.1" y2="195"/>
+<line class="frame" x1="360.1" y1="183" x2="360.1" y2="195"/>
+<line class="frame" x1="364.6" y1="181" x2="364.6" y2="197"/>
+<line class="frame" x1="365.9" y1="181" x2="365.9" y2="197"/>
+<line class="frame" x1="367.0" y1="183" x2="367.0" y2="195"/>
+<line class="frame" x1="368.1" y1="180" x2="368.1" y2="198"/>
+<line class="frame" x1="368.8" y1="178" x2="368.8" y2="200"/>
+<line class="frame" x1="369.2" y1="176" x2="369.2" y2="202"/>
+<line class="frame" x1="369.9" y1="175" x2="369.9" y2="203"/>
+<line class="frame" x1="371.8" y1="181" x2="371.8" y2="197"/>
+<line class="frame" x1="378.2" y1="178" x2="378.2" y2="200"/>
+<line class="frame" x1="378.3" y1="181" x2="378.3" y2="197"/>
+<line class="frame" x1="382.0" y1="176" x2="382.0" y2="202"/>
+<line class="frame" x1="382.1" y1="183" x2="382.1" y2="195"/>
+<line class="frame" x1="382.1" y1="177" x2="382.1" y2="201"/>
+<line class="frame" x1="382.8" y1="180" x2="382.8" y2="198"/>
+<line class="frame" x1="391.1" y1="179" x2="391.1" y2="199"/>
+<line class="frame" x1="391.4" y1="180" x2="391.4" y2="198"/>
+<line class="frame" x1="393.8" y1="178" x2="393.8" y2="200"/>
+<line class="frame" x1="396.3" y1="183" x2="396.3" y2="195"/>
+<line class="frame" x1="397.1" y1="177" x2="397.1" y2="201"/>
+<line class="frame" x1="399.4" y1="181" x2="399.4" y2="197"/>
+<line class="frame" x1="399.7" y1="180" x2="399.7" y2="198"/>
+<line class="frame" x1="407.2" y1="178" x2="407.2" y2="200"/>
+<line class="frame" x1="407.8" y1="182" x2="407.8" y2="196"/>
+<line class="frame" x1="408.8" y1="176" x2="408.8" y2="202"/>
+<line class="frame" x1="409.2" y1="183" x2="409.2" y2="195"/>
+<line class="frame" x1="410.1" y1="179" x2="410.1" y2="199"/>
+<line class="frame" x1="411.4" y1="182" x2="411.4" y2="196"/>
+<line class="frame" x1="416.1" y1="182" x2="416.1" y2="196"/>
+<line class="frame" x1="416.3" y1="179" x2="416.3" y2="199"/>
+<line class="frame" x1="416.4" y1="181" x2="416.4" y2="197"/>
+<line class="frame" x1="416.9" y1="180" x2="416.9" y2="198"/>
+<line class="frame" x1="417.5" y1="180" x2="417.5" y2="198"/>
+<line class="frame" x1="418.0" y1="181" x2="418.0" y2="197"/>
+<line class="frame" x1="419.8" y1="181" x2="419.8" y2="197"/>
+<line class="frame" x1="421.1" y1="180" x2="421.1" y2="198"/>
+<line class="frame" x1="422.6" y1="177" x2="422.6" y2="201"/>
+<line class="frame" x1="423.4" y1="176" x2="423.4" y2="202"/>
+<line class="frame" x1="423.6" y1="181" x2="423.6" y2="197"/>
+<line class="frame" x1="426.1" y1="176" x2="426.1" y2="202"/>
+<line class="frame" x1="426.3" y1="179" x2="426.3" y2="199"/>
+<line class="frame" x1="426.6" y1="183" x2="426.6" y2="195"/>
+<line class="frame" x1="429.0" y1="182" x2="429.0" y2="196"/>
+<line class="frame" x1="429.6" y1="178" x2="429.6" y2="200"/>
+<line class="frame" x1="431.0" y1="182" x2="431.0" y2="196"/>
+<line class="frame" x1="435.9" y1="175" x2="435.9" y2="203"/>
+<line class="frame" x1="437.0" y1="183" x2="437.0" y2="195"/>
+<line class="frame" x1="437.5" y1="177" x2="437.5" y2="201"/>
+<line class="frame" x1="438.7" y1="183" x2="438.7" y2="195"/>
+<line class="frame" x1="439.2" y1="181" x2="439.2" y2="197"/>
+<line class="frame" x1="439.9" y1="183" x2="439.9" y2="195"/>
+<line class="frame" x1="440.3" y1="180" x2="440.3" y2="198"/>
+<line class="frame" x1="440.6" y1="179" x2="440.6" y2="199"/>
+<line class="frame" x1="440.7" y1="183" x2="440.7" y2="195"/>
+<line class="frame" x1="441.1" y1="182" x2="441.1" y2="196"/>
+<line class="frame" x1="443.2" y1="181" x2="443.2" y2="197"/>
+<line class="frame" x1="446.0" y1="175" x2="446.0" y2="203"/>
+<line class="frame" x1="446.7" y1="176" x2="446.7" y2="202"/>
+<line class="frame" x1="447.9" y1="177" x2="447.9" y2="201"/>
+<line class="frame" x1="455.4" y1="181" x2="455.4" y2="197"/>
+<line class="frame" x1="457.1" y1="178" x2="457.1" y2="200"/>
+<line class="frame" x1="457.7" y1="182" x2="457.7" y2="196"/>
+<line class="frame" x1="459.9" y1="176" x2="459.9" y2="202"/>
+<line class="frame" x1="462.5" y1="178" x2="462.5" y2="200"/>
+<line class="frame" x1="465.8" y1="177" x2="465.8" y2="201"/>
+<line class="frame" x1="467.3" y1="183" x2="467.3" y2="195"/>
+<line class="frame" x1="467.6" y1="181" x2="467.6" y2="197"/>
+<line class="frame" x1="470.1" y1="178" x2="470.1" y2="200"/>
+<line class="frame" x1="471.3" y1="183" x2="471.3" y2="195"/>
+<line class="frame" x1="473.4" y1="178" x2="473.4" y2="200"/>
+<line class="frame" x1="473.8" y1="179" x2="473.8" y2="199"/>
+<line class="frame" x1="476.4" y1="179" x2="476.4" y2="199"/>
+<line class="frame" x1="476.5" y1="178" x2="476.5" y2="200"/>
+<line class="frame" x1="477.5" y1="181" x2="477.5" y2="197"/>
+<line class="frame" x1="478.9" y1="183" x2="478.9" y2="195"/>
+<line class="frame" x1="485.4" y1="182" x2="485.4" y2="196"/>
+<line class="frame" x1="488.9" y1="175" x2="488.9" y2="203"/>
+<line class="frame" x1="494.2" y1="182" x2="494.2" y2="196"/>
+<line class="frame" x1="494.3" y1="182" x2="494.3" y2="196"/>
+<line class="frame" x1="496.0" y1="179" x2="496.0" y2="199"/>
+<line class="frame" x1="496.7" y1="182" x2="496.7" y2="196"/>
+<line class="frame" x1="497.2" y1="175" x2="497.2" y2="203"/>
+<line class="frame" x1="497.4" y1="182" x2="497.4" y2="196"/>
+<line class="frame" x1="497.5" y1="183" x2="497.5" y2="195"/>
+<line class="frame" x1="497.5" y1="177" x2="497.5" y2="201"/>
+<line class="frame" x1="499.6" y1="182" x2="499.6" y2="196"/>
+<line class="frame" x1="500.0" y1="177" x2="500.0" y2="201"/>
+<line class="frame" x1="500.7" y1="175" x2="500.7" y2="203"/>
+<line class="frame" x1="502.2" y1="183" x2="502.2" y2="195"/>
+<line class="frame" x1="503.4" y1="183" x2="503.4" y2="195"/>
+<line class="frame" x1="504.3" y1="180" x2="504.3" y2="198"/>
+<line class="frame" x1="504.9" y1="176" x2="504.9" y2="202"/>
+<line class="frame" x1="507.0" y1="177" x2="507.0" y2="201"/>
+<line class="frame" x1="508.3" y1="177" x2="508.3" y2="201"/>
+<line class="frame" x1="510.2" y1="181" x2="510.2" y2="197"/>
+<line class="frame" x1="510.4" y1="177" x2="510.4" y2="201"/>
+<line class="frame" x1="510.5" y1="180" x2="510.5" y2="198"/>
+<line class="frame" x1="513.3" y1="181" x2="513.3" y2="197"/>
+<line class="frame" x1="513.7" y1="177" x2="513.7" y2="201"/>
+<line class="frame" x1="515.9" y1="175" x2="515.9" y2="203"/>
+<line class="frame" x1="516.1" y1="176" x2="516.1" y2="202"/>
+<line class="frame" x1="516.9" y1="181" x2="516.9" y2="197"/>
+<line class="frame" x1="518.1" y1="179" x2="518.1" y2="199"/>
+<line class="frame" x1="519.0" y1="183" x2="519.0" y2="195"/>
+<line class="frame" x1="519.2" y1="179" x2="519.2" y2="199"/>
+<line class="frame" x1="525.3" y1="181" x2="525.3" y2="197"/>
+<line class="frame" x1="528.4" y1="176" x2="528.4" y2="202"/>
+<line class="frame" x1="529.2" y1="177" x2="529.2" y2="201"/>
+<line class="frame" x1="530.6" y1="177" x2="530.6" y2="201"/>
+<line class="frame" x1="530.7" y1="179" x2="530.7" y2="199"/>
+<line class="frame" x1="530.8" y1="180" x2="530.8" y2="198"/>
+<line class="frame" x1="531.1" y1="175" x2="531.1" y2="203"/>
+<line class="frame" x1="533.7" y1="179" x2="533.7" y2="199"/>
+<line class="frame" x1="533.8" y1="181" x2="533.8" y2="197"/>
+<line class="frame" x1="535.2" y1="181" x2="535.2" y2="197"/>
+<line class="frame" x1="537.4" y1="178" x2="537.4" y2="200"/>
+<line class="frame" x1="539.2" y1="176" x2="539.2" y2="202"/>
+<line class="frame" x1="540.2" y1="180" x2="540.2" y2="198"/>
+<line class="frame" x1="540.3" y1="177" x2="540.3" y2="201"/>
+<line class="frame" x1="542.5" y1="178" x2="542.5" y2="200"/>
+<line class="frame" x1="542.6" y1="177" x2="542.6" y2="201"/>
+<line class="frame" x1="542.8" y1="183" x2="542.8" y2="195"/>
+<line class="frame" x1="543.4" y1="179" x2="543.4" y2="199"/>
+<line class="frame" x1="543.6" y1="182" x2="543.6" y2="196"/>
+<line class="frame" x1="545.3" y1="180" x2="545.3" y2="198"/>
+<line class="frame" x1="546.3" y1="183" x2="546.3" y2="195"/>
+<line class="frame" x1="549.8" y1="182" x2="549.8" y2="196"/>
+<line class="frame" x1="555.1" y1="177" x2="555.1" y2="201"/>
+<line class="frame" x1="555.3" y1="182" x2="555.3" y2="196"/>
+<line class="frame" x1="556.5" y1="182" x2="556.5" y2="196"/>
+<line class="frame" x1="560.3" y1="175" x2="560.3" y2="203"/>
+<line class="frame" x1="561.5" y1="181" x2="561.5" y2="197"/>
+<line class="frame" x1="561.8" y1="177" x2="561.8" y2="201"/>
+<line class="frame" x1="562.2" y1="180" x2="562.2" y2="198"/>
+<line class="frame" x1="563.3" y1="175" x2="563.3" y2="203"/>
+<line class="frame" x1="570.8" y1="178" x2="570.8" y2="200"/>
+<line class="frame" x1="571.4" y1="178" x2="571.4" y2="200"/>
+<line class="frame" x1="572.0" y1="177" x2="572.0" y2="201"/>
+<line class="frame" x1="573.1" y1="183" x2="573.1" y2="195"/>
+<line class="frame" x1="573.7" y1="177" x2="573.7" y2="201"/>
+<line class="frame" x1="574.9" y1="177" x2="574.9" y2="201"/>
+<line class="frame" x1="576.1" y1="181" x2="576.1" y2="197"/>
+<line class="frame" x1="579.4" y1="180" x2="579.4" y2="198"/>
+<line class="frame" x1="580.8" y1="178" x2="580.8" y2="200"/>
+<line class="frame" x1="581.8" y1="182" x2="581.8" y2="196"/>
+<line class="frame" x1="583.4" y1="180" x2="583.4" y2="198"/>
+<line class="frame" x1="585.0" y1="180" x2="585.0" y2="198"/>
+<line class="frame" x1="585.1" y1="180" x2="585.1" y2="198"/>
+<line class="frame" x1="587.1" y1="177" x2="587.1" y2="201"/>
+<line class="frame" x1="587.3" y1="178" x2="587.3" y2="200"/>
+<line class="frame" x1="587.6" y1="180" x2="587.6" y2="198"/>
+<line class="frame" x1="594.6" y1="182" x2="594.6" y2="196"/>
+<line class="frame" x1="597.4" y1="176" x2="597.4" y2="202"/>
+<line class="frame" x1="600.6" y1="178" x2="600.6" y2="200"/>
+<line class="frame" x1="603.2" y1="178" x2="603.2" y2="200"/>
+<line class="frame" x1="603.5" y1="176" x2="603.5" y2="202"/>
+<line class="frame" x1="603.6" y1="178" x2="603.6" y2="200"/>
+<line class="frame" x1="608.8" y1="183" x2="608.8" y2="195"/>
+<line class="frame" x1="608.9" y1="179" x2="608.9" y2="199"/>
+<line class="frame" x1="613.2" y1="182" x2="613.2" y2="196"/>
+<line class="frame" x1="613.3" y1="180" x2="613.3" y2="198"/>
+<line class="frame" x1="613.4" y1="181" x2="613.4" y2="197"/>
+<line class="frame" x1="615.6" y1="175" x2="615.6" y2="203"/>
+<line class="frame" x1="616.6" y1="182" x2="616.6" y2="196"/>
+<line class="frame" x1="616.9" y1="177" x2="616.9" y2="201"/>
+<line class="frame" x1="618.7" y1="179" x2="618.7" y2="199"/>
+<line class="frame" x1="619.3" y1="183" x2="619.3" y2="195"/>
+<line class="frame" x1="623.0" y1="175" x2="623.0" y2="203"/>
+<line class="frame" x1="623.6" y1="179" x2="623.6" y2="199"/>
+<line class="frame" x1="624.8" y1="178" x2="624.8" y2="200"/>
+<line class="frame" x1="625.0" y1="178" x2="625.0" y2="200"/>
+<line class="frame" x1="628.3" y1="175" x2="628.3" y2="203"/>
+<line class="frame" x1="628.8" y1="177" x2="628.8" y2="201"/>
+<line class="frame" x1="630.8" y1="178" x2="630.8" y2="200"/>
+<line class="frame" x1="632.1" y1="179" x2="632.1" y2="199"/>
+<line class="frame" x1="632.8" y1="182" x2="632.8" y2="196"/>
+<line class="frame" x1="632.8" y1="182" x2="632.8" y2="196"/>
+<line class="frame" x1="635.4" y1="183" x2="635.4" y2="195"/>
+<line class="frame" x1="636.5" y1="175" x2="636.5" y2="203"/>
+<line class="frame" x1="637.5" y1="181" x2="637.5" y2="197"/>
+<line class="frame" x1="639.4" y1="183" x2="639.4" y2="195"/>
+<line class="frame" x1="639.6" y1="182" x2="639.6" y2="196"/>
+<line class="frame" x1="642.1" y1="177" x2="642.1" y2="201"/>
+<line class="frame" x1="644.0" y1="180" x2="644.0" y2="198"/>
+<line class="frame" x1="644.1" y1="178" x2="644.1" y2="200"/>
+<line class="frame" x1="644.8" y1="177" x2="644.8" y2="201"/>
+<line class="frame" x1="645.3" y1="179" x2="645.3" y2="199"/>
+<line class="frame" x1="646.3" y1="182" x2="646.3" y2="196"/>
+<line class="frame" x1="647.3" y1="178" x2="647.3" y2="200"/>
+<line class="frame" x1="649.3" y1="177" x2="649.3" y2="201"/>
+<line class="frame" x1="651.4" y1="183" x2="651.4" y2="195"/>
+<line class="frame" x1="651.5" y1="177" x2="651.5" y2="201"/>
+<line class="frame" x1="651.6" y1="178" x2="651.6" y2="200"/>
+<line class="frame" x1="655.2" y1="175" x2="655.2" y2="203"/>
+<line class="frame" x1="657.9" y1="175" x2="657.9" y2="203"/>
+<line class="frame" x1="658.1" y1="181" x2="658.1" y2="197"/>
+<line class="frame" x1="660.1" y1="182" x2="660.1" y2="196"/>
+<line class="frame" x1="660.9" y1="177" x2="660.9" y2="201"/>
+<line class="frame" x1="665.0" y1="180" x2="665.0" y2="198"/>
+<line class="frame" x1="666.0" y1="177" x2="666.0" y2="201"/>
+<line class="frame" x1="666.2" y1="179" x2="666.2" y2="199"/>
+<line class="frame" x1="667.9" y1="183" x2="667.9" y2="195"/>
+<line class="frame" x1="671.0" y1="178" x2="671.0" y2="200"/>
+<line class="frame" x1="675.9" y1="181" x2="675.9" y2="197"/>
+<line class="frame" x1="676.2" y1="182" x2="676.2" y2="196"/>
+<line class="frame" x1="677.8" y1="178" x2="677.8" y2="200"/>
+<line class="frame" x1="677.9" y1="178" x2="677.9" y2="200"/>
+<line class="frame" x1="678.8" y1="183" x2="678.8" y2="195"/>
+<line class="frame" x1="680.8" y1="179" x2="680.8" y2="199"/>
+<line class="frame" x1="682.2" y1="182" x2="682.2" y2="196"/>
+<line class="frame" x1="684.0" y1="175" x2="684.0" y2="203"/>
+<line class="frame" x1="684.0" y1="183" x2="684.0" y2="195"/>
+<line class="frame" x1="688.3" y1="181" x2="688.3" y2="197"/>
+<line class="frame" x1="693.5" y1="181" x2="693.5" y2="197"/>
+<line class="frame" x1="693.8" y1="182" x2="693.8" y2="196"/>
+<line class="frame" x1="697.8" y1="177" x2="697.8" y2="201"/>
+<line class="frame" x1="698.7" y1="177" x2="698.7" y2="201"/>
+<line class="frame" x1="698.9" y1="182" x2="698.9" y2="196"/>
+<line class="frame" x1="701.0" y1="177" x2="701.0" y2="201"/>
+<line class="frame" x1="703.3" y1="176" x2="703.3" y2="202"/>
+<line class="frame" x1="704.3" y1="177" x2="704.3" y2="201"/>
+<line class="frame" x1="704.5" y1="181" x2="704.5" y2="197"/>
+<line class="frame" x1="704.9" y1="182" x2="704.9" y2="196"/>
+<line class="frame" x1="705.0" y1="177" x2="705.0" y2="201"/>
+<line class="frame" x1="706.7" y1="181" x2="706.7" y2="197"/>
+<line class="frame" x1="709.2" y1="182" x2="709.2" y2="196"/>
+<line class="frame" x1="709.2" y1="176" x2="709.2" y2="202"/>
+<line class="frame" x1="709.5" y1="176" x2="709.5" y2="202"/>
+<line class="frame" x1="709.8" y1="180" x2="709.8" y2="198"/>
+<line class="frame" x1="710.9" y1="177" x2="710.9" y2="201"/>
+<line class="frame" x1="713.9" y1="180" x2="713.9" y2="198"/>
+<line class="frame" x1="714.0" y1="182" x2="714.0" y2="196"/>
+<line class="frame" x1="717.1" y1="178" x2="717.1" y2="200"/>
+<line class="frame" x1="724.3" y1="180" x2="724.3" y2="198"/>
+<line class="frame" x1="734.1" y1="180" x2="734.1" y2="198"/>
+<line class="frame" x1="736.8" y1="175" x2="736.8" y2="203"/>
+<line class="frame" x1="737.2" y1="181" x2="737.2" y2="197"/>
+<line class="frame" x1="737.6" y1="175" x2="737.6" y2="203"/>
+<line class="frame" x1="740.7" y1="182" x2="740.7" y2="196"/>
+<line class="frame" x1="742.5" y1="183" x2="742.5" y2="195"/>
+<line class="frame" x1="743.5" y1="183" x2="743.5" y2="195"/>
+<line class="frame" x1="746.5" y1="181" x2="746.5" y2="197"/>
+<line class="frame" x1="747.9" y1="179" x2="747.9" y2="199"/>
+<line class="frame" x1="750.9" y1="175" x2="750.9" y2="203"/>
+<line class="frame" x1="755.6" y1="181" x2="755.6" y2="197"/>
+<line class="frame" x1="757.7" y1="181" x2="757.7" y2="197"/>
+<line class="frame" x1="759.0" y1="178" x2="759.0" y2="200"/>
+<line class="frame" x1="760.1" y1="176" x2="760.1" y2="202"/>
+<line class="frame" x1="760.2" y1="175" x2="760.2" y2="203"/>
+<line class="frame" x1="761.2" y1="181" x2="761.2" y2="197"/>
+<line class="frame" x1="762.7" y1="182" x2="762.7" y2="196"/>
+<line class="frame" x1="763.8" y1="177" x2="763.8" y2="201"/>
+<line class="frame" x1="765.8" y1="177" x2="765.8" y2="201"/>
+<line class="frame" x1="768.0" y1="182" x2="768.0" y2="196"/>
+<line class="frame" x1="770.7" y1="178" x2="770.7" y2="200"/>
+<line class="frame" x1="772.8" y1="177" x2="772.8" y2="201"/>
+<line class="frame" x1="773.1" y1="178" x2="773.1" y2="200"/>
+<line class="frame" x1="776.0" y1="177" x2="776.0" y2="201"/>
+<line class="frame" x1="777.5" y1="180" x2="777.5" y2="198"/>
+<line class="frame" x1="777.9" y1="179" x2="777.9" y2="199"/>
+<line class="frame" x1="778.2" y1="183" x2="778.2" y2="195"/>
+<line class="frame" x1="779.3" y1="176" x2="779.3" y2="202"/>
+<line class="frame" x1="781.4" y1="179" x2="781.4" y2="199"/>
+<line class="frame" x1="782.6" y1="178" x2="782.6" y2="200"/>
+<line class="frame" x1="784.6" y1="180" x2="784.6" y2="198"/>
+<line class="frame" x1="784.8" y1="178" x2="784.8" y2="200"/>
+<line class="frame" x1="785.2" y1="178" x2="785.2" y2="200"/>
+<line class="frame" x1="785.9" y1="176" x2="785.9" y2="202"/>
+<line class="frame" x1="787.9" y1="177" x2="787.9" y2="201"/>
+<line class="frame" x1="789.1" y1="179" x2="789.1" y2="199"/>
+<line class="frame" x1="789.1" y1="179" x2="789.1" y2="199"/>
+<line class="frame" x1="789.3" y1="179" x2="789.3" y2="199"/>
+<line class="frame" x1="791.4" y1="181" x2="791.4" y2="197"/>
+<line class="frame" x1="791.6" y1="183" x2="791.6" y2="195"/>
+<line class="frame" x1="791.7" y1="175" x2="791.7" y2="203"/>
+<line class="frame" x1="792.5" y1="175" x2="792.5" y2="203"/>
+<line class="frame" x1="793.6" y1="180" x2="793.6" y2="198"/>
+<line class="frame" x1="793.9" y1="175" x2="793.9" y2="203"/>
+<line class="frame" x1="796.6" y1="177" x2="796.6" y2="201"/>
+<line class="frame" x1="798.1" y1="181" x2="798.1" y2="197"/>
+<line class="frame" x1="798.8" y1="177" x2="798.8" y2="201"/>
+<line class="frame" x1="799.9" y1="177" x2="799.9" y2="201"/>
+<line class="frame" x1="800.1" y1="181" x2="800.1" y2="197"/>
+<line class="frame" x1="800.2" y1="175" x2="800.2" y2="203"/>
+<line class="frame" x1="801.5" y1="182" x2="801.5" y2="196"/>
+<line class="frame" x1="802.3" y1="179" x2="802.3" y2="199"/>
+<line class="frame" x1="802.6" y1="182" x2="802.6" y2="196"/>
+<line class="frame" x1="803.2" y1="179" x2="803.2" y2="199"/>
+<line class="frame" x1="804.9" y1="182" x2="804.9" y2="196"/>
+<line class="frame" x1="805.6" y1="182" x2="805.6" y2="196"/>
+<line class="frame" x1="805.6" y1="179" x2="805.6" y2="199"/>
+<line class="frame" x1="808.6" y1="178" x2="808.6" y2="200"/>
+<line class="frame" x1="808.9" y1="183" x2="808.9" y2="195"/>
+<line class="frame" x1="809.1" y1="183" x2="809.1" y2="195"/>
+<line class="frame" x1="811.2" y1="180" x2="811.2" y2="198"/>
+<line class="frame" x1="811.4" y1="177" x2="811.4" y2="201"/>
+<line class="frame" x1="812.4" y1="183" x2="812.4" y2="195"/>
+<line class="frame" x1="815.8" y1="176" x2="815.8" y2="202"/>
+<line class="frame" x1="819.4" y1="180" x2="819.4" y2="198"/>
+<line class="frame" x1="821.8" y1="175" x2="821.8" y2="203"/>
+<line class="frame" x1="823.0" y1="177" x2="823.0" y2="201"/>
+<line class="frame" x1="824.0" y1="180" x2="824.0" y2="198"/>
+<line class="frame" x1="824.1" y1="180" x2="824.1" y2="198"/>
+<line class="frame" x1="826.5" y1="177" x2="826.5" y2="201"/>
+<line class="frame" x1="826.9" y1="177" x2="826.9" y2="201"/>
+<line class="frame" x1="829.1" y1="183" x2="829.1" y2="195"/>
+<line class="frame" x1="829.8" y1="178" x2="829.8" y2="200"/>
+<line class="frame" x1="830.5" y1="177" x2="830.5" y2="201"/>
+<line class="frame" x1="832.2" y1="182" x2="832.2" y2="196"/>
+<line class="frame" x1="834.1" y1="181" x2="834.1" y2="197"/>
+<line class="frame" x1="837.9" y1="178" x2="837.9" y2="200"/>
+<line class="frame" x1="838.9" y1="176" x2="838.9" y2="202"/>
+<line class="frame" x1="839.1" y1="178" x2="839.1" y2="200"/>
+<line class="frame" x1="839.3" y1="175" x2="839.3" y2="203"/>
+<line class="frame" x1="840.8" y1="182" x2="840.8" y2="196"/>
+<line class="frame" x1="842.1" y1="180" x2="842.1" y2="198"/>
+<line class="frame" x1="844.5" y1="175" x2="844.5" y2="203"/>
+<line class="frame" x1="844.7" y1="182" x2="844.7" y2="196"/>
+<line class="frame" x1="845.5" y1="177" x2="845.5" y2="201"/>
+<line class="frame" x1="847.3" y1="177" x2="847.3" y2="201"/>
+<line class="frame" x1="848.6" y1="177" x2="848.6" y2="201"/>
+<line class="frame" x1="848.6" y1="176" x2="848.6" y2="202"/>
+<line class="frame" x1="851.0" y1="176" x2="851.0" y2="202"/>
+<line class="frame" x1="851.2" y1="182" x2="851.2" y2="196"/>
+<line class="frame" x1="851.4" y1="183" x2="851.4" y2="195"/>
+<line class="frame" x1="856.3" y1="176" x2="856.3" y2="202"/>
+<line class="frame" x1="857.3" y1="181" x2="857.3" y2="197"/>
+<line class="frame" x1="860.6" y1="181" x2="860.6" y2="197"/>
+<line class="frame" x1="860.7" y1="176" x2="860.7" y2="202"/>
+<line class="frame" x1="862.2" y1="183" x2="862.2" y2="195"/>
+<line class="frame" x1="863.8" y1="179" x2="863.8" y2="199"/>
+<line class="frame" x1="865.9" y1="176" x2="865.9" y2="202"/>
+<line class="frame" x1="866.3" y1="175" x2="866.3" y2="203"/>
+<line class="frame" x1="867.6" y1="181" x2="867.6" y2="197"/>
+<line class="frame" x1="868.7" y1="178" x2="868.7" y2="200"/>
+<line class="frame" x1="871.2" y1="183" x2="871.2" y2="195"/>
+<line class="frame" x1="871.4" y1="183" x2="871.4" y2="195"/>
+<line class="frame" x1="871.9" y1="182" x2="871.9" y2="196"/>
+<line class="frame" x1="872.2" y1="177" x2="872.2" y2="201"/>
+<line class="frame" x1="874.2" y1="180" x2="874.2" y2="198"/>
+<line class="frame" x1="875.0" y1="181" x2="875.0" y2="197"/>
+<line class="frame" x1="878.0" y1="183" x2="878.0" y2="195"/>
+<line class="frame" x1="878.1" y1="182" x2="878.1" y2="196"/>
+<line class="frame" x1="879.1" y1="175" x2="879.1" y2="203"/>
+<line class="frame" x1="880.3" y1="177" x2="880.3" y2="201"/>
+<line class="frame" x1="881.4" y1="181" x2="881.4" y2="197"/>
+<line class="frame" x1="882.6" y1="175" x2="882.6" y2="203"/>
+<line class="frame" x1="882.7" y1="183" x2="882.7" y2="195"/>
+<line class="frame" x1="883.7" y1="179" x2="883.7" y2="199"/>
+<line class="frame" x1="884.1" y1="176" x2="884.1" y2="202"/>
+<line class="frame" x1="885.4" y1="179" x2="885.4" y2="199"/>
+<line class="frame" x1="885.6" y1="182" x2="885.6" y2="196"/>
+<line class="frame" x1="886.2" y1="180" x2="886.2" y2="198"/>
+<line class="frame" x1="887.8" y1="178" x2="887.8" y2="200"/>
+<line class="frame" x1="892.9" y1="182" x2="892.9" y2="196"/>
+<line class="frame" x1="893.3" y1="176" x2="893.3" y2="202"/>
+<line class="frame" x1="894.2" y1="182" x2="894.2" y2="196"/>
+<line class="frame" x1="895.4" y1="182" x2="895.4" y2="196"/>
+<line class="frame" x1="899.9" y1="180" x2="899.9" y2="198"/>
+<path class="cp" d="M270 181 l8 8 l-8 8 l-8 -8z" style="fill:var(--fg);stroke:var(--bg)"/>
+<path class="cp" d="M396 181 l8 8 l-8 8 l-8 -8z" style="fill:var(--fg);stroke:var(--bg)"/>
+<path class="cp" d="M522 181 l8 8 l-8 8 l-8 -8z" style="fill:var(--fg);stroke:var(--bg)"/>
+<path class="cp" d="M648 181 l8 8 l-8 8 l-8 -8z" style="fill:var(--fg);stroke:var(--bg)"/>
+<path class="cp" d="M774 181 l8 8 l-8 8 l-8 -8z" style="fill:var(--fg);stroke:var(--bg)"/>
+<text class="role" x="924" y="186" style="fill:var(--amber)">recordedPlayers()</text>
+<text class="m" x="924" y="203">scanned, nothing sent</text>
+</g>
+<g>
+<rect x="648" y="226" width="63" height="42" rx="6" style="fill:var(--blue-fill);stroke:var(--blue);stroke-width:1.2"/>
+<text class="lane-t" x="32" y="244">WORLD minecraft:the_nether</text>
+<text class="m" x="32" y="261">track 11</text>
+<line class="base" x1="270" y1="247" x2="900" y2="247"/>
+<line class="frame" x1="586.7" y1="239" x2="586.7" y2="255"/>
+<line class="frame" x1="587.1" y1="240" x2="587.1" y2="254"/>
+<line class="frame" x1="589.6" y1="240" x2="589.6" y2="254"/>
+<line class="frame" x1="590.1" y1="234" x2="590.1" y2="260"/>
+<line class="frame" x1="590.6" y1="234" x2="590.6" y2="260"/>
+<line class="frame" x1="590.7" y1="236" x2="590.7" y2="258"/>
+<line class="frame" x1="596.8" y1="236" x2="596.8" y2="258"/>
+<line class="frame" x1="597.7" y1="235" x2="597.7" y2="259"/>
+<line class="frame" x1="598.5" y1="239" x2="598.5" y2="255"/>
+<line class="frame" x1="599.5" y1="239" x2="599.5" y2="255"/>
+<line class="frame" x1="599.5" y1="236" x2="599.5" y2="258"/>
+<line class="frame" x1="599.9" y1="239" x2="599.9" y2="255"/>
+<line class="frame" x1="603.0" y1="233" x2="603.0" y2="261"/>
+<line class="frame" x1="603.0" y1="234" x2="603.0" y2="260"/>
+<line class="frame" x1="606.1" y1="239" x2="606.1" y2="255"/>
+<line class="frame" x1="608.0" y1="234" x2="608.0" y2="260"/>
+<line class="frame" x1="609.0" y1="235" x2="609.0" y2="259"/>
+<line class="frame" x1="611.2" y1="241" x2="611.2" y2="253"/>
+<line class="frame" x1="614.6" y1="235" x2="614.6" y2="259"/>
+<line class="frame" x1="614.7" y1="238" x2="614.7" y2="256"/>
+<line class="frame" x1="616.9" y1="241" x2="616.9" y2="253"/>
+<line class="frame" x1="617.8" y1="237" x2="617.8" y2="257"/>
+<line class="frame" x1="618.0" y1="237" x2="618.0" y2="257"/>
+<line class="frame" x1="619.0" y1="234" x2="619.0" y2="260"/>
+<line class="frame" x1="619.1" y1="233" x2="619.1" y2="261"/>
+<line class="frame" x1="621.6" y1="233" x2="621.6" y2="261"/>
+<line class="frame" x1="622.9" y1="241" x2="622.9" y2="253"/>
+<line class="frame" x1="624.2" y1="235" x2="624.2" y2="259"/>
+<line class="frame" x1="624.3" y1="238" x2="624.3" y2="256"/>
+<line class="frame" x1="626.5" y1="241" x2="626.5" y2="253"/>
+<line class="frame" x1="627.7" y1="238" x2="627.7" y2="256"/>
+<line class="frame" x1="627.8" y1="235" x2="627.8" y2="259"/>
+<line class="frame" x1="628.7" y1="240" x2="628.7" y2="254"/>
+<line class="frame" x1="631.4" y1="234" x2="631.4" y2="260"/>
+<line class="frame" x1="634.6" y1="238" x2="634.6" y2="256"/>
+<line class="frame" x1="636.4" y1="234" x2="636.4" y2="260"/>
+<line class="frame" x1="637.4" y1="241" x2="637.4" y2="253"/>
+<line class="frame" x1="638.2" y1="236" x2="638.2" y2="258"/>
+<line class="frame" x1="643.9" y1="235" x2="643.9" y2="259"/>
+<line class="frame" x1="644.8" y1="236" x2="644.8" y2="258"/>
+<line class="frame" x1="646.1" y1="240" x2="646.1" y2="254"/>
+<line class="frame" x1="648.9" y1="240" x2="648.9" y2="254"/>
+<line class="frame" x1="653.9" y1="233" x2="653.9" y2="261"/>
+<line class="frame" x1="656.6" y1="240" x2="656.6" y2="254"/>
+<line class="frame" x1="656.8" y1="241" x2="656.8" y2="253"/>
+<line class="frame" x1="657.6" y1="237" x2="657.6" y2="257"/>
+<line class="frame" x1="660.0" y1="236" x2="660.0" y2="258"/>
+<line class="frame" x1="660.4" y1="241" x2="660.4" y2="253"/>
+<line class="frame" x1="660.8" y1="234" x2="660.8" y2="260"/>
+<line class="frame" x1="662.4" y1="235" x2="662.4" y2="259"/>
+<line class="frame" x1="663.2" y1="238" x2="663.2" y2="256"/>
+<line class="frame" x1="664.2" y1="239" x2="664.2" y2="255"/>
+<line class="frame" x1="666.4" y1="235" x2="666.4" y2="259"/>
+<line class="frame" x1="667.3" y1="235" x2="667.3" y2="259"/>
+<line class="frame" x1="667.8" y1="240" x2="667.8" y2="254"/>
+<line class="frame" x1="669.7" y1="237" x2="669.7" y2="257"/>
+<line class="frame" x1="670.0" y1="235" x2="670.0" y2="259"/>
+<line class="frame" x1="674.8" y1="241" x2="674.8" y2="253"/>
+<line class="frame" x1="677.9" y1="241" x2="677.9" y2="253"/>
+<line class="frame" x1="678.8" y1="235" x2="678.8" y2="259"/>
+<line class="frame" x1="684.7" y1="241" x2="684.7" y2="253"/>
+<line class="frame" x1="687.1" y1="239" x2="687.1" y2="255"/>
+<line class="frame" x1="687.8" y1="241" x2="687.8" y2="253"/>
+<line class="frame" x1="690.9" y1="239" x2="690.9" y2="255"/>
+<line class="frame" x1="693.1" y1="240" x2="693.1" y2="254"/>
+<line class="frame" x1="697.7" y1="240" x2="697.7" y2="254"/>
+<line class="frame" x1="698.1" y1="240" x2="698.1" y2="254"/>
+<line class="frame" x1="699.3" y1="237" x2="699.3" y2="257"/>
+<line class="frame" x1="706.8" y1="236" x2="706.8" y2="258"/>
+<line class="frame" x1="707.3" y1="238" x2="707.3" y2="256"/>
+<line class="frame" x1="708.2" y1="240" x2="708.2" y2="254"/>
+<line class="frame" x1="709.6" y1="239" x2="709.6" y2="255"/>
+<line class="frame" x1="711.1" y1="239" x2="711.1" y2="255"/>
+<line class="frame" x1="711.4" y1="236" x2="711.4" y2="258"/>
+<line class="frame" x1="714.7" y1="236" x2="714.7" y2="258"/>
+<line class="frame" x1="716.9" y1="239" x2="716.9" y2="255"/>
+<line class="frame" x1="719.1" y1="234" x2="719.1" y2="260"/>
+<line class="frame" x1="721.5" y1="236" x2="721.5" y2="258"/>
+<line class="frame" x1="722.1" y1="240" x2="722.1" y2="254"/>
+<line class="frame" x1="722.5" y1="234" x2="722.5" y2="260"/>
+<line class="frame" x1="723.2" y1="236" x2="723.2" y2="258"/>
+<line class="frame" x1="724.0" y1="240" x2="724.0" y2="254"/>
+<line class="frame" x1="724.5" y1="233" x2="724.5" y2="261"/>
+<line class="frame" x1="726.9" y1="240" x2="726.9" y2="254"/>
+<line class="frame" x1="728.5" y1="239" x2="728.5" y2="255"/>
+<line class="frame" x1="728.9" y1="238" x2="728.9" y2="256"/>
+<line class="frame" x1="729.9" y1="235" x2="729.9" y2="259"/>
+<line class="frame" x1="732.4" y1="241" x2="732.4" y2="253"/>
+<line class="frame" x1="734.2" y1="241" x2="734.2" y2="253"/>
+<line class="frame" x1="739.5" y1="235" x2="739.5" y2="259"/>
+<line class="frame" x1="741.1" y1="237" x2="741.1" y2="257"/>
+<line class="frame" x1="741.3" y1="241" x2="741.3" y2="253"/>
+<line class="frame" x1="742.2" y1="235" x2="742.2" y2="259"/>
+<line class="frame" x1="745.0" y1="233" x2="745.0" y2="261"/>
+<line class="frame" x1="748.7" y1="234" x2="748.7" y2="260"/>
+<line class="frame" x1="751.0" y1="235" x2="751.0" y2="259"/>
+<line class="frame" x1="755.5" y1="239" x2="755.5" y2="255"/>
+<line class="frame" x1="757.3" y1="236" x2="757.3" y2="258"/>
+<line class="frame" x1="758.4" y1="240" x2="758.4" y2="254"/>
+<line class="frame" x1="759.4" y1="235" x2="759.4" y2="259"/>
+<line class="frame" x1="759.7" y1="237" x2="759.7" y2="257"/>
+<line class="frame" x1="760.1" y1="239" x2="760.1" y2="255"/>
+<line class="frame" x1="761.9" y1="234" x2="761.9" y2="260"/>
+<line class="frame" x1="761.9" y1="234" x2="761.9" y2="260"/>
+<line class="frame" x1="762.7" y1="241" x2="762.7" y2="253"/>
+<line class="frame" x1="765.6" y1="240" x2="765.6" y2="254"/>
+<line class="frame" x1="767.5" y1="238" x2="767.5" y2="256"/>
+<line class="frame" x1="768.6" y1="233" x2="768.6" y2="261"/>
+<line class="frame" x1="769.7" y1="234" x2="769.7" y2="260"/>
+<line class="frame" x1="771.1" y1="234" x2="771.1" y2="260"/>
+<line class="frame" x1="772.2" y1="235" x2="772.2" y2="259"/>
+<line class="frame" x1="772.2" y1="239" x2="772.2" y2="255"/>
+<line class="frame" x1="772.4" y1="241" x2="772.4" y2="253"/>
+<line class="frame" x1="773.3" y1="240" x2="773.3" y2="254"/>
+<line class="frame" x1="773.8" y1="238" x2="773.8" y2="256"/>
+<line class="frame" x1="774.1" y1="233" x2="774.1" y2="261"/>
+<line class="frame" x1="775.9" y1="238" x2="775.9" y2="256"/>
+<line class="frame" x1="776.5" y1="239" x2="776.5" y2="255"/>
+<line class="frame" x1="776.5" y1="241" x2="776.5" y2="253"/>
+<line class="frame" x1="779.2" y1="241" x2="779.2" y2="253"/>
+<line class="frame" x1="779.6" y1="234" x2="779.6" y2="260"/>
+<line class="frame" x1="780.6" y1="236" x2="780.6" y2="258"/>
+<line class="frame" x1="781.1" y1="235" x2="781.1" y2="259"/>
+<line class="frame" x1="781.7" y1="241" x2="781.7" y2="253"/>
+<line class="frame" x1="782.1" y1="236" x2="782.1" y2="258"/>
+<line class="frame" x1="782.5" y1="234" x2="782.5" y2="260"/>
+<line class="frame" x1="783.7" y1="234" x2="783.7" y2="260"/>
+<line class="frame" x1="784.2" y1="241" x2="784.2" y2="253"/>
+<line class="frame" x1="784.3" y1="233" x2="784.3" y2="261"/>
+<line class="frame" x1="786.6" y1="241" x2="786.6" y2="253"/>
+<line class="frame" x1="787.1" y1="240" x2="787.1" y2="254"/>
+<line class="frame" x1="787.6" y1="237" x2="787.6" y2="257"/>
+<line class="frame" x1="787.8" y1="239" x2="787.8" y2="255"/>
+<line class="frame" x1="789.0" y1="234" x2="789.0" y2="260"/>
+<line class="frame" x1="790.4" y1="238" x2="790.4" y2="256"/>
+<line class="frame" x1="791.3" y1="234" x2="791.3" y2="260"/>
+<line class="frame" x1="791.6" y1="233" x2="791.6" y2="261"/>
+<line class="frame" x1="792.4" y1="234" x2="792.4" y2="260"/>
+<line class="frame" x1="792.5" y1="239" x2="792.5" y2="255"/>
+<line class="frame" x1="793.8" y1="237" x2="793.8" y2="257"/>
+<line class="frame" x1="794.4" y1="241" x2="794.4" y2="253"/>
+<line class="frame" x1="796.7" y1="240" x2="796.7" y2="254"/>
+<line class="frame" x1="796.9" y1="233" x2="796.9" y2="261"/>
+<line class="frame" x1="797.4" y1="241" x2="797.4" y2="253"/>
+<line class="frame" x1="805.2" y1="240" x2="805.2" y2="254"/>
+<line class="frame" x1="810.8" y1="234" x2="810.8" y2="260"/>
+<line class="frame" x1="811.5" y1="234" x2="811.5" y2="260"/>
+<line class="frame" x1="811.8" y1="236" x2="811.8" y2="258"/>
+<line class="frame" x1="812.1" y1="238" x2="812.1" y2="256"/>
+<line class="frame" x1="812.4" y1="238" x2="812.4" y2="256"/>
+<line class="frame" x1="812.5" y1="233" x2="812.5" y2="261"/>
+<line class="frame" x1="823.7" y1="237" x2="823.7" y2="257"/>
+<line class="frame" x1="824.4" y1="236" x2="824.4" y2="258"/>
+<line class="frame" x1="824.4" y1="241" x2="824.4" y2="253"/>
+<line class="frame" x1="825.5" y1="241" x2="825.5" y2="253"/>
+<line class="frame" x1="826.0" y1="237" x2="826.0" y2="257"/>
+<line class="frame" x1="826.0" y1="233" x2="826.0" y2="261"/>
+<line class="frame" x1="826.1" y1="235" x2="826.1" y2="259"/>
+<line class="frame" x1="826.9" y1="238" x2="826.9" y2="256"/>
+<line class="frame" x1="827.9" y1="238" x2="827.9" y2="256"/>
+<line class="frame" x1="828.1" y1="235" x2="828.1" y2="259"/>
+<line class="frame" x1="830.9" y1="240" x2="830.9" y2="254"/>
+<line class="frame" x1="832.7" y1="233" x2="832.7" y2="261"/>
+<line class="frame" x1="835.0" y1="237" x2="835.0" y2="257"/>
+<line class="frame" x1="835.2" y1="236" x2="835.2" y2="258"/>
+<line class="frame" x1="836.2" y1="234" x2="836.2" y2="260"/>
+<line class="frame" x1="840.9" y1="241" x2="840.9" y2="253"/>
+<line class="frame" x1="844.3" y1="236" x2="844.3" y2="258"/>
+<line class="frame" x1="845.7" y1="233" x2="845.7" y2="261"/>
+<line class="frame" x1="847.5" y1="238" x2="847.5" y2="256"/>
+<line class="frame" x1="848.3" y1="233" x2="848.3" y2="261"/>
+<line class="frame" x1="848.6" y1="240" x2="848.6" y2="254"/>
+<line class="frame" x1="850.3" y1="237" x2="850.3" y2="257"/>
+<line class="frame" x1="854.0" y1="236" x2="854.0" y2="258"/>
+<line class="frame" x1="857.6" y1="237" x2="857.6" y2="257"/>
+<line class="frame" x1="859.8" y1="239" x2="859.8" y2="255"/>
+<line class="frame" x1="860.0" y1="233" x2="860.0" y2="261"/>
+<line class="frame" x1="861.1" y1="234" x2="861.1" y2="260"/>
+<line class="frame" x1="862.9" y1="239" x2="862.9" y2="255"/>
+<line class="frame" x1="865.1" y1="239" x2="865.1" y2="255"/>
+<line class="frame" x1="870.2" y1="236" x2="870.2" y2="258"/>
+<line class="frame" x1="883.6" y1="239" x2="883.6" y2="255"/>
+<line class="frame" x1="885.4" y1="235" x2="885.4" y2="259"/>
+<line class="frame" x1="889.0" y1="237" x2="889.0" y2="257"/>
+<line class="frame" x1="893.3" y1="234" x2="893.3" y2="260"/>
+<line class="frame" x1="897.8" y1="241" x2="897.8" y2="253"/>
+<line class="frame" x1="897.9" y1="236" x2="897.9" y2="258"/>
+<line class="frame" x1="900.0" y1="235" x2="900.0" y2="259"/>
+<path class="cp" d="M270 239 l8 8 l-8 8 l-8 -8z" style="fill:var(--bg);stroke:var(--muted)"/>
+<path class="cp" d="M396 239 l8 8 l-8 8 l-8 -8z" style="fill:var(--bg);stroke:var(--muted)"/>
+<path class="cp" d="M522 239 l8 8 l-8 8 l-8 -8z" style="fill:var(--bg);stroke:var(--muted)"/>
+<path class="cp" d="M648 239 l8 8 l-8 8 l-8 -8z" style="fill:var(--fg);stroke:var(--bg)"/>
+<path class="cp" d="M774 239 l8 8 l-8 8 l-8 -8z" style="fill:var(--fg);stroke:var(--bg)"/>
+<text class="m" x="585" y="230" text-anchor="middle">first packet</text>
+<text class="role" x="924" y="244" style="fill:var(--blue)">timeline</text>
+<text class="m" x="924" y="261">sent to the viewer</text>
+</g>
+<g>
+<rect x="648" y="284" width="63" height="42" rx="6" style="fill:var(--pink-fill);stroke:var(--pink);stroke-width:1.2"/>
+<text class="lane-t" x="32" y="302">STATE player A</text>
+<text class="m" x="32" y="319">track 3</text>
+<line class="base" x1="270" y1="305" x2="900" y2="305"/>
+<line class="frame" x1="271.7" y1="297" x2="271.7" y2="313"/>
+<line class="frame" x1="282.6" y1="298" x2="282.6" y2="312"/>
+<line class="frame" x1="351.2" y1="293" x2="351.2" y2="317"/>
+<line class="frame" x1="361.0" y1="293" x2="361.0" y2="317"/>
+<line class="frame" x1="372.8" y1="299" x2="372.8" y2="311"/>
+<line class="frame" x1="388.8" y1="294" x2="388.8" y2="316"/>
+<line class="frame" x1="403.3" y1="293" x2="403.3" y2="317"/>
+<line class="frame" x1="406.9" y1="296" x2="406.9" y2="314"/>
+<line class="frame" x1="419.9" y1="299" x2="419.9" y2="311"/>
+<line class="frame" x1="454.4" y1="297" x2="454.4" y2="313"/>
+<line class="frame" x1="455.1" y1="293" x2="455.1" y2="317"/>
+<line class="frame" x1="457.4" y1="294" x2="457.4" y2="316"/>
+<line class="frame" x1="488.2" y1="291" x2="488.2" y2="319"/>
+<line class="frame" x1="491.0" y1="295" x2="491.0" y2="315"/>
+<line class="frame" x1="509.2" y1="294" x2="509.2" y2="316"/>
+<line class="frame" x1="515.5" y1="295" x2="515.5" y2="315"/>
+<line class="frame" x1="517.4" y1="293" x2="517.4" y2="317"/>
+<line class="frame" x1="524.4" y1="299" x2="524.4" y2="311"/>
+<line class="frame" x1="529.2" y1="295" x2="529.2" y2="315"/>
+<line class="frame" x1="573.0" y1="296" x2="573.0" y2="314"/>
+<line class="frame" x1="623.8" y1="296" x2="623.8" y2="314"/>
+<line class="frame" x1="627.5" y1="294" x2="627.5" y2="316"/>
+<line class="frame" x1="644.0" y1="299" x2="644.0" y2="311"/>
+<line class="frame" x1="678.7" y1="299" x2="678.7" y2="311"/>
+<line class="frame" x1="683.5" y1="294" x2="683.5" y2="316"/>
+<line class="frame" x1="685.9" y1="293" x2="685.9" y2="317"/>
+<line class="frame" x1="741.3" y1="295" x2="741.3" y2="315"/>
+<line class="frame" x1="752.8" y1="299" x2="752.8" y2="311"/>
+<line class="frame" x1="755.8" y1="295" x2="755.8" y2="315"/>
+<line class="frame" x1="761.6" y1="297" x2="761.6" y2="313"/>
+<line class="frame" x1="763.8" y1="299" x2="763.8" y2="311"/>
+<line class="frame" x1="793.7" y1="294" x2="793.7" y2="316"/>
+<line class="frame" x1="802.4" y1="293" x2="802.4" y2="317"/>
+<line class="frame" x1="819.7" y1="292" x2="819.7" y2="318"/>
+<line class="frame" x1="853.9" y1="292" x2="853.9" y2="318"/>
+<line class="frame" x1="860.4" y1="293" x2="860.4" y2="317"/>
+<line class="frame" x1="861.0" y1="299" x2="861.0" y2="311"/>
+<line class="frame" x1="877.2" y1="299" x2="877.2" y2="311"/>
+<path class="cp" d="M270 297 l8 8 l-8 8 l-8 -8z" style="fill:var(--fg);stroke:var(--bg)"/>
+<path class="cp" d="M396 297 l8 8 l-8 8 l-8 -8z" style="fill:var(--fg);stroke:var(--bg)"/>
+<path class="cp" d="M522 297 l8 8 l-8 8 l-8 -8z" style="fill:var(--fg);stroke:var(--bg)"/>
+<path class="cp" d="M648 297 l8 8 l-8 8 l-8 -8z" style="fill:var(--fg);stroke:var(--bg)"/>
+<path class="cp" d="M774 297 l8 8 l-8 8 l-8 -8z" style="fill:var(--fg);stroke:var(--bg)"/>
+<text class="role" x="924" y="302" style="fill:var(--pink)">state(player A)</text>
+<text class="m" x="924" y="319">decoded on request</text>
+</g>
+<g opacity=".5">
+<text class="lane-t" x="32" y="360">STATE donkey</text>
+<text class="m" x="32" y="377">track 8</text>
+<line class="base" x1="270" y1="363" x2="900" y2="363"/>
+<line class="frame" x1="439.7" y1="352" x2="439.7" y2="374"/>
+<line class="frame" x1="607.2" y1="355" x2="607.2" y2="371"/>
+<line class="frame" x1="655.4" y1="356" x2="655.4" y2="370"/>
+<line class="frame" x1="665.9" y1="353" x2="665.9" y2="373"/>
+<line class="frame" x1="704.0" y1="350" x2="704.0" y2="376"/>
+<line class="frame" x1="832.4" y1="352" x2="832.4" y2="374"/>
+<line class="frame" x1="837.4" y1="349" x2="837.4" y2="377"/>
+<path class="cp" d="M270 355 l8 8 l-8 8 l-8 -8z" style="fill:var(--bg);stroke:var(--muted)"/>
+<path class="cp" d="M396 355 l8 8 l-8 8 l-8 -8z" style="fill:var(--bg);stroke:var(--muted)"/>
+<path class="cp" d="M522 355 l8 8 l-8 8 l-8 -8z" style="fill:var(--fg);stroke:var(--bg)"/>
+<path class="cp" d="M648 355 l8 8 l-8 8 l-8 -8z" style="fill:var(--fg);stroke:var(--bg)"/>
+<path class="cp" d="M774 355 l8 8 l-8 8 l-8 -8z" style="fill:var(--fg);stroke:var(--bg)"/>
+<text class="m" x="438" y="346" text-anchor="middle">first packet</text>
+<text class="role" x="924" y="360" style="fill:var(--muted)">not read</text>
+</g>
+<line class="playhead" x1="711" y1="100" x2="711" y2="398"/>
+<path d="M704 398 h14 l-7 9z" style="fill:var(--pink)"/>
+<text class="role" x="711" y="424" text-anchor="middle" style="fill:var(--pink)">1:45</text>
+<text class="m" x="679.5" y="424" text-anchor="end" dx="-24">checkpoint #3, then frames up to 1:45</text>
+<rect class="panel" x="24" y="448" width="1092" height="64" rx="10"/>
+<path d="M48 472 l8 8 l-8 8 l-8 -8z" style="fill:var(--fg);stroke:var(--bg);stroke-width:2" transform="translate(8 0)"/>
+<text class="m" x="72" y="484">checkpoint</text>
+<path d="M168 472 l8 8 l-8 8 l-8 -8z" style="fill:var(--bg);stroke:var(--muted);stroke-width:2" transform="translate(8 0)"/>
+<text class="m" x="192" y="484">empty checkpoint, before the track existed</text>
+<line class="frame" x1="476" y1="472" x2="476" y2="488"/>
+<line class="frame" x1="481" y1="475" x2="481" y2="485"/>
+<text class="m" x="492" y="484">frames</text>
+<rect x="568" y="473" width="16" height="14" rx="3" style="fill:var(--blue-fill);stroke:var(--blue)"/>
+<text class="m" x="592" y="484">read by the timeline</text>
+<rect x="732" y="473" width="16" height="14" rx="3" style="fill:var(--amber-fill);stroke:var(--amber)"/>
+<text class="m" x="756" y="484">read for the player list</text>
+<rect x="920.8" y="473" width="16" height="14" rx="3" style="fill:var(--pink-fill);stroke:var(--pink)"/>
+<text class="m" x="944.8" y="484">read for a state query</text>
+</svg>

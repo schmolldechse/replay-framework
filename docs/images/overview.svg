@@ -1,0 +1,150 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1208 420" width="1208" height="420" role="img" aria-labelledby="t d">
+<title id="t">How Replay Framework works</title>
+<desc id="d">Virtual observers and player connections on the Paper server deliver packets. Argus merges them into one scene per world without duplicates. The recording stores them in tracks: one global track, one per world and one per subject. Artifacts go to Local, S3 or SFTP storage with a PostgreSQL catalog. Each viewer plays the replay on an independent timeline with its own position and speed.</desc>
+<style>
+  svg { --bg:#ffffff; --panel:#f6f8fa; --card:#ffffff; --fg:#1f2328; --muted:#59636e; --grid:#d1d9e0; --on:#ffffff;
+        --blue:#0969da; --blue-fill:#ddf4ff; --violet:#8250df; --violet-fill:#fbefff; --green:#1a7f37; --green-fill:#dafbe1;
+        --amber:#9a6700; --amber-fill:#fff8c5; --pink:#bf3989; --pink-fill:#ffeff7; --orange:#bc4c00; --tick:#8c959f; }
+  @media (prefers-color-scheme: dark) {
+    svg { --bg:#0d1117; --panel:#151b23; --card:#0d1117; --fg:#f0f6fc; --muted:#9198a1; --grid:#3d444d; --on:#0d1117;
+          --blue:#4493f8; --blue-fill:#0f2445; --violet:#ab7df8; --violet-fill:#231a3a; --green:#3fb950; --green-fill:#12261e;
+          --amber:#d29922; --amber-fill:#272115; --pink:#f778ba; --pink-fill:#3a1b2c; --orange:#f0883e; --tick:#656c76; }
+  }
+  text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif; fill: var(--fg); }
+  .bg { fill: var(--bg); }
+  .card { fill: var(--panel); stroke: var(--grid); }
+  .step { font-size: 11px; font-weight: 700; letter-spacing: .08em; fill: var(--muted); }
+  .h { font-size: 15px; font-weight: 600; }
+  .m { font-size: 12px; fill: var(--muted); }
+  .s { font-size: 11px; fill: var(--muted); }
+  .arrow { stroke: var(--muted); stroke-width: 2; fill: none; }
+  .chunk { fill: var(--card); stroke: var(--grid); }
+  .tick { stroke: var(--tick); stroke-width: 1.3; }
+  .lane { stroke: var(--grid); }
+  .eye-w { fill: var(--card); stroke: var(--blue); stroke-width: 1.8; }
+  .eye-p { fill: var(--blue); }
+  .person { fill: var(--amber); }
+</style>
+<defs>
+  <marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0L10 5L0 10z" style="fill:var(--muted)"/></marker>
+  <g id="eye"><path class="eye-w" d="M-11 0Q0 -9 11 0Q0 9 -11 0Z"/><circle class="eye-p" r="3.3"/></g>
+  <g id="person"><circle class="person" cx="0" cy="-7" r="4.5"/><path class="person" d="M-7 6 Q-7 -2 0 -2 Q7 -2 7 6Z"/></g>
+</defs>
+
+<rect class="bg" width="1208" height="420" rx="12"/>
+
+<!-- 1 Capture -->
+<rect class="card" x="24" y="24" width="204" height="372" rx="12"/>
+<text class="step" x="44" y="54">1  CAPTURE</text>
+<text class="h" x="44" y="78">Paper server</text>
+<g transform="translate(44 104)">
+  <rect class="chunk" x="0" y="0" width="40" height="40"/><rect class="chunk" x="40" y="0" width="40" height="40"/><rect class="chunk" x="80" y="0" width="40" height="40"/><rect class="chunk" x="120" y="0" width="44" height="40"/>
+  <rect class="chunk" x="0" y="40" width="40" height="40"/><rect class="chunk" x="40" y="40" width="40" height="40"/><rect class="chunk" x="80" y="40" width="40" height="40"/><rect class="chunk" x="120" y="40" width="44" height="40"/>
+  <rect class="chunk" x="0" y="80" width="40" height="40"/><rect class="chunk" x="40" y="80" width="40" height="40"/><rect class="chunk" x="80" y="80" width="40" height="40"/><rect class="chunk" x="120" y="80" width="44" height="40"/>
+  <circle cx="44" cy="58" r="40" style="fill:var(--blue);fill-opacity:.08;stroke:var(--blue);stroke-dasharray:3 3"/>
+  <circle cx="120" cy="62" r="40" style="fill:var(--blue);fill-opacity:.08;stroke:var(--blue);stroke-dasharray:3 3"/>
+  <use href="#eye" x="44" y="58"/>
+  <use href="#eye" x="120" y="62"/>
+  <use href="#person" x="70" y="36"/>
+  <use href="#person" x="140" y="100"/>
+</g>
+<use href="#eye" x="52" y="256"/><text class="m" x="72" y="260">eyes: chunks, entities</text>
+<use href="#person" x="52" y="286"/><text class="m" x="72" y="290">players: sounds, chat</text>
+<text class="s" x="44" y="330">Eyes are virtual observers.</text>
+<text class="s" x="44" y="346">No player, plugin or player</text>
+<text class="s" x="44" y="362">count can see them.</text>
+
+<path class="arrow" d="M232 210 H262" marker-end="url(#ar)"/>
+
+<!-- 2 Merge -->
+<rect class="card" x="268" y="24" width="204" height="372" rx="12"/>
+<text class="step" x="288" y="54">2  MERGE</text>
+<text class="h" x="288" y="78">One scene per world</text>
+<g transform="translate(370 168)">
+  <circle cx="-26" cy="0" r="44" style="fill:var(--blue);fill-opacity:.1;stroke:var(--blue);stroke-width:1.8"/>
+  <circle cx="26" cy="0" r="44" style="fill:var(--violet);fill-opacity:.1;stroke:var(--violet);stroke-width:1.8"/>
+  <rect x="-8" y="-8" width="16" height="16" rx="3" style="fill:var(--amber)"/>
+  <text class="s" x="0" y="64" text-anchor="middle">seen by two eyes</text>
+</g>
+<path class="arrow" d="M370 244 V266" marker-end="url(#ar)"/>
+<g transform="translate(370 292)">
+  <rect x="-62" y="-18" width="124" height="36" rx="18" style="fill:var(--green-fill);stroke:var(--green)"/>
+  <rect x="-48" y="-7" width="14" height="14" rx="3" style="fill:var(--amber)"/>
+  <text x="8" y="5" text-anchor="middle" style="fill:var(--green);font-size:12px;font-weight:600">recorded once</text>
+</g>
+<text class="s" x="288" y="346">Reference counts and object</text>
+<text class="s" x="288" y="362">identity remove every duplicate.</text>
+
+<path class="arrow" d="M476 210 H506" marker-end="url(#ar)"/>
+
+<!-- 3 Tracks -->
+<rect class="card" x="512" y="24" width="204" height="372" rx="12"/>
+<text class="step" x="532" y="54">3  STORE</text>
+<text class="h" x="532" y="78">Tracks</text>
+<g transform="translate(532 108)">
+  <text class="s" x="0" y="4">global</text><line class="lane" x1="64" y1="0" x2="164" y2="0"/>
+  <line class="tick" x1="72" y1="-5" x2="72" y2="5"/><line class="tick" x1="98" y1="-5" x2="98" y2="5"/><line class="tick" x1="140" y1="-5" x2="140" y2="5"/>
+  <text class="s" x="0" y="40">overworld</text><line class="lane" x1="64" y1="36" x2="164" y2="36"/>
+  <path class="tick" d="M68 30v12M71 32v8M75 29v14M79 31v10M83 30v12M88 32v8M92 29v14M96 31v10M101 30v12M105 33v6M109 29v14M114 31v10M118 30v12M122 32v8M127 29v14M131 31v10M135 30v12M140 32v8M144 29v14M149 31v10M153 30v12M158 32v8"/>
+  <text class="s" x="0" y="76" style="fill:var(--orange)">nether</text><line class="lane" x1="64" y1="72" x2="164" y2="72"/>
+  <path class="tick" d="M118 66v12M122 68v8M126 65v14M130 67v10M135 66v12M139 68v8M143 65v14M148 67v10M152 66v12M157 68v8M161 65v14"/>
+  <text class="s" x="0" y="112">player A</text><line class="lane" x1="64" y1="108" x2="164" y2="108"/>
+  <line class="tick" x1="76" y1="103" x2="76" y2="113"/><line class="tick" x1="90" y1="103" x2="90" y2="113"/><line class="tick" x1="121" y1="103" x2="121" y2="113"/><line class="tick" x1="150" y1="103" x2="150" y2="113"/>
+  <text class="s" x="0" y="148">llama</text><line class="lane" x1="64" y1="144" x2="164" y2="144"/>
+  <line class="tick" x1="104" y1="139" x2="104" y2="149"/>
+</g>
+<text class="s" x="532" y="298">Scene by world, private state</text>
+<text class="s" x="532" y="314">by subject. Playback reads only</text>
+<text class="s" x="532" y="330">what the viewer needs.</text>
+
+<path class="arrow" d="M720 210 H750" marker-end="url(#ar)"/>
+
+<!-- 4 Persist -->
+<rect class="card" x="756" y="24" width="204" height="372" rx="12"/>
+<text class="step" x="776" y="54">4  PERSIST</text>
+<text class="h" x="776" y="78">Storage and catalog</text>
+<g transform="translate(822 130)">
+  <path d="M-34 -14 V38 A34 10 0 0 0 34 38 V-14" style="fill:var(--blue-fill);stroke:var(--blue);stroke-width:1.8"/>
+  <ellipse cx="0" cy="-14" rx="34" ry="10" style="fill:var(--blue-fill);stroke:var(--blue);stroke-width:1.8"/>
+  <path d="M-34 12 A34 10 0 0 0 34 12" style="fill:none;stroke:var(--blue);stroke-width:1.2;opacity:.6"/>
+  <text class="s" x="0" y="66" text-anchor="middle">artifacts</text>
+  <text class="s" x="0" y="80" text-anchor="middle">Local · S3 · SFTP</text>
+</g>
+<g transform="translate(906 130)">
+  <path d="M-30 -14 V38 A30 9 0 0 0 30 38 V-14" style="fill:var(--violet-fill);stroke:var(--violet);stroke-width:1.8"/>
+  <ellipse cx="0" cy="-14" rx="30" ry="9" style="fill:var(--violet-fill);stroke:var(--violet);stroke-width:1.8"/>
+  <path d="M-30 12 A30 9 0 0 0 30 12" style="fill:none;stroke:var(--violet);stroke-width:1.2;opacity:.6"/>
+  <text class="s" x="0" y="66" text-anchor="middle">catalog</text>
+  <text class="s" x="0" y="80" text-anchor="middle">PostgreSQL</text>
+</g>
+<g transform="translate(776 248)">
+  <rect x="0" y="0" width="164" height="30" rx="15" style="fill:var(--green-fill);stroke:var(--green)"/>
+  <path d="M16 15 l5 5 l9 -10" style="fill:none;stroke:var(--green);stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round"/>
+  <text x="40" y="20" style="fill:var(--green);font-size:12px;font-weight:600">digests verified</text>
+</g>
+<text class="s" x="776" y="314">A replay becomes AVAILABLE</text>
+<text class="s" x="776" y="330">only after its artifacts are</text>
+<text class="s" x="776" y="346">verified and published.</text>
+
+<path class="arrow" d="M964 210 H994" marker-end="url(#ar)"/>
+
+<!-- 5 Play -->
+<rect class="card" x="1000" y="24" width="184" height="372" rx="12"/>
+<text class="step" x="1020" y="54">5  PLAY</text>
+<text class="h" x="1020" y="78">Viewer timelines</text>
+<g transform="translate(1020 112)">
+  <text class="s" x="0" y="0">viewer 1</text><text class="s" x="144" y="0" text-anchor="end">1×</text>
+  <rect x="0" y="10" width="144" height="8" rx="4" style="fill:var(--grid)"/><rect x="0" y="10" width="48" height="8" rx="4" style="fill:var(--blue)"/><circle cx="48" cy="14" r="6" style="fill:var(--card);stroke:var(--blue);stroke-width:2"/>
+  <text class="s" x="0" y="36">0:42 · overworld</text>
+
+  <text class="s" x="0" y="72">viewer 2</text><text class="s" x="144" y="72" text-anchor="end">4×</text>
+  <rect x="0" y="82" width="144" height="8" rx="4" style="fill:var(--grid)"/><rect x="0" y="82" width="112" height="8" rx="4" style="fill:var(--pink)"/><circle cx="112" cy="86" r="6" style="fill:var(--card);stroke:var(--pink);stroke-width:2"/>
+  <text class="s" x="0" y="108" style="fill:var(--orange)">2:10 · nether</text>
+
+  <text class="s" x="0" y="144">viewer 3</text><text class="s" x="144" y="144" text-anchor="end">paused</text>
+  <rect x="0" y="154" width="144" height="8" rx="4" style="fill:var(--grid)"/><rect x="0" y="154" width="20" height="8" rx="4" style="fill:var(--violet)"/><circle cx="20" cy="158" r="6" style="fill:var(--card);stroke:var(--violet);stroke-width:2"/>
+  <text class="s" x="0" y="180">0:12 · overworld</text>
+</g>
+<text class="s" x="1020" y="330">Own position, speed and</text>
+<text class="s" x="1020" y="346">world for every viewer.</text>
+</svg>

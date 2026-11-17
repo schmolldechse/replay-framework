@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 470" width="1000" height="470" role="img" aria-labelledby="t d">
+<title id="t">Life of a companion eye</title>
+<desc id="d">A player is followed by an eye in the overworld. When the player dies the eye waits at the place of death until the respawn, then follows again. When the player logs out the eye lingers and the returning player gets the same eye back. Through a portal the overworld eye closes and a new eye opens in the nether. When the player logs out there and does not return within the grace period, that eye closes.</desc>
+<style>
+  svg { --bg:#ffffff; --panel:#f6f8fa; --fg:#1f2328; --muted:#59636e; --grid:#d1d9e0; --on:#ffffff;
+        --blue:#0969da; --amber:#bf8700; --violet:#8250df; --red:#cf222e; --nether:#bc4c00; }
+  @media (prefers-color-scheme: dark) {
+    svg { --bg:#0d1117; --panel:#151b23; --fg:#f0f6fc; --muted:#9198a1; --grid:#3d444d; --on:#0d1117;
+          --blue:#4493f8; --amber:#d29922; --violet:#ab7df8; --red:#f85149; --nether:#f0883e; }
+  }
+  text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif; fill: var(--fg); }
+  .bg { fill: var(--bg); }
+  .panel { fill: var(--panel); stroke: var(--grid); }
+  .title { font-size: 20px; font-weight: 600; }
+  .sub { font-size: 13px; fill: var(--muted); }
+  .lane { font-size: 13px; font-weight: 600; }
+  .m { font-size: 12px; fill: var(--muted); }
+  .ev { font-size: 12px; font-weight: 600; }
+  .guide { stroke: var(--grid); stroke-dasharray: 3 4; }
+  .online { stroke: var(--fg); stroke-width: 3; stroke-linecap: round; }
+  .dead { stroke: var(--muted); stroke-width: 3; stroke-dasharray: 2 6; stroke-linecap: round; }
+  .bar-t { fill: var(--on); font-size: 12px; font-weight: 600; }
+  .f { fill: var(--blue); } .w { fill: var(--amber); } .l { fill: var(--violet); }
+  .key-t { font-size: 13px; font-weight: 600; }
+</style>
+
+<rect class="bg" width="1000" height="470" rx="12"/>
+<text class="title" x="32" y="42">Life of a companion eye</text>
+<text class="sub" x="32" y="66">A companion moves with its player but does not share its fate. It stays where the player died or left, so nothing of the scene is lost.</text>
+
+<!-- event guides: t -> x = 180 + t*0.76 -->
+<g>
+  <line class="guide" x1="332" y1="108" x2="332" y2="318"/>
+  <line class="guide" x1="408" y1="108" x2="408" y2="318"/>
+  <line class="guide" x1="499" y1="108" x2="499" y2="318"/>
+  <line class="guide" x1="560" y1="108" x2="560" y2="318"/>
+  <line class="guide" x1="651" y1="108" x2="651" y2="318"/>
+  <line class="guide" x1="758" y1="108" x2="758" y2="318"/>
+  <line class="guide" x1="864" y1="108" x2="864" y2="318"/>
+</g>
+<text class="ev" x="332" y="102" text-anchor="middle">dies</text>
+<text class="ev" x="408" y="102" text-anchor="middle">respawns</text>
+<text class="ev" x="499" y="102" text-anchor="middle">logs out</text>
+<text class="ev" x="560" y="102" text-anchor="middle">returns</text>
+<text class="ev" x="651" y="102" text-anchor="middle" style="fill:var(--nether)">portal</text>
+<text class="ev" x="758" y="102" text-anchor="middle">logs out</text>
+<text class="ev" x="864" y="102" text-anchor="middle" style="fill:var(--red)">grace expires</text>
+
+<!-- Player lane -->
+<text class="lane" x="32" y="146">Player</text>
+<text class="m" x="32" y="164">online, dead, away</text>
+<line class="online" x1="182" y1="148" x2="330" y2="148"/>
+<line class="dead" x1="336" y1="148" x2="404" y2="148"/>
+<line class="online" x1="410" y1="148" x2="497" y2="148"/>
+<line class="online" x1="562" y1="148" x2="649" y2="148"/>
+<line class="online" x1="653" y1="148" x2="756" y2="148" style="stroke:var(--nether)"/>
+<!-- skull -->
+<g transform="translate(332 148)"><circle r="9" style="fill:var(--bg);stroke:var(--fg);stroke-width:2"/><circle cx="-3" cy="-1" r="1.8" style="fill:var(--fg)"/><circle cx="3" cy="-1" r="1.8" style="fill:var(--fg)"/></g>
+<!-- portal -->
+<g transform="translate(651 148)"><rect x="-7" y="-11" width="14" height="22" rx="2" style="fill:var(--violet);stroke:var(--nether);stroke-width:2"/></g>
+
+<!-- Overworld eye lane -->
+<text class="lane" x="32" y="214">Overworld eye</text>
+<text class="m" x="32" y="232">one eye, start to portal</text>
+<rect class="f" x="180" y="206" width="150" height="26" rx="6"/><text class="bar-t" x="255" y="223" text-anchor="middle">following</text>
+<rect class="w" x="334" y="206" width="72" height="26" rx="6"/><text class="bar-t" x="370" y="223" text-anchor="middle">waiting</text>
+<rect class="f" x="410" y="206" width="87" height="26" rx="6"/><text class="bar-t" x="453" y="223" text-anchor="middle">following</text>
+<rect class="l" x="501" y="206" width="57" height="26" rx="6"/><text class="bar-t" x="529" y="223" text-anchor="middle">linger</text>
+<rect class="f" x="562" y="206" width="87" height="26" rx="6"/><text class="bar-t" x="605" y="223" text-anchor="middle">following</text>
+<g transform="translate(651 219)"><circle r="8" style="fill:var(--bg);stroke:var(--fg);stroke-width:2"/><path d="M-3.5 -3.5L3.5 3.5M3.5 -3.5L-3.5 3.5" style="stroke:var(--fg);stroke-width:2;stroke-linecap:round"/></g>
+<text class="m" x="529" y="250" text-anchor="middle">same eye</text>
+<text class="m" x="529" y="264" text-anchor="middle">comes back</text>
+<text class="m" x="370" y="250" text-anchor="middle">at the place</text>
+<text class="m" x="370" y="264" text-anchor="middle">of death</text>
+
+<!-- Nether eye lane -->
+<text class="lane" x="32" y="290" style="fill:var(--nether)">Nether eye</text>
+<text class="m" x="32" y="308">a new eye opens</text>
+<rect class="f" x="653" y="282" width="103" height="26" rx="6"/><text class="bar-t" x="704" y="299" text-anchor="middle">following</text>
+<rect class="l" x="760" y="282" width="102" height="26" rx="6"/><text class="bar-t" x="811" y="299" text-anchor="middle">lingering</text>
+<g transform="translate(864 295)"><circle r="8" style="fill:var(--bg);stroke:var(--red);stroke-width:2"/><path d="M-3.5 -3.5L3.5 3.5M3.5 -3.5L-3.5 3.5" style="stroke:var(--red);stroke-width:2;stroke-linecap:round"/></g>
+<path d="M760 276 L760 270 L862 270 L862 276" fill="none" style="stroke:var(--violet);stroke-width:1.5"/>
+<text class="m" x="811" y="264" text-anchor="middle">grace period, 30 s</text>
+
+<!-- Key -->
+<rect class="panel" x="24" y="338" width="952" height="108" rx="10"/>
+<rect class="f" x="48" y="362" width="14" height="14" rx="3"/>
+<text class="key-t" x="72" y="374">Following</text>
+<text class="m" x="72" y="394">moves to its player every tick</text>
+<text class="m" x="72" y="410">and loads what the player loads</text>
+<rect class="w" x="282" y="362" width="14" height="14" rx="3"/>
+<text class="key-t" x="306" y="374">Waiting</text>
+<text class="m" x="306" y="394">stays at the place of death, so the</text>
+<text class="m" x="306" y="410">death and the dropped items are seen</text>
+<rect class="l" x="530" y="362" width="14" height="14" rx="3"/>
+<text class="key-t" x="554" y="374">Lingering</text>
+<text class="m" x="554" y="394">stays where the player left for the</text>
+<text class="m" x="554" y="410">grace period, then closes</text>
+<g transform="translate(762 369)"><circle r="7" style="fill:var(--bg);stroke:var(--fg);stroke-width:2"/><path d="M-3 -3L3 3M3 -3L-3 3" style="stroke:var(--fg);stroke-width:2;stroke-linecap:round"/></g>
+<text class="key-t" x="778" y="374">Closed</text>
+<text class="m" x="778" y="394">on a world change or when the</text>
+<text class="m" x="778" y="410">grace period expires</text>
+</svg>

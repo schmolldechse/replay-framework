@@ -129,9 +129,15 @@ SFTP secrets into JSON.
 The workspace holds transient recording and publication work. `maxSegmentBytes`
 is the required structural segment limit. `maxSegmentDuration` rotates long
 segments; `checkpointInterval` controls default seek checkpoints; and
-`maxQueueBytes` protects the capture pipeline. The runtime exposes these values
-through `framework.defaults()` so plugin requests can begin from the server
-operator's chosen limits.
+`maxQueueBytes` protects the capture pipeline. Segment limits apply to each
+[track](recording-tracks.md) of a recording separately. The runtime exposes
+these values through `framework.defaults()` so plugin requests can begin from
+the server operator's chosen limits.
+
+Observer behavior, such as the companion grace period and the eye budgets, is
+not part of `config.json`. It is set per recording through
+`RecordingOptions.observers(...)`; see
+[options and budgets](virtual-observer.md#options-and-budgets).
 
 ## Playback resources
 

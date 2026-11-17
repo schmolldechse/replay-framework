@@ -13,9 +13,9 @@ flowchart TD
 
     runtime --> core["replay-core<br/>Recording, playback, metadata, catalog"]
     runtime --> adapterApi["replay-adapter:api<br/>Shared adapter contract"]
-    adapterApi --> paperCommon["paper-common<br/>Packet definitions and policy flow"]
-    paperCommon --> adapter262["paper-26_2<br/>Capture, checkpoints, playback"]
-    runtime --> format["replay-format<br/>Segments, indexes, checkpoints, manifests"]
+    adapterApi --> paperCommon["paper-common<br/>Definition contracts, Argus"]
+    paperCommon --> adapter262["paper-26_2<br/>Definitions, eye, checkpoints, playback"]
+    runtime --> format["replay-format<br/>Tracks, segments, indexes, checkpoints, manifests"]
     runtime --> storage["replay-storage:*<br/>Local, S3, SFTP artifacts"]
     runtime --> database["replay-database:postgresql<br/>Catalog, leases, metadata revisions"]
 
@@ -41,10 +41,11 @@ flowchart TD
     setup -->|yes| register["Register session CaptureSink<br/>(still rejects packets)"]
     register --> recording["Transition catalog to RECORDING<br/>Activate session and writer"]
 
-    recording --> capture["PacketEvents / Paper capture bridge"]
+    recording --> watch["Open the Argus watch<br/>eyes on the next server tick"]
+    watch --> capture["Eyes, sampled state, player connections"]
     capture --> router["CaptureRouter validates and fans out<br/>to matching session sinks"]
     router --> queue["Per-session bounded packet queue"]
-    queue --> writer["Single virtual writer thread<br/>segments, checkpoints, seek points"]
+    queue --> writer["Single virtual writer thread<br/>routes to tracks; segments,<br/>checkpoints, seek points per track"]
 
     writer --> stop{"Manual stop, server shutdown,<br/>or clean budget limit?"}
     stop -->|yes| finalizing["Transition to FINALIZING<br/>Unregister sink and drain queue"]
@@ -58,12 +59,14 @@ flowchart TD
     finalizing -->|validation, storage, or database failure| failed
 ```
 
-The adapter classifies and serializes supported raw network packets. PacketEvents
-capture is deferred to its post-task, after all listeners and optional wrapper
-re-encoding, so the stored packet ID and body are the final uncompressed bytes.
-The core
-routes captured packets to each matching recording session, so overlapping
-scopes remain isolated. A bounded queue prevents capture pressure from becoming
+The scene of a recording comes from its own [virtual observers](virtual-observer.md):
+eyes the server serves like neutral players, merged into one scene per world.
+Packets only real players receive, such as sounds and chat, are captured from
+their connections through a PacketEvents post-task, after all listeners and
+optional wrapper re-encoding, so the stored packet ID and body are the final
+uncompressed bytes. The core routes every captured packet to each matching
+recording session, so overlapping scopes remain isolated, and within a session
+to one of its [tracks](recording-tracks.md). A bounded queue prevents capture pressure from becoming
 unbounded memory use. Segment rotation, checkpoints, and finalization are
 internal mechanics; the public `RecordingSession` intentionally exposes only
 progress inspection and `stop()`.
@@ -99,7 +102,8 @@ flowchart TD
     validate -->|no| failed["Fail opening or playback session"]
     validate -->|yes| timeline["Create isolated PlaybackTimeline<br/>and Paper viewer bridge"]
 
-    timeline --> plan["Prefetch planner selects segment ranges<br/>within session disk budget"]
+    timeline --> tracks["Timeline merges the global track<br/>and the viewed world track"]
+    tracks --> plan["Prefetch planner selects segment ranges<br/>within session disk budget"]
     plan --> cache{"Verified segment<br/>cache hit?"}
     cache -->|yes| decode["Decode frames into session-local buffer"]
     cache -->|no| fetch["Fetch artifact, verify digest,<br/>then acquire cache lease"]
@@ -113,8 +117,10 @@ flowchart TD
     scheduler -->|send, read, or decode failure| failed
 ```
 
-Each viewer receives a dedicated session. The playback engine reads only the
-required replay ranges, maintains a session-local decoded buffer, and uses the
+Each viewer receives a dedicated session. The playback engine reads the global
+track and the track of the viewed world; other world tracks and state tracks
+are read only when an integration queries players or subject state. Within those
+tracks it reads only the required replay ranges, maintains a session-local decoded buffer, and uses the
 shared disk segment cache within configured limits. Seeking begins from the
 nearest checkpoint at or before the target, then replays deltas through that
 position. A virtual playback worker schedules due frames according to the

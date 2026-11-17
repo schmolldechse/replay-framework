@@ -76,6 +76,7 @@ Each version adapter exposes `packet` as a sibling of the runtime consumers:
 replay-adapter/paper-26_2/src/main/java/
 └── dev/voldechse/replayframework/adapter/paper/v26_2/
     ├── actor/
+    ├── argus/
     ├── capture/
     ├── checkpoint/
     ├── packet/
@@ -93,23 +94,22 @@ replay-adapter/paper-26_2/src/main/java/
     │   └── clientbound/
     │       ├── Paper26_2ClientboundPacketCatalog.java
     │       └── definition/
-    │       ├── connection/
-    │       ├── diagnostic/
-    │       ├── world/
-    │       ├── entity/
-    │       ├── player/
-    │       ├── inventory/
-    │       ├── chat/
-    │       ├── scoreboard/
-    │       ├── ui/
-    │       └── effect/
+    │           ├── connection/
+    │           ├── diagnostic/
+    │           ├── world/
+    │           ├── entity/
+    │           ├── player/
+    │           ├── chat/
+    │           ├── scoreboard/
+    │           ├── ui/
+    │           └── effect/
     └── playback/
 ```
 
 The Java package of a definition is therefore:
 
 ```text
-dev.voldechse.replayframework.adapter.paper.<version>.packet.definition.<domain>
+dev.voldechse.replayframework.adapter.paper.<version>.packet.<direction>.definition.<domain>
 ```
 
 The domain is determined by protocol responsibility, not by the current
@@ -124,10 +124,10 @@ gains capture-specific metadata.
 | `world` | chunks, light, blocks, border, time, spawn, cache, registry tags and maps |
 | `entity` | lifecycle, movement, metadata, equipment, attributes, effects, passengers, links, projectiles and player profiles |
 | `player` | abilities, health, experience, camera, position, respawn, combat and other player-local state |
-| `inventory` | containers, slots, held items, cooldowns, merchants and recipe books |
+| `inventory` | serverbound container clicks, slots, held items, merchants and recipe books; clientbound container packets belong to `ui` |
 | `chat` | player, system and disguised chat plus chat and command data |
 | `scoreboard` | objectives, display slots, scores and teams |
-| `ui` | titles, action bar, screens, dialogs, tab list, advancements, links and waypoints |
+| `ui` | titles, action bar, screens, containers, cooldowns, recipe books, dialogs, tab list, advancements, links and waypoints |
 | `effect` | animations, particles, sounds, explosions, boss bars and other ordered scene effects |
 
 Serverbound definitions use the same domains where they apply; the 26.2
@@ -156,10 +156,12 @@ packet/serverbound/definition/world/
 
 | Package | Owns |
 |---|---|
-| `packet` | protocol identifiers, native packet types, classification, decode/encode and packet-specific read/rewrite/rebuild logic |
-| `capture` | PacketEvents observation, source selection, event fallbacks, ordering and frame emission |
+| `packet` | protocol identifiers, native packet types, classification, distribution, recipient copies and state, decode/encode and packet-specific read/rewrite/rebuild logic |
+| `argus` | the eye and the state Argus samples from the server |
+| `actor` | before and after reads around serverbound triggers and the effect families |
+| `capture` | PacketEvents observation, the serverbound receiver, source tagging, ordering and frame emission |
 | `checkpoint` | authoritative snapshots and checkpoint ordering |
-| `playback` | viewer session state, identity-map lifetime, reset, queueing and outbound channel injection |
+| `playback` | viewer session state, identity-map lifetime, reset, queueing, outbound channel injection, scene queries and interactions |
 
 A packet definition may consume a narrow context supplied by capture or
 playback, but it does not own listeners, schedulers, Netty handlers or viewer

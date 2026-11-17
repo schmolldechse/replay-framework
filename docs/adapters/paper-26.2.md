@@ -1,300 +1,340 @@
 # Paper 26.2 adapter
 
-This document describes the architectural boundaries and compatibility
-contract of the Paper 26.2 adapter. It intentionally does not track packet
-implementation or test status.
+The Paper 26.2 adapter implements the [version contract](../virtual-observer.md#version-contract)
+for Minecraft 26.2. It owns everything that depends on the protocol: packet
+definitions, the native codec, the Argus eye, checkpoints and the playback
+bridge. This document describes its boundaries and lists the policy of every
+packet.
 
 ## Runtime baseline
 
-The adapter targets Paper `26.2.build.135-stable`, Java 26, and PacketEvents
-2.14.0. Version-bound NMS access remains inside
+| Item | Value |
+|---|---|
+| Server | Paper `26.2.build.135-stable` |
+| Java | 26 |
+| PacketEvents | 2.14.0 |
+| Protocol version | 776 |
+| Adapter ID | `paper-26.2` |
+| Adapter format revision | 5 |
+
+Version-bound NMS access stays inside
 `dev.voldechse.replayframework.adapter.paper.v26_2`.
 
-The registry fingerprint is derived at runtime from the active protocol
+The registry fingerprint is derived at runtime from the live protocol
 registry: phase, direction, ID, type name and codec of every packet. Capture
 and playback policy are not part of it, so a policy change never locks out
-existing replays; playback always applies the current policy. Adapter format revision `4` is required;
-recordings from earlier revisions are not migrated or accepted.
+existing replays; playback always applies the current policy. A replay is
+playable when its adapter ID, format revision and fingerprint match.
 
-## Architecture
+## Packages
 
-`Paper26_2ReplayAdapter` is the adapter entry point and
-`Paper26_2AdapterProvider` exposes it to adapter discovery. Shared,
-NMS-independent contracts live in `replay-adapter:paper-common` and
-`replay-adapter:api`.
+`Paper26_2ReplayAdapter` is the entry point and `Paper26_2AdapterProvider`
+exposes it to adapter discovery.
 
-The version module is divided by responsibility:
+| Package | Owns |
+|---|---|
+| `packet` | protocol discovery, the native codec and every packet definition, split into `packet.clientbound` and `packet.serverbound` |
+| `argus` | the eye (`Paper26_2ArgusEye`), sampled time and weather (`Paper26_2AmbientSource`), sampled entity state (`Paper26_2SubjectStates`) and the platform queries Argus needs |
+| `actor` | effects the server sends to everyone except the acting player, derived from serverbound packets |
+| `capture` | the PacketEvents bridge, the serverbound receiver, capture context, source tagging and capture ordering |
+| `checkpoint` | snapshots of a coverage and the capture barrier that separates them from later frames |
+| `playback` | rewriting, the viewer gate, injection, view reset, scene queries and interactions |
 
-- `packet` owns protocol discovery, native codec access, classifications, and
-  version-local packet definitions, strictly separated into
-  `packet.clientbound` and `packet.serverbound`.
-- `actor` owns the effects the server sends to everyone except the acting
-  player, derived from serverbound packets.
-- `capture` owns outbound observation, semantic capture context, source
-  selection, ordering, and frame emission.
-- `checkpoint` owns scoped Paper snapshots, deterministic assembly, and the
-  capture barrier used to separate snapshots from later deltas.
-- `playback` owns decoding, session isolation, queueing, channel injection,
-  and cleanup of replay-owned client state.
+Definition naming and placement follow
+[packet definition layout](../packet-definition-layout.md).
 
-Packet definition naming and placement are specified centrally in
-[`packet-definition-layout.md`](../packet-definition-layout.md).
+## Capture
 
-## Capture boundary
+```mermaid
+flowchart LR
+    subgraph serverthread["Server thread"]
+        eye["Paper26_2ArgusEye<br/>Connection.send"]
+        amb["Paper26_2AmbientSource"]
+        subj["Paper26_2SubjectStates"]
+        actor["Actor effects<br/>before and after reads"]
+    end
+    subgraph netty["Netty event loop, per player"]
+        pe["PacketEvents post-task<br/>final clientbound bytes"]
+        sb["Paper26_2ServerboundReceiver<br/>before packet_handler"]
+    end
+    eye --> defs["Clientbound definitions<br/>context, distribution, copies, state"]
+    amb --> defs
+    subj --> defs
+    actor --> defs
+    pe --> defs
+    sb -->|"trigger"| actor
+    defs --> order["Capture order<br/>time, tick, sequence"]
+    order --> core["Core capture route"]
+```
 
-Clientbound traffic is observed after Paper and other handlers have produced
-its final protocol representation. Capture copies immutable frame data before
-leaving the network thread and attaches only semantic context that can be
-derived safely from typed adapter state.
+- **Eyes** hand packet objects to Argus on the server thread before any
+  encoding. Argus merges them and passes them through their clientbound
+  definition to obtain their capture context.
+- **Player connections** are observed through a PacketEvents post-task. It
+  runs after all listeners and any wrapper re-encoding, parses the final
+  VarInt packet ID and copies the final uncompressed body without changing
+  the live buffer. Packets whose definition is not observable by eyes are
+  tagged `PLAYER_ONLY`; packets that describe their recipient get the player
+  as subject.
+- **Serverbound packets** are seen as decoded objects directly before the
+  server's packet handler. The receiver never changes, drops or delays a
+  packet. A serverbound definition decides whether its packet triggers an
+  actor effect; the reads around it are queued on the server thread.
 
-Packet observation remains the authoritative source for recipient-specific
-wire behavior. Server-side events are used only where the protocol stream
-cannot provide the required authoritative state and where an equivalent,
-well-defined fallback exists.
+Every path publishes through one capture-order allocator, so timestamps,
+ticks, sequences and checkpoint barriers form one order.
 
 ## Checkpoints
 
-Checkpoint creation preloads the requested scope when necessary, captures a
-Paper-owned snapshot, and allocates a server tick/time/sequence barrier only
-after that snapshot is ready. The core drains earlier deltas before persisting
-the checkpoint, preserving an exclusive boundary between snapshot state and
-subsequent traffic.
+A checkpoint covers the watch's current coverage. `PRELOAD_SCOPE` loads the
+covered chunks first; `LOADED_ONLY` takes only chunks that are loaded. The
+snapshot is taken on the server thread, and the capture barrier is allocated
+only after it is ready. The core drains every frame ordered before the
+barrier before it writes the checkpoint, so the snapshot and the following
+frames never overlap.
 
-Snapshot data is converted to ordered native protocol frames without exposing
-mutable Paper objects to asynchronous persistence work.
+Snapshot data is converted to ordered native packets before it leaves the
+server thread. The checkpoint of a `STATE` track is the complete state of
+its subject, built from the same packets a client receives on join or when
+opening the subject.
 
-## Playback boundary
+## Playback
 
-Playback validates the recorded adapter identity, format revision, and
-registry fingerprint before emitting frames. Version-native decoding and
-encoding stay behind the adapter boundary.
+```mermaid
+flowchart TB
+    subgraph outbound["Outbound to the viewer"]
+        direction LR
+        live["Live server packets"] --> gate["ReplayViewerOutboundGate<br/>drops conflicting scene packets"]
+        gate --> enc["Paper encoder"]
+        frame["Replay frame"] --> rw["Paper26_2ReplayPacketRewriter<br/>definition policy, ID rewrite"]
+        rw --> writer["PacketEventsReplayWriter<br/>written from the PacketEvents<br/>encoder context"]
+        enc --> net["Compression, encryption, socket"]
+        writer --> net
+    end
+    subgraph inbound["Inbound from the viewer"]
+        direction LR
+        useAttack["interact, attack"] --> inter["ReplayEntityInteractions<br/>before packet_handler"]
+        inter -->|"aimed at a replay entity"| event["PlaybackEntityInteracted"]
+        inter -->|"anything else"| server["Server"]
+    end
+```
 
-Replay-owned identities are deterministic per playback session and isolated
-from live server identities. Viewer-local state is kept separate from scene
-state, while unsupported or unsafe traffic is rejected by registry policy.
-Live outbound traffic that would conflict with an active replay view is
-filtered at the Paper channel boundary.
+| Class | Responsibility |
+|---|---|
+| `Paper26_2PlaybackBridge` | the session's bridge: batching, bounded outbound processing, world filter, scene and state queries |
+| `Paper26_2ReplayPacketRewriter` | applies each definition's playback policy and rewrites entity IDs and UUIDs into a session-local identity space |
+| `PacketEventsReplayWriter` | encodes a rebuilt packet with the live codec and writes it from the PacketEvents encoder context, skipping the gate, PacketEvents listeners and the Paper encoder, but keeping compression and encryption |
+| `ReplayViewerOutboundGate` | suppresses live scene packets that would conflict with the replay; passes the viewer's own chunk cache center and radius |
+| `Paper26_2ViewResetter` | removes replay-owned boss bars, tab entries, entities and block cracks on reset and close |
+| `Paper26_2SceneEntityTracker` | keeps type, position, name, health, equipment, effects and flags of every replay entity from the frames played |
+| `Paper26_2SubjectStateDecoder` | decodes a state track's packets into a `SubjectState` |
+| `ReplayEntityInteractions` | consumes `interact` and `attack` packets aimed at replay entities |
 
-Seek reconstruction emits only state admitted by the verified checkpoint
-contract. Normal timeline playback may additionally emit ordered transient
-state. Reset removes tracked replay-owned client state in deterministic order
-and reports partial failures without silently discarding its tracking data.
+Replay packets are never observed or recaptured by PacketEvents, because
+they bypass its listeners.
+
+A live `respawn` lifts the gate's isolation, so the viewer's client receives
+the new world's live chunks after a world change. Isolation resumes with the
+next view rebuild.
+
+Seek reconstruction emits only packets marked checkpoint-relevant. Sounds,
+particles, animations and other transient packets are sent during normal
+playback at their recorded time but are not replayed as a burst after a
+seek.
 
 ## Compatibility and limits
 
 The adapter requires the pinned Paper protocol and compatible registries.
-Custom server software, modified registries, datapacks, or intermediary
-protocol translators can invalidate assumptions even when the nominal game
-version matches.
+Custom server software, modified registries, datapacks or protocol
+translators can invalidate assumptions even when the nominal game version
+matches.
 
-Only semantics explicitly modeled by the adapter are transformed. Opaque or
-unknown values are never guessed from field shape, packet names, or payload
+Only semantics the adapter models explicitly are transformed. Opaque or
+unknown values are never guessed from field shape, packet names or payload
 bytes. The registry fingerprint is a compatibility guard, not a substitute
 for validating custom runtime content.
 
 ## Quality assurance
 
-The version module is covered by protocol-registry, native-codec, capture,
-checkpoint, playback-isolation, reset, and outbound-channel tests. Validation
-uses the pinned Paper development bundle so runtime IDs, codecs, and native
-types are checked against the same version used for compilation.
+Every clientbound and serverbound definition has a test against the live
+registry. Further tests cover the native codec, capture ordering, Argus
+platform behavior, effect families, checkpoints, rewriting, the outbound
+gate, view reset, the scene entity tracker, the subject state decoder and
+entity interactions. Tests run against the pinned Paper development bundle,
+so IDs, codecs and native types match the version used for compilation.
 
 ## Protocol inventory
 
-The following tables document every clientbound packet in the pinned
-protocol registry, including its protocol role, replay relevance, and
-intended playback/checkpoint policy. They do not state implementation or
-test status.
+### STATUS, LOGIN and CONFIGURATION
 
-### STATUS
+Packets of these phases set up or manage a connection. None of them is
+recorded or ever injected into an established PLAY connection:
 
-| ID | Identifier | Description / relevance | Playback | Checkpoint |
-|---:|---|---|---|---|
-| 0 | `minecraft:status_response` | Connection setup or management; never inject into an established PLAY connection | BLOCKED | no |
-| 1 | `minecraft:pong_response` | Connection setup or management; never inject into an established PLAY connection | BLOCKED | no |
+- **STATUS:** `status_response`, `pong_response`.
+- **LOGIN:** `login_disconnect`, `hello`, `login_finished`,
+  `login_compression`, `custom_query`, `cookie_request`.
+- **CONFIGURATION:** `cookie_request`, `custom_payload`, `disconnect`,
+  `finish_configuration`, `keep_alive`, `ping`, `reset_chat`,
+  `registry_data`, `resource_pack_pop`, `resource_pack_push`,
+  `store_cookie`, `transfer`, `update_enabled_features`, `update_tags`,
+  `select_known_packs`, `custom_report_details`, `server_links`,
+  `clear_dialog`, `show_dialog`, `code_of_conduct`.
 
-### LOGIN
+### PLAY clientbound
 
-| ID | Identifier | Description / relevance | Playback | Checkpoint |
-|---:|---|---|---|---|
-| 0 | `minecraft:login_disconnect` | Connection setup or management; never inject into an established PLAY connection | BLOCKED | no |
-| 1 | `minecraft:hello` | Connection setup or management; never inject into an established PLAY connection | BLOCKED | no |
-| 2 | `minecraft:login_finished` | Connection setup or management; never inject into an established PLAY connection | BLOCKED | no |
-| 3 | `minecraft:login_compression` | Connection setup or management; never inject into an established PLAY connection | BLOCKED | no |
-| 4 | `minecraft:custom_query` | Connection setup or management; never inject into an established PLAY connection | BLOCKED | no |
-| 5 | `minecraft:cookie_request` | Connection setup or management; never inject into an established PLAY connection | BLOCKED | no |
+Every PLAY clientbound packet has exactly one definition. The table is
+generated from the definitions' declarations.
 
-### CONFIGURATION
+| Column | Values |
+|---|---|
+| Category | `stateful`: restores state; `ephemeral`: an event at one moment; `configurable`: recorded according to the `CapturePolicy`; `control`: connection management |
+| Playback | `replayed`; `replayed, IDs rewritten` into the session's identity space; `viewer-local`: never applied to the viewer's client; `blocked`: rejected |
+| Checkpoint | whether checkpoints contain it and seeks rebuild it |
+| Source | `eye, broadcast` and `eye, membership`: from the eyes, see [merging](../virtual-observer.md#one-scene-from-many-eyes); `view-local`: one view's own state, never recorded; `ears`: from player connections with the [recipient-copy](../capture-source-policy.md#recipient-copies) declaration, `world-wide` into the global track; `own state`: the recipient's state track |
 
-| ID | Identifier | Description / relevance | Playback | Checkpoint |
-|---:|---|---|---|---|
-| 0 | `minecraft:cookie_request` | Connection setup or management; never inject into an established PLAY connection | BLOCKED | no |
-| 1 | `minecraft:custom_payload` | Connection setup or management; never inject into an established PLAY connection | BLOCKED | no |
-| 2 | `minecraft:disconnect` | Connection setup or management; never inject into an established PLAY connection | BLOCKED | no |
-| 3 | `minecraft:finish_configuration` | Connection setup or management; never inject into an established PLAY connection | BLOCKED | no |
-| 4 | `minecraft:keep_alive` | Connection setup or management; never inject into an established PLAY connection | BLOCKED | no |
-| 5 | `minecraft:ping` | Connection setup or management; never inject into an established PLAY connection | BLOCKED | no |
-| 6 | `minecraft:reset_chat` | Connection setup or management; never inject into an established PLAY connection | BLOCKED | no |
-| 7 | `minecraft:registry_data` | Connection setup or management; never inject into an established PLAY connection | BLOCKED | no |
-| 8 | `minecraft:resource_pack_pop` | Connection setup or management; never inject into an established PLAY connection | BLOCKED | no |
-| 9 | `minecraft:resource_pack_push` | Connection setup or management; never inject into an established PLAY connection | BLOCKED | no |
-| 10 | `minecraft:store_cookie` | Connection setup or management; never inject into an established PLAY connection | BLOCKED | no |
-| 11 | `minecraft:transfer` | Connection setup or management; never inject into an established PLAY connection | BLOCKED | no |
-| 12 | `minecraft:update_enabled_features` | Connection setup or management; never inject into an established PLAY connection | BLOCKED | no |
-| 13 | `minecraft:update_tags` | Connection setup or management; never inject into an established PLAY connection | BLOCKED | no |
-| 14 | `minecraft:select_known_packs` | Connection setup or management; never inject into an established PLAY connection | BLOCKED | no |
-| 15 | `minecraft:custom_report_details` | Connection setup or management; never inject into an established PLAY connection | BLOCKED | no |
-| 16 | `minecraft:server_links` | Connection setup or management; never inject into an established PLAY connection | BLOCKED | no |
-| 17 | `minecraft:clear_dialog` | Connection setup or management; never inject into an established PLAY connection | BLOCKED | no |
-| 18 | `minecraft:show_dialog` | Connection setup or management; never inject into an established PLAY connection | BLOCKED | no |
-| 19 | `minecraft:code_of_conduct` | Connection setup or management; never inject into an established PLAY connection | BLOCKED | no |
-
-### PLAY
-
-| ID | Identifier | Description / relevance | Playback | Checkpoint |
-|---:|---|---|---|---|
-| 0 | `minecraft:bundle_delimiter` | Payload-free, identity-sensitive bundle boundary; retain for stream analysis but never replay without channel-scoped bundle ownership | BLOCKED | no |
-| 1 | `minecraft:add_entity` | Essential scene state: spawn an entity with type, position, UUID, and type-specific data | REWRITE | yes |
-| 2 | `minecraft:animate` | Ordered scene effect: entity animation such as wake-up or critical hit; rewrite entity ID | REWRITE | no |
-| 3 | `minecraft:award_stats` | Must remain local: recorded player or connection state; leave the neutral observer unchanged | DROP_LOCAL | no |
-| 4 | `minecraft:block_changed_ack` | Cumulative recorded-client prediction acknowledgement; no block state or result | BLOCKED | no |
-| 5 | `minecraft:block_destruction` | Spatial, ordered block-breaking overlay; isolate its source/overlay ID, preserve all unsigned progress values, and clear active overlays during reset | REWRITE | no |
-| 6 | `minecraft:block_entity_data` | Essential scene state: durable world or scene state | SEND | yes |
-| 7 | `minecraft:block_event` | Spatial, ordered block-local action; preserve the registered block and both unsigned action fields because their meaning depends on the block state at the position | SEND | no |
-| 8 | `minecraft:block_update` | Spatial, durable replacement of one global block state, preserving every state property such as orientation, shape, level, age and flags | SEND | yes |
-| 9 | `minecraft:boss_event` | Durable boss-bar lifecycle with six operation variants; preserve its component, progress, style and properties while isolating the bar UUID per playback session | REWRITE | yes |
-| 10 | `minecraft:change_difficulty` | Synchronizes the four-level world difficulty and its lock flag with the receiving client; keep the recorded connection state from changing the neutral observer | DROP_LOCAL | no |
-| 11 | `minecraft:chunk_batch_finished` | Ends the client-side chunk-throughput measurement with the transmitted batch size and triggers a serverbound rate acknowledgement; never replay into an established connection | BLOCKED | no |
-| 12 | `minecraft:chunk_batch_start` | Payload-free start of a connection-local chunk-batch timing measurement; never replay into an established connection | BLOCKED | no |
-| 13 | `minecraft:chunks_biomes` | Replaces the serialized biome palettes of zero or more chunks while preserving entry order, duplicate coordinates, and the complete per-chunk payload | SEND | yes |
-| 14 | `minecraft:clear_titles` | Clears the recorded connection's title and subtitle and can also reset its animation timings; never apply either operation to the neutral observer | DROP_LOCAL | no |
-| 15 | `minecraft:command_suggestions` | Correlates a recorded input request with its replacement range, completion texts and optional tooltips; preserve the observer's current command input | DROP_LOCAL | no |
-| 16 | `minecraft:commands` | Installs the permission-sensitive Brigadier tree with literals, typed arguments, redirects, restrictions and suggestion providers; preserve the observer's live command tree | DROP_LOCAL | no |
-| 17 | `minecraft:container_close` | Closes the connection-local menu identified by its container ID; preserve the neutral observer's live screen | DROP_LOCAL | no |
-| 18 | `minecraft:container_set_content` | Replaces one menu state's indexed item contents and carried stack; preserve the neutral observer's live inventory | DROP_LOCAL | no |
-| 19 | `minecraft:container_set_data` | Updates a signed, menu-type-specific property for one container; preserve the neutral observer's live menu data | DROP_LOCAL | no |
-| 20 | `minecraft:container_set_slot` | Updates one signed menu slot with an optional component-bearing item stack for a container state; preserve the neutral observer's live inventory | DROP_LOCAL | no |
-| 21 | `minecraft:cookie_request` | Requests the client cookie under one namespaced key and elicits a nullable, size-bounded response owned by the current connection; never replay into an established connection | BLOCKED | no |
-| 22 | `minecraft:cooldown` | Sets, replaces or clears an item-use cooldown for one receiver-local group; shared groups can affect multiple items, so leave the neutral observer unchanged | DROP_LOCAL | no |
-| 23 | `minecraft:custom_chat_completions` | Adds, removes or replaces receiver-local chat suggestions; leave the neutral observer's own suggestion set unchanged | DROP_LOCAL | no |
-| 24 | `minecraft:custom_payload` | Carries brand or channel-defined plugin/mod bytes whose schema and effects belong to the receiving connection | DROP_LOCAL | no |
-| 25 | `minecraft:damage_event` | Ordered hurt effect with rewritten target, causing-entity and direct-source IDs; optional source position takes precedence over entity sources | REWRITE | no |
-| 26 | `minecraft:debug/block_value` | Subscription-keyed diagnostic value at a block position; optional value can clear the viewer's debug entry and registry-backed values describe the recorded world | BLOCKED | no |
-| 27 | `minecraft:debug/chunk_value` | Subscription-keyed diagnostic value at a chunk position; the protocol sends Z before X and updates can clear the viewer's debug entry | BLOCKED | no |
-| 28 | `minecraft:debug/entity_value` | Subscription-keyed diagnostic value at a source entity ID; entity identity and the viewer's active debug subscriptions are connection-local | BLOCKED | no |
-| 29 | `minecraft:debug/event` | One-shot debug-subscription event with a mandatory type-specific payload that can contain registry-backed or world-specific data | BLOCKED | no |
-| 30 | `minecraft:debug_sample` | Periodic subscription-selected server telemetry; tick-time samples report full, server, task and idle nanoseconds and are operator-only | BLOCKED | no |
-| 31 | `minecraft:delete_chat` | Removes a signed player-chat entry using a connection-local packed signature reference or full signature; preserve the observer's own chat history | DROP_LOCAL | no |
-| 32 | `minecraft:disconnect` | Terminates the receiving connection with a required chat-component reason; retain for recording fidelity and diagnostics, never replay into the observer connection | BLOCKED | no |
-| 33 | `minecraft:disguised_chat` | Disguised chat presentation with message content, bound chat type, sender name and optional target name; keep recorded chat local to preserve the observer's chat history | DROP_LOCAL* | no |
-| 34 | `minecraft:entity_event` | Entity-specific transient status byte; rewrite its entity ID and preserve unknown values. Player debug and permission statuses belong to the recorded connection | REWRITE / DROP_LOCAL* | no |
-| 35 | `minecraft:entity_position_sync` | Absolute entity position, movement vector, rotation and ground state; preserve as essential scene state with playback-session identity rewriting | REWRITE | yes |
-| 36 | `minecraft:explode` | Explosion scene effect with sound and weighted particle data; suppress recorded-player knockback and remap entity-backed vibration destinations | REWRITE | no |
-| 37 | `minecraft:forget_level_chunk` | Unloads a recorded chunk column from the client view; preserve its signed coordinates to remove stale terrain. | SEND | yes |
-| 38 | `minecraft:game_event` | Forward rain and thunder changes; keep recorded-player, game-rule and loading-screen events from changing the observer | SEND / DROP_LOCAL* | no |
-| 39 | `minecraft:game_rule_values` | Carries serialized values for the recorded player's available game rules in response to a privileged request; keep the observer's rule view unchanged | DROP_LOCAL | no |
-| 40 | `minecraft:game_test_highlight_pos` | GameTest `showPos` highlight for a selected block and its test-relative coordinates; no general replay target exists | BLOCKED | no |
-| 41 | `minecraft:mount_screen_open` | Opens the recorded player's horse or Nautilus inventory using its connection-local container ID and mount entity ID; leave the observer's UI unchanged | DROP_LOCAL | no |
-| 42 | `minecraft:hurt_animation` | Directional damage animation for a replay entity; remap its target entity ID and preserve yaw | REWRITE | no |
-| 43 | `minecraft:initialize_border` | Full world-border center, current and target size, transition, maximum boundary, and warning settings | SEND | yes |
-| 44 | `minecraft:keep_alive` | 64-bit keep-alive challenge; the live connection expects a matching response and may disconnect on a mismatch | BLOCKED | no |
-| 45 | `minecraft:level_chunk_with_light` | Chunk terrain, heightmaps, block entity updates, and sky/block light for one world coordinate | SEND | yes |
-| 46 | `minecraft:level_event` | One-shot sound, particle, animation, or related world effect; event-specific data and the global-volume flag must be preserved | SEND in event order, retaining global-volume semantics | no |
-| 47 | `minecraft:level_particles` | Particle spawn with visibility flags, coordinates, spread, speed, count, and registry-specific payload; vibration particles can reference a block or entity destination | REWRITE entity vibration destination; preserve other payloads and rendering flags | no |
-| 48 | `minecraft:light_update` | Incremental sky/block light data for one chunk; masks distinguish changed sections, explicit all-zero sections, and unchanged sections | SEND with exact masks and section arrays | yes |
-| 49 | `minecraft:login` | Initializes the active player and world with player ID, available dimensions, view/simulation settings, and common spawn information | BLOCKED; do not replace an established observer connection's player/world context | no |
-| 50 | `minecraft:low_disk_space_warning` | Source-server low-storage warning presented as a system toast; describes the recorded server's storage environment | DROP_LOCAL; do not present it as a warning about the playback observer's environment | no |
-| 51 | `minecraft:map_item_data` | Updates saved map scale, lock state, decorations, and color patches by numeric map ID; map items share references to that ID | DROP_LOCAL until map IDs are isolated consistently across map updates and map-item references | no |
-| 52 | `minecraft:merchant_offers` | Supplies the active trading container's offers, merchant level/XP, progress visibility, and restock capability; container IDs and trade UI state belong to the recorded player's connection | DROP_LOCAL; preserve the observer's own trade menu and offers | no |
-| 53 | `minecraft:move_entity_pos` | Ordered movement delta for any tracked entity: signed 1/4096-block X/Y/Z deltas and on-ground flag; remap its entity ID | REWRITE in timeline order | no |
-| 54 | `minecraft:move_entity_pos_rot` | Ordered relative entity movement with signed 1/4096-block X/Y/Z deltas, raw yaw/pitch bytes, and on-ground flag; remap its entity ID | REWRITE in timeline order | no |
-| 55 | `minecraft:move_minecart_along_track` | Ordered minecart trajectory steps, each with position, movement vector, yaw/pitch, and interpolation weight; remap its entity ID | REWRITE in timeline order | yes |
-| 56 | `minecraft:move_entity_rot` | Relative entity rotation as raw yaw/pitch bytes and an on-ground flag; remap the entity ID | REWRITE in timeline order | no |
-| 57 | `minecraft:move_vehicle` | Absolute vehicle position as three doubles plus Y/X rotation floats; corrects the recorded player's client-controlled vehicle | DROP_LOCAL to keep recorded player movement local to its source connection | no |
-| 58 | `minecraft:open_book` | Opens book-reading UI for the recorded player's main- or off-hand item; hand is an enum VarInt | DROP_LOCAL to keep the recorded player's UI action local to its source connection | no |
-| 59 | `minecraft:open_screen` | Container ID as VarInt, `minecraft:menu` registry type and trusted title component; opens the recorded player's menu UI | DROP_LOCAL to preserve the observer's own open container and title | no |
-| 60 | `minecraft:open_sign_editor` | Sign block position and front/back text side; opens the recorded player's sign editor | DROP_LOCAL to keep the recorded player's editing UI local to its source connection | no |
-| 61 | `minecraft:ping` | Connection-local synchronization challenge with a signed 32-bit ID echoed by the client's Pong response | BLOCKED to keep the challenge and response on their originating connection | no |
-| 62 | `minecraft:pong_response` | Returns the client-generated 64-bit ping time used for that connection's latency sample | BLOCKED to keep the response paired with its originating client request | no |
-| 63 | `minecraft:place_ghost_recipe` | Container ID and registry-dispatched recipe display, including nested slot displays; previews the selected recipe in the active crafting UI | DROP_LOCAL to preserve the observer's own menu and recipe selection | no |
-| 64 | `minecraft:player_abilities` | Four player-ability flags (invulnerable, flying, may fly, instabuild) and flying/walking speeds; controls the receiving player's local abilities | DROP_LOCAL to preserve the observer's own abilities and movement settings | no |
-| 65 | `minecraft:player_chat` | Global and sender message indexes, optional signature, packed signed body and last-seen chain, optional unsigned display component, filter mask, and bound chat decoration; recorded chat belongs to the replay's presentation state | Convert to `minecraft:disguised_chat` for unsigned visible presentation; source signature and last-seen chain are not applied to the observer | no |
-| 66 | `minecraft:player_combat_end` | Transient combat-tracker event with combat duration in ticks (VarInt); not checkpoint state | DROP_LOCAL to keep the recorded player's combat episode off the observer's connection | no |
-| 67 | `minecraft:player_combat_enter` | No payload; transient recorded-player combat-entry event, not checkpoint state | DROP_LOCAL to keep the recorded player's combat state off the observer's connection | no |
-| 68 | `minecraft:player_combat_kill` | Dying player's entity ID (VarInt) and trusted death-message component; victim-local death-screen event, with public death chat broadcast sent separately | DROP_LOCAL to keep the recorded victim's death screen off the observer's connection | no |
-| 69 | `minecraft:player_info_remove` | Length-prefixed list of profile UUIDs; removes listed profiles from the player list | Rewrite every UUID into the replay identity space so only replay profiles can be removed | yes |
-| 70 | `minecraft:player_info_update` | Ordered profile UUID entries with action-selected name/properties, optional chat session, game mode, listed state, latency, display name, hat visibility, and list order; essential player-profile state | Rewrite profile UUIDs, force `listed=false` when that action is present, and discard source chat-session credentials | yes |
-| 71 | `minecraft:player_look_at` | Rotates the receiving player's view from feet/eyes toward an absolute position or an entity ID and target anchor; entity mode retains an absolute-coordinate fallback; personal camera state | DROP_LOCAL to leave the observer's view unchanged | no |
-| 72 | `minecraft:player_position` | Teleport ID, position, delta movement, yaw/pitch and nine relative-position, rotation and velocity flags; server correction and confirmation state for the receiving player's own connection. | DROP_LOCAL to preserve the observer's position, movement and connection state; capture derives `remove_entities` + `add_entity` for the respawned player's own entity from it | no |
-| 73 | `minecraft:player_rotation` | Yaw and pitch angles with independent relative flags; server correction for the receiving player's own view rotation | DROP_LOCAL to preserve the observer's view | no |
-| 74 | `minecraft:recipe_book_add` | List of recipe display entries with registry-backed display/category data, optional group and crafting requirements, notification/highlight flags; replace or add to the receiving player's known recipe book | DROP_LOCAL to preserve the observer's recipe-book contents and notifications | no |
-| 75 | `minecraft:recipe_book_remove` | Variable list of recipe display IDs to remove from the receiving player's known recipe book and highlights | DROP_LOCAL to preserve the observer's recipe-book contents | no |
-| 76 | `minecraft:recipe_book_settings` | For crafting, furnace, blast furnace and smoker: whether each recipe book is open and whether its craftable-only filter is active; per-player recipe-book UI preferences | DROP_LOCAL to preserve the observer's open tabs and filters | no |
-| 77 | `minecraft:remove_entities` | Ordered list of entity IDs to destroy in the client scene; target IDs are translated into the playback identity namespace. | REWRITE | yes |
-| 78 | `minecraft:remove_mob_effect` | Removes one registry-backed status effect from the target entity; target entity identity is translated into the playback identity namespace | REWRITE | yes |
-| 79 | `minecraft:reset_score` | Owner string with optional objective: remove that score, or every score for the owner when absent; recorded-viewer scoreboard state | DROP_LOCAL to preserve the observer's scoreboard | no |
-| 80 | `minecraft:resource_pack_pop` | Optional UUID of a server-provided resource pack to remove; if absent, removes all server-provided packs and changes the receiving client's resource assets | BLOCKED | no |
-| 81 | `minecraft:resource_pack_push` | UUID, download URL, SHA-1 hash, required flag and optional prompt component; asks the receiving client to download and apply server resource assets | BLOCKED | no |
-| 82 | `minecraft:respawn` | Dimension type and key, world seed, current/previous game mode, debug and flat flags, optional last-death position, portal cooldown, sea level, and attribute/entity-data keep mask; respawn state for the receiving player. Carries no entity ID; eyes see the respawned player as `remove_entities` + `add_entity` | DROP_LOCAL to preserve the observer's world and player state; without the keep-entity-data bit capture marks the connection so the following `minecraft:player_position` replaces the scene entity | no |
-| 83 | `minecraft:rotate_head` | Entity ID and absolute head yaw angle in 1/256-turn steps; head orientation is independent of body rotation | REWRITE the entity ID into the playback identity space | yes |
-| 84 | `minecraft:section_blocks_update` | Packed section position, VarInt update count, then ordered VarLong records (`global block-state ID << 12 | local X << 8 | local Z << 4 | local Y`); each record changes one block using a global state and three 4-bit section-relative coordinates | SEND | yes |
-| 85 | `minecraft:select_advancements_tab` | Optional advancement-tab identifier; switches tabs after a client selection or an advancement in another tab; an absent or unknown identifier selects the first available tab | DROP_LOCAL to preserve the observer's advancements view | no |
-| 86 | `minecraft:server_data` | Server MOTD as a rich text component and an optional byte array containing the server icon; connection-specific server presentation | DROP_LOCAL to preserve the observer's server details | no |
-| 87 | `minecraft:set_action_bar_text` | Rich text component displayed temporarily above the hotbar as an action-bar message; carries no duration or clear operation | DROP_LOCAL to preserve the observer's action bar | no |
-| 88 | `minecraft:set_border_center` | Center X and Z as doubles; updates the shared world's border center without changing its size or other border settings | SEND | yes |
-| 89 | `minecraft:set_border_lerp_size` | Current and target border diameters with a remaining interpolation time; smoothly updates the shared world's border size | SEND | yes |
-| 90 | `minecraft:set_border_size` | One new border diameter as a double; applies immediately without interpolation to the shared world border | SEND | yes |
-| 91 | `minecraft:set_border_warning_delay` | Nonnegative VarInt warning threshold stored as ticks in Paper 26.2; configures when the shared world border warning appears | SEND | yes |
-| 92 | `minecraft:set_border_warning_distance` | Nonnegative VarInt distance in blocks; configures how far from the shared world border its distance warning appears | SEND | yes |
-| 93 | `minecraft:set_camera` | Entity ID selecting the entity followed by the receiving client's camera; changing it would take control of the observer's view | DROP_LOCAL | no |
-| 94 | `minecraft:set_chunk_cache_center` | Chunk X and Z coordinates as signed VarInts; centers the receiving client's chunk cache and view area | DROP_LOCAL | no |
-| 95 | `minecraft:set_chunk_cache_radius` | Server-imposed view radius as a VarInt number of chunks; changes the receiving client's effective chunk view distance | DROP_LOCAL | no |
-| 96 | `minecraft:set_cursor_item` | Optional Slot containing the cursor ItemStack and its data components; sets the receiving player's cursor independently of a container | DROP_LOCAL | no |
-| 97 | `minecraft:set_default_spawn_position` | Dimension key, packed block position, yaw and pitch; sets that dimension's default spawn destination and compass target | SEND | yes |
-| 98 | `minecraft:set_display_objective` | VarInt display slot and objective name (empty clears it); selects a player-list, sidebar, below-name, or team-colored sidebar objective, all part of the observer's local scoreboard presentation | DROP_LOCAL | no |
-| 99 | `minecraft:set_entity_data` | Target entity VarInt followed by sparse typed metadata entries ending at `0xFF`; updates that entity's synchronized appearance and state | REWRITE | yes |
-| 100 | `minecraft:set_entity_link` | Leash relationship between attached entity and holder; two fixed-width Int entity IDs, with destination `0` clearing the leash; rewrite both non-sentinel IDs | REWRITE | yes |
-| 101 | `minecraft:set_entity_motion` | Target entity VarInt and velocity as a variable-length low-precision `LpVec3`; updates that entity's current motion, including zero velocity | REWRITE | yes |
-| 102 | `minecraft:set_equipment` | Updates one or more equipment slots on an entity; ordered optional item stacks preserve item components and empty stacks clear slots | REWRITE | yes |
-| 103 | `minecraft:set_experience` | Receiver-local experience HUD: progress Float, level VarInt, and total-experience VarInt; retain in recordings but do not replace the observer's own XP state | DROP_LOCAL | no |
-| 104 | `minecraft:set_health` | Receiver-local vitals: health Float, food VarInt, and saturation Float; retain for recording completeness but leave the observer's own health and hunger state unchanged | DROP_LOCAL | no |
-| 105 | `minecraft:set_held_slot` | Receiver-local hotbar selection as a VarInt (slot 0–8); retain in recordings but do not change the observer's selected item | DROP_LOCAL | no |
-| 106 | `minecraft:set_objective` | Objective name and method byte (add, remove, change); add/change also carry display text, integer/hearts render type, and optional blank/styled/fixed score-number format; mutates the recorded viewer's local scoreboard | DROP_LOCAL | no |
-| 107 | `minecraft:set_passengers` | Vehicle ID VarInt followed by the ordered VarInt array of direct passenger IDs; an empty array clears the vehicle's passengers; rewrite the vehicle and every passenger ID; checkpoint family `PASSENGERS` | REWRITE | yes |
-| 108 | `minecraft:set_player_inventory` | Player-inventory slot VarInt followed by an optional ItemStack with its data-component patch; the slot is independent of container window IDs and non-positive item counts decode as empty; retain the recorded update but preserve the observer's local inventory | DROP_LOCAL | no |
-| 109 | `minecraft:set_player_team` | Team name and method byte create, remove, update, add members, or remove members; create/update include display name, styled member prefix and suffix, name-tag visibility, collision rule, optional team color, and friendly-fire/invisibility flags; create/add/remove-member modes include player-name collections; team and member presentation are viewer-local | DROP_LOCAL | no |
-| 110 | `minecraft:set_score` | Owner and objective UTF-8 strings with a signed score VarInt; optional per-score display component and independent optional blank, styled, or fixed number format; the owner is scoreboard text rather than an entity ID, and the score changes recorded-viewer scoreboard state | DROP_LOCAL | no |
-| 111 | `minecraft:set_simulation_distance` | Server simulation distance sent as a VarInt; the client uses it to determine when distant entity death animations pause | SEND | yes |
-| 112 | `minecraft:set_subtitle_text` | Text component staged as the subtitle for the next title; changes the receiving client's title HUD state | DROP_LOCAL | no |
-| 113 | `minecraft:set_time` | Fixed-width game-time long plus zero or more registry-keyed world-clock updates; each update carries clock ticks, partial tick, and rate, and normal packets may contain only a delta | SEND | yes |
-| 114 | `minecraft:set_title_text` | Title text component for the receiving player's title overlay, presented with separately sent subtitle and animation timing; connection-local HUD state | DROP_LOCAL | no |
-| 115 | `minecraft:set_titles_animation` | Title overlay fade-in, stay, and fade-out durations as three fixed-width Int tick values; persists as the receiving client's title timing configuration | DROP_LOCAL | no |
-| 116 | `minecraft:sound_entity` | Entity-attached sound event (registry reference or inline identifier with optional fixed range), source category, VarInt entity ID, volume/pitch Floats, and variant seed; rewrite the source entity ID | REWRITE | no |
-| 117 | `minecraft:sound` | Sound event as a registry reference or inline identifier with optional fixed range, source category, signed Int X/Y/Z in eighth-block units, volume and pitch Floats, and variant seed; preserve exact fixed-point positions and event order | SEND | no |
-| 118 | `minecraft:start_configuration` | Transport, connection, or server control; never replay into an established connection | BLOCKED | no |
-| 119 | `minecraft:stop_sound` | Flags select an optional source category and sound identifier: stop all sounds, all sounds in a category, one sound in every category, or one sound in one category; preserve in order with preceding replayed audio | SEND | no |
-| 120 | `minecraft:store_cookie` | Namespaced cookie key and length-prefixed byte payload up to 5,120 bytes; writes recipient-owned persistent connection data that may be returned in later cookie requests | BLOCKED | no |
-| 121 | `minecraft:system_chat` | Trusted text component and overlay Boolean; includeChat and chatFilter control recording capture, while chat-history and action-bar changes stay local to the recorded connection | DROP_LOCAL* | no |
-| 122 | `minecraft:tab_list` | Two trusted text components customize the player-list header and footer for the recorded connection; preserve the observer's own tab-list presentation | DROP_LOCAL | no |
-| 123 | `minecraft:tag_query` | Response to a client block-entity or entity tag query: the request's VarInt transaction ID and a nullable NBT compound; the response is tied to that requesting connection | BLOCKED | no |
-| 124 | `minecraft:take_item_entity` | Ordered item-pickup animation: collected item entity ID, collector entity ID, and collected stack amount as VarInts; rewrite both entity IDs | REWRITE | no |
-| 125 | `minecraft:teleport_entity` | Entity ID, position/delta movement/yaw/pitch, nine independent relative flags, and on-ground bit; preserve each absolute or relative value and rewrite the entity ID | REWRITE | yes |
-| 126 | `minecraft:test_instance_block_status` | Status text component and optional integer Vec3i structure size for the recipient's open GameTest instance-block editor; depends on that editor's test context | BLOCKED | no |
-| 127 | `minecraft:ticking_state` | Client tick-rate float and frozen flag; changes the receiving client's processing cadence and can freeze it | BLOCKED | no |
-| 128 | `minecraft:ticking_step` | Tick-step count as VarInt; manually advances client processing only while the receiving client is frozen | BLOCKED | no |
-| 129 | `minecraft:transfer` | Target host string and port VarInt; instructs the client to reconnect elsewhere and preserve stored cookies | BLOCKED | no |
-| 130 | `minecraft:update_advancements` | Reset flag, added advancement definitions, removed advancement identifiers, per-advancement criterion progress with completion times, and advancement-screen visibility; belongs to the recorded player's progression UI | DROP_LOCAL | no |
-| 131 | `minecraft:update_attributes` | Entity ID VarInt followed by at most 128 ordered attribute snapshots; each carries a registry attribute, base-value double, and modifier list (identifier, amount double, operation). Rewrites the entity identity and restores entity attributes in checkpoints | REWRITE | yes |
-| 132 | `minecraft:update_mob_effect` | Entity ID VarInt, registry-backed effect, amplifier and duration VarInts, plus ambient, particle, icon, and blend flags. Active effects belong to their entity and are restored in running-effect checkpoints | REWRITE | yes |
-| 133 | `minecraft:update_recipes` | Recipe-property-set map (registry keys and item sets) plus stonecutter input ingredients and slot-display options; recipe objects are omitted from the wire display entries. Connection-local recipe synchronization; drop for the neutral observer | DROP_LOCAL | no |
-| 134 | `minecraft:update_tags` | Registry-key map of tag names to numeric registry-entry IDs (VarInts); server configuration, not scene: replaying it would replace the viewer's live tags with those of the recording time | DROP_LOCAL | no |
-| 135 | `minecraft:projectile_power` | Projectile entity ID VarInt and acceleration-power double; updates `AbstractHurtingProjectile` acceleration separately from motion. Rewrites the entity ID and restores this entity state in checkpoints | REWRITE | yes |
-| 136 | `minecraft:custom_report_details` | Map of up to 32 UTF-8 detail keys (128 characters) and values (4,096 characters), included in later client crash or disconnect reports. Keep local to the source connection; block for the observer | BLOCKED | no |
-| 137 | `minecraft:server_links` | List of built-in or custom text labels with link strings, displayed in the pause-menu server-links view. Keep the recorded connection's menu local to preserve the observer's own links | DROP_LOCAL | no |
-| 138 | `minecraft:waypoint` | Track, update or untrack locator-bar markers by UUID or string identifier; includes icon style, optional RGB color, and empty, block-position, chunk-position or azimuth data. Preserve the observer's own HUD markers | DROP_LOCAL | no |
-| 139 | `minecraft:clear_dialog` | Empty marker that closes the active server-shown dialog on the receiving client. Keep the observer's current dialog unchanged | DROP_LOCAL | no |
-| 140 | `minecraft:show_dialog` | Opens a server-authored dialog from a registry reference or inline dialog definition, with content, inputs and actions. Keep the recorded connection's screen local to preserve the observer's current UI | DROP_LOCAL | no |
-
+| ID | Packet | Domain | Category | Playback | Checkpoint | Source | Notes |
+|---:|---|---|---|---|---|---|---|
+| 0 | `minecraft:bundle_delimiter` | connection | control | blocked | no | - | a bundle boundary; never injected into an established connection |
+| 1 | `minecraft:add_entity` | entity | stateful | replayed, IDs rewritten | yes | eye, membership |  |
+| 2 | `minecraft:animate` | effect | ephemeral | replayed, IDs rewritten | no | eye, broadcast |  |
+| 3 | `minecraft:award_stats` | player | stateful | viewer-local | no | - |  |
+| 4 | `minecraft:block_changed_ack` | world | control | blocked | no | - |  |
+| 5 | `minecraft:block_destruction` | effect | ephemeral | replayed, IDs rewritten | no | ears, identical copies |  |
+| 6 | `minecraft:block_entity_data` | world | stateful | replayed | yes | eye, broadcast |  |
+| 7 | `minecraft:block_event` | world | ephemeral | replayed | no | ears, identical copies |  |
+| 8 | `minecraft:block_update` | world | stateful | replayed | yes | eye, broadcast |  |
+| 9 | `minecraft:boss_event` | effect | stateful | replayed, IDs rewritten | yes | ears, identical copies |  |
+| 10 | `minecraft:change_difficulty` | world | stateful | viewer-local | no | - |  |
+| 11 | `minecraft:chunk_batch_finished` | connection | control | blocked | no | - |  |
+| 12 | `minecraft:chunk_batch_start` | connection | control | blocked | no | - |  |
+| 13 | `minecraft:chunks_biomes` | world | stateful | replayed | yes | eye, broadcast |  |
+| 14 | `minecraft:clear_titles` | ui | stateful | viewer-local | no | - |  |
+| 15 | `minecraft:command_suggestions` | ui | ephemeral | viewer-local | no | - |  |
+| 16 | `minecraft:commands` | ui | stateful | viewer-local | no | - |  |
+| 17 | `minecraft:container_close` | ui | stateful | viewer-local | no | - |  |
+| 18 | `minecraft:container_set_content` | ui | stateful | viewer-local | no | own state, window 0 | window 0 is the recipient's own inventory |
+| 19 | `minecraft:container_set_data` | ui | stateful | viewer-local | no | - |  |
+| 20 | `minecraft:container_set_slot` | ui | stateful | viewer-local | no | own state, window 0 | window 0 is the recipient's own inventory |
+| 21 | `minecraft:cookie_request` | connection | control | blocked | no | - |  |
+| 22 | `minecraft:cooldown` | ui | stateful | viewer-local | no | - |  |
+| 23 | `minecraft:custom_chat_completions` | chat | stateful | viewer-local | no | - |  |
+| 24 | `minecraft:custom_payload` | connection | configurable | viewer-local | no | - |  |
+| 25 | `minecraft:damage_event` | effect | ephemeral | replayed, IDs rewritten | no | eye, broadcast |  |
+| 26 | `minecraft:debug/block_value` | diagnostic | control | blocked | no | - |  |
+| 27 | `minecraft:debug/chunk_value` | diagnostic | control | blocked | no | - |  |
+| 28 | `minecraft:debug/entity_value` | diagnostic | control | blocked | no | - |  |
+| 29 | `minecraft:debug/event` | diagnostic | control | blocked | no | - |  |
+| 30 | `minecraft:debug_sample` | diagnostic | control | blocked | no | - |  |
+| 31 | `minecraft:delete_chat` | chat | ephemeral | viewer-local | no | - |  |
+| 32 | `minecraft:disconnect` | connection | control | blocked | no | - |  |
+| 33 | `minecraft:disguised_chat` | chat | ephemeral | replayed | no | ears, identical copies, world-wide | public chat only |
+| 34 | `minecraft:entity_event` | effect | ephemeral | replayed, IDs rewritten | no | eye, broadcast |  |
+| 35 | `minecraft:entity_position_sync` | entity | stateful | replayed, IDs rewritten | yes | eye, broadcast |  |
+| 36 | `minecraft:explode` | effect | ephemeral | replayed, IDs rewritten | no | ears, keyed copies |  |
+| 37 | `minecraft:forget_level_chunk` | world | stateful | replayed | yes | eye, membership |  |
+| 38 | `minecraft:game_event` | world | ephemeral | replayed | no | ears, from Argus, copies dropped | weather and other game events; weather is sampled by Argus |
+| 39 | `minecraft:game_rule_values` | world | stateful | viewer-local | no | - |  |
+| 40 | `minecraft:game_test_highlight_pos` | diagnostic | control | blocked | no | - |  |
+| 41 | `minecraft:mount_screen_open` | ui | stateful | viewer-local | no | - |  |
+| 42 | `minecraft:hurt_animation` | effect | ephemeral | replayed, IDs rewritten | no | eye, broadcast |  |
+| 43 | `minecraft:initialize_border` | world | stateful | replayed | yes | ears, identical copies |  |
+| 44 | `minecraft:keep_alive` | connection | control | blocked | no | - |  |
+| 45 | `minecraft:level_chunk_with_light` | world | stateful | replayed | yes | eye, membership |  |
+| 46 | `minecraft:level_event` | world | ephemeral | replayed | no | ears, keyed copies |  |
+| 47 | `minecraft:level_particles` | effect | ephemeral | replayed, IDs rewritten | no | ears, identical copies |  |
+| 48 | `minecraft:light_update` | world | stateful | replayed | yes | eye, broadcast |  |
+| 49 | `minecraft:login` | connection | control | blocked | no | - |  |
+| 50 | `minecraft:low_disk_space_warning` | ui | ephemeral | viewer-local | no | - |  |
+| 51 | `minecraft:map_item_data` | world | stateful | viewer-local | no | - |  |
+| 52 | `minecraft:merchant_offers` | ui | stateful | viewer-local | no | - |  |
+| 53 | `minecraft:move_entity_pos` | entity | ephemeral | replayed, IDs rewritten | no | eye, broadcast |  |
+| 54 | `minecraft:move_entity_pos_rot` | entity | ephemeral | replayed, IDs rewritten | no | eye, broadcast |  |
+| 55 | `minecraft:move_minecart_along_track` | entity | stateful | replayed, IDs rewritten | yes | eye, broadcast |  |
+| 56 | `minecraft:move_entity_rot` | entity | ephemeral | replayed, IDs rewritten | no | eye, broadcast |  |
+| 57 | `minecraft:move_vehicle` | entity | ephemeral | viewer-local | no | - |  |
+| 58 | `minecraft:open_book` | ui | ephemeral | viewer-local | no | - |  |
+| 59 | `minecraft:open_screen` | ui | ephemeral | viewer-local | no | - |  |
+| 60 | `minecraft:open_sign_editor` | ui | ephemeral | viewer-local | no | - |  |
+| 61 | `minecraft:ping` | connection | control | blocked | no | - |  |
+| 62 | `minecraft:pong_response` | connection | control | blocked | no | - |  |
+| 63 | `minecraft:place_ghost_recipe` | ui | ephemeral | viewer-local | no | - |  |
+| 64 | `minecraft:player_abilities` | player | stateful | viewer-local | no | - |  |
+| 65 | `minecraft:player_chat` | chat | configurable | replayed | no | ears, keyed copies, world-wide | replayed as `disguised_chat`; whispers and team messages are not recorded |
+| 66 | `minecraft:player_combat_end` | player | ephemeral | viewer-local | no | - |  |
+| 67 | `minecraft:player_combat_enter` | player | ephemeral | viewer-local | no | - |  |
+| 68 | `minecraft:player_combat_kill` | player | ephemeral | viewer-local | no | - |  |
+| 69 | `minecraft:player_info_remove` | player | stateful | replayed, IDs rewritten | yes | ears, identical copies, world-wide | tab list |
+| 70 | `minecraft:player_info_update` | player | stateful | replayed, IDs rewritten | yes | ears, identical copies, world-wide | tab list and player profiles |
+| 71 | `minecraft:player_look_at` | player | ephemeral | viewer-local | no | - |  |
+| 72 | `minecraft:player_position` | player | stateful | viewer-local | no | - |  |
+| 73 | `minecraft:player_rotation` | player | stateful | viewer-local | no | - |  |
+| 74 | `minecraft:recipe_book_add` | ui | stateful | viewer-local | no | - |  |
+| 75 | `minecraft:recipe_book_remove` | ui | stateful | viewer-local | no | - |  |
+| 76 | `minecraft:recipe_book_settings` | ui | stateful | viewer-local | no | - |  |
+| 77 | `minecraft:remove_entities` | entity | stateful | replayed, IDs rewritten | yes | eye, membership |  |
+| 78 | `minecraft:remove_mob_effect` | effect | stateful | replayed, IDs rewritten | yes | eye, broadcast |  |
+| 79 | `minecraft:reset_score` | scoreboard | stateful | viewer-local | no | - |  |
+| 80 | `minecraft:resource_pack_pop` | connection | control | blocked | no | - |  |
+| 81 | `minecraft:resource_pack_push` | connection | control | blocked | no | - |  |
+| 82 | `minecraft:respawn` | player | stateful | viewer-local | no | - |  |
+| 83 | `minecraft:rotate_head` | entity | stateful | replayed, IDs rewritten | yes | eye, broadcast |  |
+| 84 | `minecraft:section_blocks_update` | world | stateful | replayed | yes | eye, broadcast |  |
+| 85 | `minecraft:select_advancements_tab` | ui | ephemeral | viewer-local | no | - |  |
+| 86 | `minecraft:server_data` | ui | stateful | viewer-local | no | - |  |
+| 87 | `minecraft:set_action_bar_text` | ui | ephemeral | viewer-local | no | - |  |
+| 88 | `minecraft:set_border_center` | world | stateful | replayed | yes | ears, identical copies |  |
+| 89 | `minecraft:set_border_lerp_size` | world | stateful | replayed | yes | ears, identical copies |  |
+| 90 | `minecraft:set_border_size` | world | stateful | replayed | yes | ears, identical copies |  |
+| 91 | `minecraft:set_border_warning_delay` | world | stateful | replayed | yes | ears, identical copies |  |
+| 92 | `minecraft:set_border_warning_distance` | world | stateful | replayed | yes | ears, identical copies |  |
+| 93 | `minecraft:set_camera` | player | stateful | viewer-local | no | - |  |
+| 94 | `minecraft:set_chunk_cache_center` | world | stateful | viewer-local | no | view-local |  |
+| 95 | `minecraft:set_chunk_cache_radius` | world | stateful | viewer-local | no | view-local |  |
+| 96 | `minecraft:set_cursor_item` | ui | stateful | viewer-local | no | - |  |
+| 97 | `minecraft:set_default_spawn_position` | world | stateful | replayed | yes | ears, identical copies |  |
+| 98 | `minecraft:set_display_objective` | scoreboard | stateful | viewer-local | no | - |  |
+| 99 | `minecraft:set_entity_data` | entity | stateful | replayed, IDs rewritten | yes | eye, broadcast |  |
+| 100 | `minecraft:set_entity_link` | entity | stateful | replayed, IDs rewritten | yes | eye, broadcast |  |
+| 101 | `minecraft:set_entity_motion` | entity | stateful | replayed, IDs rewritten | yes | eye, broadcast |  |
+| 102 | `minecraft:set_equipment` | entity | stateful | replayed, IDs rewritten | yes | eye, broadcast |  |
+| 103 | `minecraft:set_experience` | player | stateful | viewer-local | no | own state |  |
+| 104 | `minecraft:set_health` | player | stateful | viewer-local | no | own state |  |
+| 105 | `minecraft:set_held_slot` | player | stateful | viewer-local | no | own state |  |
+| 106 | `minecraft:set_objective` | scoreboard | stateful | viewer-local | no | - |  |
+| 107 | `minecraft:set_passengers` | entity | stateful | replayed, IDs rewritten | yes | eye, broadcast |  |
+| 108 | `minecraft:set_player_inventory` | ui | stateful | viewer-local | no | own state |  |
+| 109 | `minecraft:set_player_team` | scoreboard | stateful | viewer-local | no | - |  |
+| 110 | `minecraft:set_score` | scoreboard | stateful | viewer-local | no | - |  |
+| 111 | `minecraft:set_simulation_distance` | world | stateful | replayed | yes | view-local |  |
+| 112 | `minecraft:set_subtitle_text` | ui | stateful | viewer-local | no | - |  |
+| 113 | `minecraft:set_time` | world | stateful | replayed | yes | ears, from Argus, copies dropped | sampled by Argus |
+| 114 | `minecraft:set_title_text` | ui | stateful | viewer-local | no | - |  |
+| 115 | `minecraft:set_titles_animation` | ui | stateful | viewer-local | no | - |  |
+| 116 | `minecraft:sound_entity` | effect | ephemeral | replayed, IDs rewritten | no | ears, identical copies |  |
+| 117 | `minecraft:sound` | effect | ephemeral | replayed | no | ears, identical copies |  |
+| 118 | `minecraft:start_configuration` | connection | control | blocked | no | - |  |
+| 119 | `minecraft:stop_sound` | effect | ephemeral | replayed | no | ears, identical copies |  |
+| 120 | `minecraft:store_cookie` | connection | control | blocked | no | - |  |
+| 121 | `minecraft:system_chat` | chat | configurable | replayed | no | ears, identical copies, world-wide | death, join, quit and advancement broadcasts only |
+| 122 | `minecraft:tab_list` | ui | stateful | viewer-local | no | - |  |
+| 123 | `minecraft:tag_query` | diagnostic | control | blocked | no | - |  |
+| 124 | `minecraft:take_item_entity` | effect | ephemeral | replayed, IDs rewritten | no | eye, broadcast |  |
+| 125 | `minecraft:teleport_entity` | entity | stateful | replayed, IDs rewritten | yes | eye, broadcast |  |
+| 126 | `minecraft:test_instance_block_status` | diagnostic | control | blocked | no | - |  |
+| 127 | `minecraft:ticking_state` | connection | control | blocked | no | - |  |
+| 128 | `minecraft:ticking_step` | connection | control | blocked | no | - |  |
+| 129 | `minecraft:transfer` | connection | control | blocked | no | - |  |
+| 130 | `minecraft:update_advancements` | player | stateful | viewer-local | no | - |  |
+| 131 | `minecraft:update_attributes` | entity | stateful | replayed, IDs rewritten | yes | eye, broadcast |  |
+| 132 | `minecraft:update_mob_effect` | effect | stateful | replayed, IDs rewritten | yes | eye, broadcast |  |
+| 133 | `minecraft:update_recipes` | ui | stateful | viewer-local | no | - |  |
+| 134 | `minecraft:update_tags` | world | stateful | viewer-local | no | - |  |
+| 135 | `minecraft:projectile_power` | entity | stateful | replayed, IDs rewritten | yes | eye, broadcast |  |
+| 136 | `minecraft:custom_report_details` | connection | control | blocked | no | - |  |
+| 137 | `minecraft:server_links` | ui | stateful | viewer-local | no | - |  |
+| 138 | `minecraft:waypoint` | ui | stateful | viewer-local | no | - |  |
+| 139 | `minecraft:clear_dialog` | ui | stateful | viewer-local | no | - |  |
+| 140 | `minecraft:show_dialog` | ui | stateful | viewer-local | no | - |  |
 
 ### PLAY serverbound
 
@@ -307,6 +347,11 @@ Serverbound packets are never recorded or replayed. Each has a definition in
 - **actor effect**: the server answers the packet with an effect it sends to
   everyone except the sender, which is derived for the recording (see
   [capture source policy](../capture-source-policy.md#effects-that-bypass-their-actor)).
+
+The definitions describe recording. During playback, a viewer's `interact`
+and `attack` packets aimed at replay entities are consumed by
+`ReplayEntityInteractions` before they reach the server; see
+[playback](#playback).
 
 | ID | Identifier | Domain | Triggers | Reason |
 |---:|---|---|---|---|

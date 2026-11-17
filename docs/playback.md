@@ -90,6 +90,11 @@ only after the buffer reports that `minimumResumeBuffer` is available. A manual
 pause clears the play intent, so a completed prefetch does not unexpectedly
 resume a viewer who paused.
 
+The timeline plays two [tracks](recording-tracks.md): the global track and the
+track of the viewed world. Each has its own buffer, and the timeline merges
+their frames by elapsed time, server tick and sequence. The least buffered of
+the two decides when playback may resume.
+
 The prefetch planner selects immutable segments around the current position.
 For forward playback it retains the configured history and preloads ahead; for
 seeking it prioritizes the target range. The forward window is scaled by the
@@ -113,11 +118,14 @@ memory budget must be large enough for at least one decoded recording segment,
 including per-frame accounting overhead; an undersized budget fails explicitly
 instead of retaining a partial segment.
 
-Recorded player, system, disguised, and action-bar chat is connection-local
-capture data. The playback bridge suppresses it before native payload decoding,
-so a neutral observer does not receive messages that were originally delivered
-to the recorded player. This does not change `CapturePolicy.includeChat()` or
-remove chat from artifacts that elected to retain it.
+Chat reaches the viewer as the public saw it. Public player chat is replayed
+as unsigned disguised chat with its original decoration, because signatures
+and message indexes belong to the recorded connection. Whispers and team
+messages are never recorded, and of the system messages only death, join,
+quit and advancement broadcasts are; see the
+[capture source policy](capture-source-policy.md). The action bar, titles,
+scoreboards and other HUD state of recorded players stay out of the viewer's
+client.
 
 ## Control the timeline
 
@@ -145,30 +153,6 @@ session.close();
   to the integration, which moves the viewer to another world. The viewer's
   live state, such as live boss bars, is the integration's concern.
 
-## Worlds and recorded players
-
-A recording can span several worlds. Every frame carries its recorded world,
-and a session shows one of them at a time: `viewedWorld()` names it. It
-starts as the world of the placement anchor.
-
-```java
-for (RecordedPlayer player : session.recordedPlayers()) {
-    player.location().ifPresent(location -> { /* world, x, y, z, yaw, pitch */ });
-}
-session.viewWorld(Key.key("minecraft:the_nether"));
-```
-
-- `recordedPlayers()` lists every player the replay knows at the current
-  position, sorted by name. A player that is not part of the scene right now,
-  for example after logging out, has no location.
-- `viewWorld(...)` rebuilds the view at the current position from the frames
-  of another recorded world. A client applies chunks with the height of its
-  own dimension, so the caller first places the viewer in a world of the same
-  dimension. The framework never moves the viewer itself.
-
-The example plugin shows one way to do this: it keeps one viewer world per
-dimension and offers a hotbar menu that moves the viewer to a recorded player.
-
 Supported speeds are `QUARTER` (0.25x), `HALF` (0.5x), `NORMAL` (1x),
 `DOUBLE` (2x), and `QUADRUPLE` (4x). Pause is an explicit state, not a
 zero-speed setting.
@@ -176,6 +160,66 @@ zero-speed setting.
 Do not assume overlapping seek requests will all take effect. A newer seek can
 supersede an in-flight seek; treat a failed or cancelled seek stage as a normal
 control-race outcome and use the latest `snapshot()` for the current state.
+
+## Worlds and recorded players
+
+A recording can span several worlds, each stored in a
+[track](recording-tracks.md) of its own. A session shows one of them at a
+time: `viewedWorld()` names it. It starts as the world of the placement
+anchor.
+
+```java
+session.recordedPlayers().thenAccept(players -> {
+    for (RecordedPlayer player : players) {
+        player.location().ifPresent(location -> {
+            // location.world(), x, y, z, yaw, pitch
+        });
+    }
+});
+```
+
+`recordedPlayers()` lists every player the replay knows at the current
+position, sorted by name, in every world. A player who is not part of the
+scene right now, for example after logging out, has no location. Players in
+the viewed world are known from the frames already played; for every other
+world the session reads that world's track up to the current position, which
+is why the result is asynchronous.
+
+To follow a player into another world, move the viewer to a world of the same
+dimension first, then switch the session:
+
+```java
+Key recorded = target.location().orElseThrow().world();
+World viewerWorld = viewerWorldFor(recorded); // your own world per dimension
+
+viewer.teleportAsync(new Location(viewerWorld, x, y, z))
+        .thenCompose(moved -> session.viewWorld(recorded))
+        .thenAccept(snapshot -> { /* the scene of the other world is built */ });
+```
+
+A client applies chunks with the height of its own dimension, so a nether
+scene in an overworld-type world breaks the client's connection. The framework
+never moves the viewer itself. `viewWorld(...)` replaces the world track of the
+timeline and rebuilds the scene at the current position, like a seek.
+
+The example plugin keeps one viewer world per dimension and offers a players
+menu: a left click goes to the player, a right click opens the player's
+inventory.
+
+## Entities, state and interactions
+
+The session answers questions about the scene at the current position:
+
+| Method | Returns | I/O |
+|---|---|---|
+| `entities()` | every entity of the viewed world with type, position, name, health, equipment, effects and flags | none |
+| `entity(int)` | the entity a viewer's client knows by this ID | none |
+| `state(RecordedSubject)` | the inventory, held slot, vitals and experience of a player, or the inventory of an entity | reads the subject's state track |
+| `recordedPlayers()` | every player in every world | reads other world tracks |
+
+A viewer clicking a replay entity produces a `PlaybackEntityInteracted` event.
+[Recording tracks](recording-tracks.md#api) shows each of these with an
+example.
 
 ## Interpret snapshots and states
 

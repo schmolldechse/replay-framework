@@ -1,9 +1,10 @@
 # Recording
 
 The public recording API creates an isolated replay session. A request defines
-what should be captured; the runtime resolves Paper worlds and chunks,
-registers the packet sink, writes raw packet frames and checkpoints, and
-publishes a replay only after finalization succeeds.
+what should be captured; the runtime resolves Paper worlds and chunks, opens
+the recording's [virtual observers](virtual-observer.md), writes raw packet
+frames and checkpoints into [tracks](recording-tracks.md), and publishes a
+replay only after finalization succeeds.
 
 ```java
 RecordingRequest request = RecordingRequest.builder()
@@ -30,10 +31,11 @@ resolved the capture scope, installed its sink, and reached `RECORDING`.
 `RecordingScope` is a platform-neutral description of worlds and inclusive
 block cuboids. It does not load worlds or chunks by itself.
 
+An arena that is recorded whether players are in it or not:
+
 ```java
 Key world = Key.key("minecraft:overworld");
-RecordingScope scope = RecordingScope.builder()
-        .addWorld(world)
+RecordingScope arena = RecordingScope.builder()
         .addRegion(new CuboidRegion(
                 world,
                 new BlockPosition(-128, 60, -128),
@@ -42,28 +44,75 @@ RecordingScope scope = RecordingScope.builder()
         .build();
 ```
 
-- Add one or more world keys to limit capture to those worlds.
-- Add one or more `CuboidRegion` values to limit capture to inclusive,
-  axis-aligned regions. `min` must not exceed `max` on any axis.
-- An empty world and region selection means all worlds that are currently
-  loaded when the scope is resolved.
-- `LOADED_ONLY` captures only naturally loaded chunks.
-- `PRELOAD_SCOPE` permits preloading, but requires at least one bounded region.
+A survival session that follows its players through every dimension:
 
-The scope controls the packet-capture area. It is not a viewer location, a
-teleport target, or a player permission boundary.
+```java
+RecordingScope survival = RecordingScope.builder()
+        .addWorld(Key.key("minecraft:overworld"))
+        .addWorld(Key.key("minecraft:the_nether"))
+        .addWorld(Key.key("minecraft:the_end"))
+        .chunkLoadingPolicy(ChunkLoadingPolicy.LOADED_ONLY)
+        .build();
+```
+
+- `CuboidRegion` values are inclusive, axis-aligned regions. `min` must not
+  exceed `max` on any axis.
+- World keys limit the recording to those worlds.
+- An empty scope records every world.
+- `PRELOAD_SCOPE` requires at least one region. It makes every checkpoint load
+  the chunks it covers before the snapshot; `LOADED_ONLY` checkpoints contain
+  only chunks that are already loaded.
+
+The scope decides where the recording's [eyes](virtual-observer.md) stand:
+
+| Scope | Eyes | What the replay contains |
+|---|---|---|
+| regions | a lattice of fixed eyes per region | the regions plus the margin the eyes see, whether players are there or not |
+| worlds | one companion per followed player, plus fixed eyes for any regions | what the followed players saw, in every listed world they enter |
+| empty | one companion per followed player | the same, in every world |
+
+Fixed eyes keep their regions loaded and simulated for the whole recording.
+Companions load nothing their players would not load.
+
+A region recording contains everything its eyes receive, not only the blocks
+inside the cuboid; see [the watch is the boundary](virtual-observer.md#the-watch-is-the-boundary).
+The scope is not a viewer location, a teleport target, or a player permission
+boundary.
 
 ## Select participants
 
 `RecordingRequest.participants(...)` accepts player UUIDs for the replay's
-selected participants. An empty set means all captured players in the resolved
-scope are selected. A non-empty set does **not** turn the capture pipeline into
-a player-only filter: packets for other visible players and entities can still
-be required to reconstruct the recorded scene.
+selected participants. In a scope that follows players, the participants are
+the players it follows: each gets a companion eye, and the replay covers the
+areas they are in. An empty set follows every player in the recorded worlds.
 
-Use this field for application-level semantics such as highlighted players,
-ownership, or later catalog presentation. It is independent from the caller
-that started the recording and independent from eventual viewers.
+A non-empty set is not a filter on what is visible. Other players and entities
+near a participant are recorded with the scene, because a replay without them
+would be incomplete. In a region-only scope the fixed eyes decide the area, and
+participants serve application-level purposes such as highlighted players or
+catalog presentation.
+
+## Configure the observers
+
+`RecordingOptions.observers(...)` sets how the eyes behave: how long a
+companion stays after its player logged out, the largest view distance of a
+fixed eye, budgets for eyes and companions, and how often entity inventories
+are read. All budgets are unlimited by default.
+
+```java
+RecordingOptions options = RecordingOptions.builder()
+        .checkpointInterval(Duration.ofSeconds(30))
+        .observers(ObserverOptions.builder()
+                .gracePeriod(Duration.ofSeconds(10))
+                .maxCompanions(40)
+                .build())
+        .build();
+```
+
+A region that needs more fixed eyes than `maxEyesPerRegion` fails the start
+of the recording. Players beyond `maxCompanions` are not followed and are
+reported in the server log. The options are described in detail under
+[options and budgets](virtual-observer.md#options-and-budgets).
 
 ## Configure packet capture
 
@@ -199,23 +248,24 @@ the requested reservation exceeds its configured limit, the runtime fails that
 recording with `QUEUE_OVERFLOW` rather than blocking the network thread or
 discarding an apparently accepted frame.
 
-Paper player and living-entity movement does not rely on outbound packets sent
-to tracking clients. Each version adapter observes the corresponding Paper move
-event on the main thread and contributes an absolute position/rotation state
-packet to the neutral stream. Recipient-derived movement copies for the same
-entity are suppressed, preventing both missing self-movement and duplicate
-relative deltas when several players track one entity. Region membership is
-evaluated from the moved entity's destination rather than a packet recipient.
+The scene does not depend on which players are connected. Chunks, blocks and
+every entity, including the recorded players themselves, arrive through the
+recording's eyes, which the server serves like neutral players. Eyes of the
+same recording are merged by object identity and reference counts, so an
+entity seen by three eyes is recorded once. Packets that only real players
+receive, such as sounds and chat, come from their connections and are merged
+per event. [Virtual observers](virtual-observer.md) and the
+[capture source policy](capture-source-policy.md) describe both paths.
 
 A single virtual writer thread owns the session's artifact state. It drains the
-queue in order, emits raw packet frames, rotates segments when structural
-limits are reached, and records seek points. The checkpoint scheduler requests
-regular snapshots from the adapter; dimension-transition signals can also cause
-checkpoint work. Checkpoint frames and normal packet frames remain separate
-artifact inputs so the playback engine can reset to a stable snapshot and then
-apply only the required delta range.
+queue in order, routes every frame to its [track](recording-tracks.md), rotates
+each track's segments when structural limits are reached, and records seek
+points. The checkpoint scheduler requests regular snapshots from the adapter.
+Checkpoint frames and normal packet frames remain separate artifact inputs so
+the playback engine can reset to a stable snapshot and then apply only the
+required delta range.
 
-Periodic and dimension checkpoints use an adapter capture barrier rather than
+Periodic checkpoints use an adapter capture barrier rather than
 the earlier scheduler trigger as their artifact timestamp. Paper allocates that
 barrier on the main thread after any requested chunk preloading and through the
 same serialized tick/sequence allocator that publishes captured packets. The
@@ -235,7 +285,7 @@ an optimization hint.
 Finalization stops new capture admission, unregisters the sink, and lets the
 writer drain every packet already reserved by a racing producer. The finalizer
 then transitions the catalog to `FINALIZING`, validates the sealed segment and
-checkpoint lists, writes `index.bin`, enforces any pending-upload budget,
+checkpoint lists of every track, writes each track's `index.bin`, enforces any pending-upload budget,
 creates the manifest, publishes the artifacts, and commits the `AVAILABLE`
 transition. It uses one finalization stage per session, so repeated `stop()`
 calls cannot produce competing publication attempts.

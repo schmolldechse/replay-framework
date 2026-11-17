@@ -118,8 +118,11 @@ ReplayMetadataService metadata = framework.metadata();
 The API separates Paper-bound inputs from asynchronous work:
 
 - A `PlaybackRequest` accepts a Paper `Player` at the integration boundary.
-- Starting a recording, opening playback, catalog access, metadata access, and
-  seek/close operations return `CompletionStage` values.
+- Starting a recording, opening playback, catalog access, metadata access,
+  seek/close operations, world switches, `recordedPlayers()` and subject
+  `state(...)` return `CompletionStage` values.
+- `PlaybackSession.entities()` and `entity(int)` answer from frames already
+  played and return immediately.
 - `PlaybackSession.play()`, `pause()`, and `speed(...)` are non-blocking.
 
 Never synchronously wait for a returned stage on the server thread. When a
