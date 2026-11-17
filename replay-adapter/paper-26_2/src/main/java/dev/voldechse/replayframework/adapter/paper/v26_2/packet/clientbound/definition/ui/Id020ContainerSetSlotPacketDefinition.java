@@ -1,6 +1,7 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.definition.ui;
 
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RecipientState;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketClassification;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
@@ -30,4 +31,11 @@ final class Id020ContainerSetSlotPacketDefinition
                         PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
     }
 
+    /** A slot of the recipient's own inventory, window 0, is part of its state. */
+    @Override
+    public RecipientState recipientState() {
+        return RecipientState.when(
+                net.minecraft.network.protocol.game.ClientboundContainerSetSlotPacket.class,
+                packet -> packet.getContainerId() == 0);
+    }
 }

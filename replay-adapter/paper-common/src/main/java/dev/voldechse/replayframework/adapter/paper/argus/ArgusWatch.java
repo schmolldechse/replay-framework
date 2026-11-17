@@ -43,6 +43,7 @@ final class ArgusWatch implements SceneObservation.Watch {
     private final Map<String, WatchScene> scenes = new LinkedHashMap<>();
     private final Map<UUID, Companion> companions = new LinkedHashMap<>();
     private final Set<UUID> overBudget = new HashSet<>();
+    private final SubjectStates subjects;
     private volatile RecordingScope coverage;
     private volatile boolean closeRequested;
     private boolean opened;
@@ -58,6 +59,8 @@ final class ArgusWatch implements SceneObservation.Watch {
         this.fixedEyes = List.copyOf(fixedEyes);
         this.coverage = initialCoverage;
         this.onClose = onClose;
+        this.subjects = new SubjectStates(services, request.observationId(),
+                Math.max(1L, request.options().stateSampleInterval().toMillis() / MILLIS_PER_TICK));
     }
 
     @Override
@@ -136,11 +139,14 @@ final class ArgusWatch implements SceneObservation.Watch {
         return opened;
     }
 
-    /** Follows the online players, then drives every eye and samples world state. */
+    /** Follows the online players, drives every eye, samples world state and the subjects' state. */
     void tick(List<PlayerAnchor> online, long serverTick) {
         follow(online, serverTick);
         new ArrayList<>(scenes.values()).forEach(WatchScene::tick);
         refreshCoverage();
+        if (!scenes.isEmpty()) {
+            subjects.tick(coverage);
+        }
     }
 
     /**

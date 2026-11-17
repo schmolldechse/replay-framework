@@ -238,7 +238,10 @@ final class DefaultPlaybackService implements PlaybackService {
             ReplayArtifactReader.VerifiedReplay verified,
             OpenResources resources) {
         ReplayManifest manifest = verified.manifest();
+        // The scene is the global and the world tracks; state tracks are read
+        // only when a subject's state is asked for.
         List<CompletableFuture<PreparedArtifacts>> preparing = manifest.tracks().stream()
+                .filter(track -> track.kind() != TrackKind.STATE)
                 .map(track -> fetchAndReadIndex(verified, track)
                         .thenApply(index -> new PreparedArtifacts(
                                 track,

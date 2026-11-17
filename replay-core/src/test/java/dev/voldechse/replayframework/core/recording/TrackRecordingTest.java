@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.voldechse.replayframework.adapter.CaptureContext;
+import dev.voldechse.replayframework.adapter.CaptureSubject;
 import dev.voldechse.replayframework.adapter.CheckpointEncoder;
 import dev.voldechse.replayframework.adapter.CheckpointSignalSource;
 import dev.voldechse.replayframework.api.recording.RecordingScope;
@@ -17,6 +18,7 @@ import dev.voldechse.replayframework.format.ReplaySegmentReader;
 import dev.voldechse.replayframework.format.SeekPoint;
 import dev.voldechse.replayframework.format.TrackDescriptor;
 import dev.voldechse.replayframework.format.TrackKind;
+import dev.voldechse.replayframework.format.TrackSubject;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -82,6 +84,36 @@ class TrackRecordingTest {
             assertTrue(track.checkpointFiles().getFirst().startsWith(
                     workspace.toRealPath().resolve(track.descriptor().directory())));
         }
+    }
+
+    @Test
+    void keepsTheStateOfASubjectInItsOwnTrackWithoutAWorld(@TempDir Path workspace) throws Exception {
+        TrackSubject alex = TrackSubject.player(java.util.UUID.fromString("00000000-0000-0000-0000-00000000000a"));
+        SessionPacketQueue queue = new SessionPacketQueue(1024);
+        queue.enqueue(packet(10L, 0, Optional.of(OVERWORLD), false));
+        CaptureContext state = new CaptureContext(
+                Optional.empty(), Optional.of(Key.key(OVERWORLD)), Optional.empty(), Optional.empty(), Optional.empty())
+                .withSubject(new CaptureSubject(alex, "Alex"));
+        queue.enqueue(new CapturedPacket(20L, 1L, 1, PacketPhase.PLAY, 2, new byte[] {9}, state));
+        queue.enqueue(new CapturedPacket(30L, 1L, 2, PacketPhase.PLAY, 2, new byte[] {8}, state));
+        queue.closeForEnqueue();
+
+        RecordingSegmentAppender appender = appender(workspace, queue, new ReplayCheckpoint(0, 0L, List.of()));
+        appender.runWriterLoop();
+        List<TrackWriter.TrackArtifacts> tracks = appender.finishForFinalization().tracks();
+
+        TrackWriter.TrackArtifacts stateTrack = tracks.stream()
+                .filter(track -> track.descriptor().kind() == TrackKind.STATE)
+                .findFirst()
+                .orElseThrow();
+        assertEquals(Optional.of(alex), stateTrack.descriptor().subject());
+        assertEquals("Alex", stateTrack.descriptor().label());
+        assertEquals(List.of(1, 2), sequences(stateTrack));
+        assertEquals(List.of(0), sequences(tracks.stream()
+                .filter(track -> track.descriptor().kind() == TrackKind.WORLD)
+                .findFirst()
+                .orElseThrow()));
+        assertEquals(new SeekPoint(0L, 0, 0, 0L), stateTrack.seekPoints().getFirst());
     }
 
     private static List<Integer> sequences(TrackWriter.TrackArtifacts track) throws Exception {

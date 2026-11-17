@@ -1,6 +1,7 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.definition.player;
 
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RecipientState;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketClassification;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
@@ -26,4 +27,9 @@ final class Id105SetHeldSlotPacketDefinition
                         PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
     }
 
+    /** The recipient's selected hotbar slot. */
+    @Override
+    public RecipientState recipientState() {
+        return RecipientState.always();
+    }
 }

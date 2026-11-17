@@ -106,8 +106,24 @@ public interface CheckpointEncoder {
         }
     }
 
-    /** Immutable checkpoint frames paired with their actual capture barrier. */
-    record CheckpointCapture(CapturePoint point, List<RawPacketFrame> initializationFrames) {
+    /**
+     * Immutable checkpoint frames paired with their actual capture barrier.
+     *
+     * @param point the barrier the state was detached at
+     * @param initializationFrames the scene: what a client needs to join it
+     * @param subjects the complete state of every subject in the scope at the
+     *                 barrier; each becomes the checkpoint of its state track
+     */
+    record CheckpointCapture(
+            CapturePoint point,
+            List<RawPacketFrame> initializationFrames,
+            List<SubjectState> subjects) {
+
+        /** A capture of the scene alone. */
+        public CheckpointCapture(CapturePoint point, List<RawPacketFrame> initializationFrames) {
+            this(point, initializationFrames, List.of());
+        }
+
         public CheckpointCapture {
             Objects.requireNonNull(point, "point");
             Objects.requireNonNull(initializationFrames, "initializationFrames");
@@ -116,6 +132,21 @@ public interface CheckpointEncoder {
                 copied.add(Objects.requireNonNull(frame, "initializationFrames contains null"));
             }
             initializationFrames = List.copyOf(copied);
+            subjects = List.copyOf(Objects.requireNonNull(subjects, "subjects"));
+        }
+    }
+
+    /**
+     * The complete state of one subject at a checkpoint barrier.
+     *
+     * @param subject the subject
+     * @param frames the packets a client needs to know the subject's state,
+     *               stamped with the barrier; they belong to no world
+     */
+    record SubjectState(CaptureSubject subject, List<RawPacketFrame> frames) {
+        public SubjectState {
+            Objects.requireNonNull(subject, "subject");
+            frames = List.copyOf(Objects.requireNonNull(frames, "frames"));
         }
     }
 

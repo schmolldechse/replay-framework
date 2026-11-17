@@ -1,6 +1,7 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.definition.player;
 
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RecipientState;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketClassification;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
@@ -27,4 +28,9 @@ final class Id104SetHealthPacketDefinition
                         PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
     }
 
+    /** The recipient's health, food and saturation. */
+    @Override
+    public RecipientState recipientState() {
+        return RecipientState.always();
+    }
 }

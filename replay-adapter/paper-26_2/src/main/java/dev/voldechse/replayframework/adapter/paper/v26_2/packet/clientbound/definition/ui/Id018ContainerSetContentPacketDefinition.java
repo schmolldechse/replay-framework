@@ -1,6 +1,7 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.definition.ui;
 
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RecipientState;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketClassification;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
@@ -31,4 +32,11 @@ final class Id018ContainerSetContentPacketDefinition
                         PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
     }
 
+    /** The content of the recipient's own inventory, window 0, is part of its state; other windows are containers it opened. */
+    @Override
+    public RecipientState recipientState() {
+        return RecipientState.when(
+                net.minecraft.network.protocol.game.ClientboundContainerSetContentPacket.class,
+                packet -> packet.containerId() == 0);
+    }
 }

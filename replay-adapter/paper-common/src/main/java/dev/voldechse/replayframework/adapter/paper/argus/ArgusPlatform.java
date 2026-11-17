@@ -1,6 +1,8 @@
 package dev.voldechse.replayframework.adapter.paper.argus;
 
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinition;
+import dev.voldechse.replayframework.api.recording.CuboidRegion;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -49,4 +51,11 @@ public interface ArgusPlatform {
      * server sends it only to the players that stay online.
      */
     Object removePlayerInfo(List<UUID> players);
+
+    /**
+     * Reads the subjects with state of their own inside the areas of one
+     * world: its players, and entities whose state no client receives
+     * without opening them, such as the inventory of a llama.
+     */
+    List<SubjectSample> subjects(String world, Collection<CuboidRegion> areas);
 }

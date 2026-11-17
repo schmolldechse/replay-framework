@@ -56,6 +56,13 @@ class ArgusTest {
                 }
 
                 @Override
+                public void publishState(
+                        UUID observationId,
+                        dev.voldechse.replayframework.adapter.CaptureSubject subject,
+                        Object packet) {
+                }
+
+                @Override
                 public void sceneClosed(UUID sceneId) {
                     closedScenes.add(sceneId);
                 }
@@ -533,6 +540,13 @@ class ArgusTest {
         @Override
         public Object removePlayerInfo(List<UUID> left) {
             return new PlayerInfoRemove(left);
+        }
+
+        @Override
+        public List<SubjectSample> subjects(
+                String world,
+                java.util.Collection<dev.voldechse.replayframework.api.recording.CuboidRegion> areas) {
+            return List.of();
         }
 
         @Override

@@ -1,9 +1,9 @@
 # Recording tracks
 
-Status: part A is implemented. A recording is written as a global track and
-one track per world in format v5; playback opens all tracks and merges them
-into one timeline. State tracks (B), on-demand tracks (C) and the state and
-entity API (D) follow.
+Status: parts A and B are implemented. A recording is written as a global
+track, one track per world and one state track per subject in format v5;
+playback merges the global and world tracks into one timeline. On-demand
+tracks (C) and the state and entity API (D) follow.
 
 A recording is a set of **tracks**, like a media container holds video,
 audio and subtitle tracks. Each track is a time-ordered stream of packet
@@ -67,6 +67,28 @@ is the scene checkpoint of that world, for `GLOBAL` the tab list, for a
 `STATE` track the complete state of its subject, built like the packets the
 server sends on join or on opening. All keyframes of one barrier share its
 time, so tracks start consistently at any seek point.
+
+### Implementation
+
+| Part | Role |
+|---|---|
+| `CaptureSubject`, `CaptureContext.subject` | adapter API: the subject a packet describes; the core routes it to the subject's state track |
+| `CheckpointCapture.subjects` | adapter API: the complete state of every subject in the scope at a barrier |
+| `RecipientState` | `paper-common`: a packet definition declares whether a packet describes its recipient's own state |
+| `SubjectSample`, `SubjectStates` | `paper-common`, Argus: publishes a subject's complete state when it comes into a watch's coverage, and a sampled subject's state again when its signature changes |
+| `ArgusPlatform.subjects` | the version-specific reading of the subjects of a world |
+| `ObserverOptions.stateSampleInterval` | how often entity state is read, one second by default |
+
+In 26.2 the player's own `container_set_content` and `container_set_slot`
+for window 0, `set_player_inventory`, `set_held_slot`, `set_health` and
+`set_experience` describe the recipient. `Paper26_2SubjectStates` reads the
+same state from a player, and the inventory of villagers, wandering traders,
+piglins, allays, chest and hopper minecarts, chest boats, and donkeys, mules
+and llamas with a chest. The cursor item, the abilities and containers a
+player opened are not recorded.
+
+A subject that leaves the coverage keeps its track; it gets empty
+checkpoints until it returns and its complete state is published again.
 
 ## Frame format v5
 

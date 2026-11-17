@@ -16,18 +16,21 @@ public final class ObserverOptions {
 
     private static final Duration DEFAULT_GRACE_PERIOD = Duration.ofSeconds(30);
     private static final int DEFAULT_MAX_VIEW_DISTANCE = 8;
+    private static final Duration DEFAULT_STATE_SAMPLE_INTERVAL = Duration.ofSeconds(1);
     private static final ObserverOptions DEFAULT = builder().build();
 
     private final Duration gracePeriod;
     private final OptionalInt maxEyesPerRegion;
     private final OptionalInt maxCompanions;
     private final int maxViewDistance;
+    private final Duration stateSampleInterval;
 
     private ObserverOptions(Builder builder) {
         this.gracePeriod = builder.gracePeriod;
         this.maxEyesPerRegion = builder.maxEyesPerRegion;
         this.maxCompanions = builder.maxCompanions;
         this.maxViewDistance = builder.maxViewDistance;
+        this.stateSampleInterval = builder.stateSampleInterval;
     }
 
     public static Builder builder() {
@@ -65,12 +68,22 @@ public final class ObserverOptions {
         return maxViewDistance;
     }
 
+    /**
+     * How often the observers read the state of entities that no client
+     * receives without opening them, such as the inventory of a llama or a
+     * chest minecart. A change is recorded at the next reading.
+     */
+    public Duration stateSampleInterval() {
+        return stateSampleInterval;
+    }
+
     /** Builder for an immutable observer option snapshot. */
     public static final class Builder {
         private Duration gracePeriod = DEFAULT_GRACE_PERIOD;
         private OptionalInt maxEyesPerRegion = OptionalInt.empty();
         private OptionalInt maxCompanions = OptionalInt.empty();
         private int maxViewDistance = DEFAULT_MAX_VIEW_DISTANCE;
+        private Duration stateSampleInterval = DEFAULT_STATE_SAMPLE_INTERVAL;
 
         private Builder() {
         }
@@ -91,6 +104,16 @@ public final class ObserverOptions {
                 throw new IllegalArgumentException("maxEyesPerRegion must be positive");
             }
             this.maxEyesPerRegion = OptionalInt.of(maxEyes);
+            return this;
+        }
+
+        /** Sets how often entity state is read; at least one server tick (50 ms). */
+        public Builder stateSampleInterval(Duration interval) {
+            Objects.requireNonNull(interval, "interval");
+            if (interval.toMillis() < 50L) {
+                throw new IllegalArgumentException("stateSampleInterval must be at least 50 ms");
+            }
+            this.stateSampleInterval = interval;
             return this;
         }
 

@@ -9,6 +9,7 @@ import com.github.retrooper.packetevents.event.UserDisconnectEvent;
 import dev.voldechse.replayframework.adapter.CaptureBridge;
 import dev.voldechse.replayframework.adapter.CaptureContext;
 import dev.voldechse.replayframework.adapter.CaptureOrigin;
+import dev.voldechse.replayframework.adapter.CaptureSubject;
 import dev.voldechse.replayframework.adapter.CheckpointEncoder;
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
@@ -25,6 +26,7 @@ import dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.Pape
 import dev.voldechse.replayframework.adapter.paper.v26_2.checkpoint.Paper26_2NativePacketCodec;
 import dev.voldechse.replayframework.format.PacketPhase;
 import dev.voldechse.replayframework.format.RawPacketFrame;
+import dev.voldechse.replayframework.format.TrackSubject;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import java.util.Objects;
@@ -127,6 +129,11 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
                     }
 
                     @Override
+                    public void publishState(UUID observationId, CaptureSubject subject, Object packet) {
+                        publishSubjectState(observationId, subject, packet);
+                    }
+
+                    @Override
                     public void sceneClosed(UUID sceneId) {
                         captureState.removeConnection(sceneId);
                     }
@@ -224,6 +231,10 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
 
             byte[] payload = wirePacket.payload();
             UUID connectionId = event.getUser().getUUID();
+            String connectionName = event.getUser().getProfile() == null
+                    || event.getUser().getProfile().getName() == null
+                    ? ""
+                    : event.getUser().getProfile().getName();
             captureOrder.publish(point -> {
                 CaptureContext context;
                 boolean publishObserved = true;
@@ -249,6 +260,12 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
                     }
                     if (!definition.distribution().observable()) {
                         context = context.withOrigin(CaptureOrigin.PLAYER_ONLY);
+                    }
+                    if (definition.recipientState().describesRecipient(decoded)) {
+                        // The recipient's own state: its inventory, health or
+                        // experience. It belongs to the recipient's state track.
+                        context = context.withSubject(new CaptureSubject(
+                                TrackSubject.player(connectionId), connectionName));
                     }
                     if (definition.suppressesRecipientState(
                             decoded, captureState, point.serverTick())) {
@@ -399,6 +416,37 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
         } catch (Throwable ignored) {
             // Receivers left on closing connections pass every packet through.
         }
+    }
+
+    /**
+     * Publishes one packet of a subject's state that Argus read on the server
+     * thread. It belongs to the recording of the watch and to no world.
+     */
+    private void publishSubjectState(UUID observationId, CaptureSubject subject, Object packet) {
+        CaptureBridge.PacketSink currentSink = sink;
+        if (state.get() != State.INSTALLED || currentSink == null || !currentSink.hasActiveSinks()) {
+            return;
+        }
+        if (!(packet instanceof net.minecraft.network.protocol.Packet<?> nativePacket)) {
+            throw incompatible("subject state is not a Paper 26.2 packet", null);
+        }
+        Paper26_2NativePacketCodec.EncodedStatePacket encoded = stateCodec.encodeState(nativePacket);
+        CaptureContext context = new CaptureContext(
+                encoded.descriptor().disposition(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty())
+                .observedBy(observationId)
+                .withSubject(subject);
+        captureOrder.publish(point -> currentSink.accept(new CaptureBridge.CapturePacket(
+                point.captureTimeNanos(),
+                point.serverTick(),
+                point.sequence(),
+                PacketPhase.PLAY,
+                encoded.packetId(),
+                encoded.payload(),
+                context)));
     }
 
     /**

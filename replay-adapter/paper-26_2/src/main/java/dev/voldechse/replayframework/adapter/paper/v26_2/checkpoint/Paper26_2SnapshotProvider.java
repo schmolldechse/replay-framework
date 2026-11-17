@@ -216,7 +216,8 @@ public final class Paper26_2SnapshotProvider
                 worldAccess.snapshot(scope, chunks), "worldAccess returned null snapshot");
         return point == null
                 ? snapshot
-                : new Paper26_2CheckpointEncoder.CheckpointSnapshot(point, snapshot.packets());
+                : new Paper26_2CheckpointEncoder.CheckpointSnapshot(
+                        java.util.Optional.of(point), snapshot.packets(), snapshot.subjects());
     }
 
     private static CompletionStage<Void> allOf(List<CompletionStage<Void>> stages) {
@@ -422,9 +423,15 @@ public final class Paper26_2SnapshotProvider
             }
 
             List<Paper26_2CheckpointEncoder.PacketBlueprint> packets = new ArrayList<>();
+            List<dev.voldechse.replayframework.adapter.paper.v26_2.argus.Paper26_2SubjectStates.Subject> subjects =
+                    new ArrayList<>();
             for (Map.Entry<String, Set<ChunkCoordinate>> entry : selectedByWorld.entrySet()) {
                 String worldKey = entry.getKey();
                 ServerLevel level = handle(worldKey);
+                Set<ChunkCoordinate> selected = entry.getValue();
+                subjects.addAll(dev.voldechse.replayframework.adapter.paper.v26_2.argus.Paper26_2SubjectStates
+                        .snapshot(level, entity -> selected.contains(new ChunkCoordinate(
+                                entity.chunkPosition().x(), entity.chunkPosition().z()))));
                 addGlobalPackets(packets, level, worldKey);
                 for (ChunkCoordinate coordinate : entry.getValue()) {
                     LevelChunk chunk = level.getChunkIfLoaded(coordinate.x(), coordinate.z());
@@ -451,7 +458,8 @@ public final class Paper26_2SnapshotProvider
                 }
                 addEntityPackets(packets, level, worldKey, entry.getValue());
             }
-            return new Paper26_2CheckpointEncoder.CheckpointSnapshot(packets);
+            return new Paper26_2CheckpointEncoder.CheckpointSnapshot(
+                    java.util.Optional.empty(), packets, subjects);
         }
 
         private void addGlobalPackets(

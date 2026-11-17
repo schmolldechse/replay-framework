@@ -91,6 +91,15 @@ public abstract class ClientboundPacketDefinition<C> {
     }
 
     /**
+     * Whether this packet describes the state of its recipient, such as its
+     * inventory or health. Recordings then keep it in the recipient's state
+     * track instead of the scene.
+     */
+    public RecipientState recipientState() {
+        return RecipientState.none();
+    }
+
+    /**
      * Whether recordings take this packet from player connections into the
      * scene: only listed players receive it, and playback replays it to the
      * viewer.

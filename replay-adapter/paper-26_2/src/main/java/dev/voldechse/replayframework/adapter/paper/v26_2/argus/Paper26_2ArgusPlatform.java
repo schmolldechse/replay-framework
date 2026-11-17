@@ -6,9 +6,12 @@ import dev.voldechse.replayframework.adapter.paper.argus.ArgusEye;
 import dev.voldechse.replayframework.adapter.paper.argus.ArgusPlatform;
 import dev.voldechse.replayframework.adapter.paper.argus.EyeSpec;
 import dev.voldechse.replayframework.adapter.paper.argus.PlayerAnchor;
+import dev.voldechse.replayframework.adapter.paper.argus.SubjectSample;
+import dev.voldechse.replayframework.api.recording.CuboidRegion;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.Paper26_2ClientboundPacketCatalog;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -22,6 +25,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.phys.AABB;
 import org.bukkit.Bukkit;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
@@ -103,6 +107,17 @@ public final class Paper26_2ArgusPlatform implements ArgusPlatform {
     @Override
     public Object removePlayerInfo(List<UUID> players) {
         return new ClientboundPlayerInfoRemovePacket(List.copyOf(players));
+    }
+
+    @Override
+    public List<SubjectSample> subjects(String world, Collection<CuboidRegion> areas) {
+        List<AABB> boxes = new ArrayList<>(areas.size());
+        for (CuboidRegion area : areas) {
+            boxes.add(new AABB(
+                    area.min().x(), area.min().y(), area.min().z(),
+                    area.max().x() + 1.0D, area.max().y() + 1.0D, area.max().z() + 1.0D));
+        }
+        return Paper26_2SubjectStates.samples(level(world), boxes);
     }
 
     private static ServerLevel level(String worldKey) {

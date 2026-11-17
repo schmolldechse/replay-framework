@@ -116,7 +116,8 @@ public final class Paper26_2CheckpointEncoder implements CheckpointEncoder {
                 }
                 return new CheckpointCapture(
                         point,
-                        encodeFrames(detached, elapsedNanos, point.serverTick()));
+                        encodeFrames(detached, elapsedNanos, point.serverTick()),
+                        encodeSubjects(detached, elapsedNanos, point.serverTick()));
             }, executor);
         } catch (Throwable failure) {
             return CompletableFuture.failedFuture(failure);
@@ -186,6 +187,27 @@ public final class Paper26_2CheckpointEncoder implements CheckpointEncoder {
         }
 
         return List.copyOf(frames);
+    }
+
+    /**
+     * Encodes the state of every subject. Its packets belong to no world and
+     * are numbered within each subject, like checkpoint frames.
+     */
+    private List<dev.voldechse.replayframework.adapter.CheckpointEncoder.SubjectState> encodeSubjects(
+            CheckpointSnapshot snapshot, long elapsedNanos, long serverTick) {
+        List<dev.voldechse.replayframework.adapter.CheckpointEncoder.SubjectState> states = new ArrayList<>();
+        for (var subject : snapshot.subjects()) {
+            List<RawPacketFrame> frames = new ArrayList<>(subject.packets().size());
+            for (Packet<?> packet : subject.packets()) {
+                Paper26_2NativePacketCodec.EncodedStatePacket encoded = nativePacketCodec.encodeState(packet);
+                frames.add(new RawPacketFrame(
+                        elapsedNanos, serverTick, frames.size(), PacketPhase.PLAY,
+                        encoded.packetId(), encoded.payload()));
+            }
+            states.add(new dev.voldechse.replayframework.adapter.CheckpointEncoder.SubjectState(
+                    subject.subject(), frames));
+        }
+        return List.copyOf(states);
     }
 
     /** Packets that concern no place, such as tab-list entries, apply in every world. */
@@ -356,21 +378,29 @@ public final class Paper26_2CheckpointEncoder implements CheckpointEncoder {
                 : new IncompatibleAdapterException(message, cause);
     }
 
-    /** Immutable detached state passed from Paper world access to assembly. */
+    /**
+     * Immutable detached state passed from Paper world access to assembly.
+     *
+     * @param capturePoint the barrier the state was detached at, when known
+     * @param packets the scene
+     * @param subjects the complete state of every subject in the scope
+     */
     public record CheckpointSnapshot(
             java.util.Optional<CapturePoint> capturePoint,
-            List<PacketBlueprint> packets) {
+            List<PacketBlueprint> packets,
+            List<dev.voldechse.replayframework.adapter.paper.v26_2.argus.Paper26_2SubjectStates.Subject> subjects) {
 
         public CheckpointSnapshot(List<PacketBlueprint> packets) {
-            this(java.util.Optional.empty(), packets);
+            this(java.util.Optional.empty(), packets, List.of());
         }
 
         public CheckpointSnapshot(CapturePoint capturePoint, List<PacketBlueprint> packets) {
             this(java.util.Optional.of(
-                    Objects.requireNonNull(capturePoint, "capturePoint")), packets);
+                    Objects.requireNonNull(capturePoint, "capturePoint")), packets, List.of());
         }
 
         public CheckpointSnapshot {
+            subjects = List.copyOf(Objects.requireNonNull(subjects, "subjects"));
             Objects.requireNonNull(capturePoint, "capturePoint");
             Objects.requireNonNull(packets, "packets");
             List<PacketBlueprint> copied = new ArrayList<>(packets.size());
@@ -437,6 +467,11 @@ public final class Paper26_2CheckpointEncoder implements CheckpointEncoder {
     @FunctionalInterface
     public interface NativePacketCodec {
         EncodedPacket encode(PacketBlueprint blueprint);
+
+        /** Encodes a packet of a subject's state, which has no checkpoint family. */
+        default Paper26_2NativePacketCodec.EncodedStatePacket encodeState(Packet<?> packet) {
+            throw new IncompatibleAdapterException("this codec cannot encode subject state");
+        }
     }
 
     /** Total order used for checkpoint family assembly. */
