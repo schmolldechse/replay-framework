@@ -25,7 +25,7 @@ public final class Paper26_2ReplayAdapter extends AbstractReplayAdapter {
 
     private static final String ADAPTER_ID = "paper-26.2";
     private static final String MINECRAFT_VERSION = "26.2";
-    private static final int ADAPTER_FORMAT_REVISION = 4;
+    private static final int ADAPTER_FORMAT_REVISION = 5;
 
     /**
      * Creates a verified adapter with its runtime ports injected.

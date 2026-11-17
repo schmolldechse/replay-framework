@@ -14,6 +14,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class ReplayCheckpointCodecTest {
 
+    private static final TrackDescriptor TRACK = TrackDescriptor.global(0);
+
     @TempDir
     Path temporaryDirectory;
 
@@ -27,15 +29,15 @@ class ReplayCheckpointCodecTest {
                 List.of(
                         new RawPacketFrame(
                                 10_000L, 40L, 0,
-                                PacketPhase.CONFIGURATION, 3, configurationPayload),
+                                PacketPhase.PLAY, 3, configurationPayload),
                         new RawPacketFrame(
                                 20_000L, 41L, 0,
                                 PacketPhase.PLAY, 7, new byte[]{0x7F, (byte) 0xFF})));
         configurationPayload[0] = 0x55;
 
-        new ReplayCheckpointWriter(target, "paper-26.2").write(checkpoint);
+        new ReplayCheckpointWriter(target, "paper-26.2", TRACK).write(checkpoint);
 
-        ReplayCheckpoint decoded = new ReplayCheckpointReader().read(target);
+        ReplayCheckpoint decoded = new ReplayCheckpointReader().read(target, TRACK);
 
         assertEquals(checkpoint.ordinal(), decoded.ordinal());
         assertEquals(checkpoint.elapsedNanos(), decoded.elapsedNanos());
@@ -56,7 +58,7 @@ class ReplayCheckpointCodecTest {
                 100L,
                 List.of(new RawPacketFrame(
                         100L, 1L, 0, PacketPhase.PLAY, 1, new byte[]{0x01, 0x02})));
-        new ReplayCheckpointWriter(target, "paper-26.2").write(checkpoint);
+        new ReplayCheckpointWriter(target, "paper-26.2", TRACK).write(checkpoint);
 
         byte[] complete = Files.readAllBytes(target);
         Path truncated = temporaryDirectory.resolve("00000001-truncated.checkpoint");
@@ -67,7 +69,7 @@ class ReplayCheckpointCodecTest {
 
         assertThrows(
                 CorruptReplayArtifactException.class,
-                () -> new ReplayCheckpointReader().read(truncated));
+                () -> new ReplayCheckpointReader().read(truncated, TRACK));
     }
 
     @Test
@@ -78,11 +80,11 @@ class ReplayCheckpointCodecTest {
                 100L,
                 List.of(new RawPacketFrame(
                         100L, 1L, 0, PacketPhase.PLAY, 1, new byte[]{0x01})));
-        new ReplayCheckpointWriter(target, "paper-26.2").write(checkpoint);
+        new ReplayCheckpointWriter(target, "paper-26.2", TRACK).write(checkpoint);
         Files.write(target, new byte[]{0x42}, StandardOpenOption.APPEND);
 
         assertThrows(
                 CorruptReplayArtifactException.class,
-                () -> new ReplayCheckpointReader().read(target));
+                () -> new ReplayCheckpointReader().read(target, TRACK));
     }
 }

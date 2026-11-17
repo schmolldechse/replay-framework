@@ -17,7 +17,8 @@ import java.util.Optional;
  * @param world namespaced key of the world the packet belongs to; empty for
  *              packets that belong to no world, such as chat or the tab list.
  *              A recording can span several worlds, and a client can only
- *              apply the packets of the world it is in.
+ *              apply the packets of the world it is in. The world is not
+ *              stored per frame: it is the world of the frame's track.
  */
 public record RawPacketFrame(
         long elapsedNanos,
@@ -59,14 +60,25 @@ public record RawPacketFrame(
         Objects.requireNonNull(payload, "payload");
         payload = payload.clone();
         Objects.requireNonNull(world, "world");
-        world.ifPresent(key -> {
-            if (key.isBlank()) {
-                throw new IllegalArgumentException("world must not be blank");
-            }
-            if (key.getBytes(StandardCharsets.UTF_8).length > MAX_WORLD_LENGTH) {
-                throw new IllegalArgumentException("world key is too long");
-            }
-        });
+        world.ifPresent(RawPacketFrame::requireWorldKey);
+    }
+
+    /**
+     * Validates a world key.
+     *
+     * @param key world key
+     * @return the key
+     * @throws IllegalArgumentException when it is blank or too long
+     */
+    static String requireWorldKey(String key) {
+        Objects.requireNonNull(key, "world");
+        if (key.isBlank()) {
+            throw new IllegalArgumentException("world must not be blank");
+        }
+        if (key.getBytes(StandardCharsets.UTF_8).length > MAX_WORLD_LENGTH) {
+            throw new IllegalArgumentException("world key is too long");
+        }
+        return key;
     }
 
     /**

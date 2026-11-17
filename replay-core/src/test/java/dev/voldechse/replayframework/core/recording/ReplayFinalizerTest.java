@@ -89,7 +89,7 @@ final class ReplayFinalizerTest {
                     RecordingStatus.FINALIZING,
                     RecordingStatus.AVAILABLE), fixture.repository.transitions);
             assertEquals(List.of(new SeekPoint(0L, 0, 0, 0L)),
-                    new ReplayIndexReader().read(fixture.workspace.resolve("index.bin")).points());
+                    new ReplayIndexReader().read(fixture.workspace.resolve("tracks/0/index.bin")).points());
         } finally {
             fixture.close();
         }
@@ -116,7 +116,7 @@ final class ReplayFinalizerTest {
                     fixture.replayId,
                     ArtifactKey.of("manifest.json")).toCompletableFuture().join());
             assertTrue(Files.isRegularFile(
-                    fixture.workspace.resolve("checkpoints/00000000.checkpoint")));
+                    fixture.workspace.resolve("tracks/0/checkpoints/00000000.checkpoint")));
         } finally {
             fixture.close();
         }

@@ -199,6 +199,9 @@ public final class Paper26_2PlaybackBridge implements PlaybackBridge {
         });
 
         enqueueOutbound(() -> {
+            // The rebuilt view replaces the live world the viewer may have
+            // received after a world change.
+            gate.resumeIsolation();
             resetter.reset();
             players.clear();
             Paper26_2ReplayPacketRewriter currentRewriter = rewriter.get();

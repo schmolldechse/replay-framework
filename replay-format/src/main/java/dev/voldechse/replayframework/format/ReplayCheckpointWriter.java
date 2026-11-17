@@ -20,7 +20,7 @@ import java.util.Objects;
 public final class ReplayCheckpointWriter {
 
     private static final byte[] MAGIC = "RFC1".getBytes(StandardCharsets.US_ASCII);
-    private static final int FORMAT_VERSION = 4;
+    private static final int FORMAT_VERSION = 5;
 
     private enum State {
         /** The writer has not published its checkpoint yet. */
@@ -33,6 +33,7 @@ public final class ReplayCheckpointWriter {
 
     private final Path target;
     private final String adapterId;
+    private final TrackDescriptor track;
     private State state = State.OPEN;
 
     /**
@@ -40,10 +41,13 @@ public final class ReplayCheckpointWriter {
      *
      * @param target final checkpoint path
      * @param adapterId adapter identifier stored in the checkpoint header
+     * @param track the track the checkpoint belongs to
      * @throws IOException if the target parent cannot be created
      */
-    public ReplayCheckpointWriter(Path target, String adapterId) throws IOException {
+    public ReplayCheckpointWriter(Path target, String adapterId, TrackDescriptor track)
+            throws IOException {
         Objects.requireNonNull(target, "target");
+        this.track = Objects.requireNonNull(track, "track");
         Objects.requireNonNull(adapterId, "adapterId");
         if (adapterId.isEmpty()) {
             throw new IllegalArgumentException("adapterId must not be empty");
@@ -78,15 +82,16 @@ public final class ReplayCheckpointWriter {
             framePath = Files.createTempFile(
                     target.getParent(), ".replay-checkpoint-", ".frames.part");
             long frameCount = 0L;
+            ReplayFrameCodec.Encoder encoder = new ReplayFrameCodec.Encoder(track);
             long uncompressedLength = 0L;
             try (OutputStream frameOutput = new BufferedOutputStream(Files.newOutputStream(
                     framePath,
                     StandardOpenOption.WRITE,
                     StandardOpenOption.TRUNCATE_EXISTING))) {
                 for (RawPacketFrame frame : checkpoint.initializationFrames()) {
-                    long encodedLength = ReplayFrameCodec.encodedRecordLength(frame);
+                    long encodedLength = encoder.encodedLength(frame);
                     uncompressedLength = addLength(uncompressedLength, encodedLength);
-                    ReplayFrameCodec.writeRecord(frameOutput, frame);
+                    encoder.write(frameOutput, frame);
                     frameCount = Math.addExact(frameCount, 1L);
                 }
             }

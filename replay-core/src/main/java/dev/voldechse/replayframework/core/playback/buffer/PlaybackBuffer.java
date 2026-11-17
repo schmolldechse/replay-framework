@@ -8,6 +8,7 @@ import dev.voldechse.replayframework.core.playback.cache.MemoryPacketBuffer;
 import dev.voldechse.replayframework.core.playback.cache.SegmentCache;
 import dev.voldechse.replayframework.format.RawPacketFrame;
 import dev.voldechse.replayframework.format.ReplaySegmentReader;
+import dev.voldechse.replayframework.format.TrackDescriptor;
 import dev.voldechse.replayframework.format.SeekPoint;
 
 import java.time.Duration;
@@ -29,6 +30,7 @@ public final class PlaybackBuffer implements AutoCloseable {
 
     private final ReplayArtifactReader.VerifiedReplay replay;
     private final List<SegmentCache.SegmentRef> segments;
+    private final TrackDescriptor track;
     private final SegmentCache segmentCache;
     private final ReplaySegmentReader segmentReader;
     private final PlaybackBufferOptions options;
@@ -46,7 +48,8 @@ public final class PlaybackBuffer implements AutoCloseable {
      * Creates one independent decoded buffer for a verified replay.
      *
      * @param replay verified replay manifest
-     * @param segments ordered segment references
+     * @param segments ordered segment references of one track; may be empty
+     * @param track the track the segments belong to
      * @param artifactReader retained for the cache boundary
      * @param segmentCache shared verified segment cache
      * @param segmentReader strict segment decoder
@@ -56,6 +59,7 @@ public final class PlaybackBuffer implements AutoCloseable {
     public PlaybackBuffer(
             ReplayArtifactReader.VerifiedReplay replay,
             List<SegmentCache.SegmentRef> segments,
+            TrackDescriptor track,
             ReplayArtifactReader artifactReader,
             SegmentCache segmentCache,
             ReplaySegmentReader segmentReader,
@@ -64,6 +68,7 @@ public final class PlaybackBuffer implements AutoCloseable {
         this.replay = Objects.requireNonNull(replay, "replay");
         Objects.requireNonNull(artifactReader, "artifactReader");
         this.segments = validateSegments(segments);
+        this.track = Objects.requireNonNull(track, "track");
         this.segmentCache = Objects.requireNonNull(segmentCache, "segmentCache");
         this.segmentReader = Objects.requireNonNull(segmentReader, "segmentReader");
         this.options = Objects.requireNonNull(options, "options");
@@ -121,7 +126,10 @@ public final class PlaybackBuffer implements AutoCloseable {
             long startNanos = toNanos(startInclusive, "startInclusive");
             long endNanos = toNanos(endExclusive, "endExclusive");
             long durationNanos = replay.manifest().durationNanos();
-            if (startNanos < 0L || endNanos < startNanos || endNanos > durationNanos) {
+            // The exclusive end may lie just after the last frame time, so a
+            // seek to the very end includes the frames at the end.
+            long maximumEnd = durationNanos == Long.MAX_VALUE ? Long.MAX_VALUE : durationNanos + 1L;
+            if (startNanos < 0L || endNanos < startNanos || endNanos > maximumEnd) {
                 throw new IllegalArgumentException("frame interval is outside replay duration");
             }
             ensureOpen();
@@ -324,7 +332,7 @@ public final class PlaybackBuffer implements AutoCloseable {
             CacheEntryLease lease,
             SegmentCache.SegmentRef segment) {
         try {
-            return validateDecoded(segmentReader.read(lease.path()), segment);
+            return validateDecoded(segmentReader.read(lease.path(), track), segment);
         } catch (Exception exception) {
             throw new SegmentDecodeException(segment, exception);
         }
@@ -421,6 +429,10 @@ public final class PlaybackBuffer implements AutoCloseable {
      * and after the final frame is covered by the neighboring loaded segment.
      */
     private LoadedCoverage loadedCoverage(long positionNanos) {
+        if (segments.isEmpty()) {
+            // A track without segments holds only checkpoints; nothing is missing.
+            return new LoadedCoverage(0L, replay.manifest().durationNanos());
+        }
         synchronized (stateLock) {
             int anchor = loadedSegmentCovering(positionNanos);
             if (anchor < 0) {

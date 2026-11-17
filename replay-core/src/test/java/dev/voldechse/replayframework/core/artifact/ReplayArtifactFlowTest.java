@@ -1,5 +1,6 @@
 package dev.voldechse.replayframework.core.artifact;
 
+import dev.voldechse.replayframework.format.TrackDescriptor;
 import com.google.gson.Gson;
 import dev.voldechse.replayframework.api.id.ReplayId;
 import dev.voldechse.replayframework.format.CorruptReplayArtifactException;
@@ -63,25 +64,25 @@ class ReplayArtifactFlowTest {
                         "sha256:registry",
                         ReplayManifest.CURRENT_FORMAT_REVISION,
                         12L,
-                        index,
-                        List.of(segment),
-                        List.of(checkpoint)))
+                        List.of(new ReplayArtifactPublisher.TrackFiles(
+
+                                TrackDescriptor.global(0), index, List.of(segment), List.of(checkpoint)))))
                 .toCompletableFuture()
                 .join();
 
         assertEquals(
                 List.of(
                         "stage",
-                        "put:segments/00000000.segment",
-                        "put:checkpoints/00000000.checkpoint",
-                        "put:index.bin",
+                        "put:tracks/0/segments/00000000.segment",
+                        "put:tracks/0/checkpoints/00000000.checkpoint",
+                        "put:tracks/0/index.bin",
                         "put:manifest.json",
                         "publish"),
                 storage.events);
         assertTrue(storage.published);
         assertEquals(REPLAY_ID.toString(), manifest.replayId());
         assertEquals(
-                List.of("checkpoints/00000000.checkpoint", "index.bin", "segments/00000000.segment"),
+                List.of("tracks/0/checkpoints/00000000.checkpoint", "tracks/0/index.bin", "tracks/0/segments/00000000.segment"),
                 manifest.files().stream().map(ArtifactFile::path).toList());
         assertArrayEquals(
                 codec.encode(manifest),
@@ -95,7 +96,7 @@ class ReplayArtifactFlowTest {
         Path segment = write(temporaryDirectory, "segment", "segment-bytes");
         Path checkpoint = write(temporaryDirectory, "checkpoint", "checkpoint-bytes");
         RecordingStorage storage = new RecordingStorage();
-        storage.failureKey = "segments/00000000.segment";
+        storage.failureKey = "tracks/0/segments/00000000.segment";
         ReplayArtifactPublisher publisher = new ReplayArtifactPublisher(
                 storage,
                 new ReplayManifestCodec(new Gson()),
@@ -112,9 +113,9 @@ class ReplayArtifactFlowTest {
                                 "sha256:registry",
                                 ReplayManifest.CURRENT_FORMAT_REVISION,
                                 12L,
-                                index,
-                                List.of(segment),
-                                List.of(checkpoint)))
+                                List.of(new ReplayArtifactPublisher.TrackFiles(
+
+                                        TrackDescriptor.global(0), index, List.of(segment), List.of(checkpoint)))))
                         .toCompletableFuture()
                         .join());
 
@@ -130,7 +131,7 @@ class ReplayArtifactFlowTest {
         ReplayManifest manifest = manifestWithIndex(expectedBytes);
         RecordingStorage storage = new RecordingStorage();
         storage.publishedArtifacts.put("manifest.json", codec.encode(manifest));
-        storage.publishedArtifacts.put("index.bin", "corrupted-index".getBytes());
+        storage.publishedArtifacts.put("tracks/0/index.bin", "corrupted-index".getBytes());
         ReplayArtifactReader reader = new ReplayArtifactReader(
                 storage,
                 codec,
@@ -177,7 +178,8 @@ class ReplayArtifactFlowTest {
                 "sha256:registry",
                 ReplayManifest.CURRENT_FORMAT_REVISION,
                 0L,
-                List.of(new ArtifactFile(ArtifactType.INDEX, "index.bin", bytes.length, sha256(bytes))));
+                List.of(TrackDescriptor.global(0)),
+                List.of(new ArtifactFile(ArtifactType.INDEX, "tracks/0/index.bin", bytes.length, sha256(bytes))));
     }
 
     private static Path write(Path directory, String name, String content) throws IOException {

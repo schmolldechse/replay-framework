@@ -19,6 +19,7 @@ import dev.voldechse.replayframework.format.ReplayManifest.ArtifactFile;
 import dev.voldechse.replayframework.format.ReplayManifest.ArtifactType;
 import dev.voldechse.replayframework.format.ReplaySegmentWriter;
 import dev.voldechse.replayframework.format.ReplaySegmentReader;
+import dev.voldechse.replayframework.format.TrackDescriptor;
 import dev.voldechse.replayframework.storage.ArtifactKey;
 import dev.voldechse.replayframework.storage.ByteRange;
 import dev.voldechse.replayframework.storage.ReplayStorage;
@@ -56,6 +57,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class PlaybackBufferCacheTest {
+
+    private static final TrackDescriptor GLOBAL = TrackDescriptor.global(0);
+
+    private static List<ArtifactFile> withIndex(List<ArtifactFile> artifacts) {
+        List<ArtifactFile> files = new ArrayList<>(artifacts);
+        files.add(new ArtifactFile(ArtifactType.INDEX, "tracks/0/index.bin", 1L, "0".repeat(64)));
+        return files;
+    }
 
     private static final ReplayId REPLAY_ID = ReplayId.parse(
             "22222222-2222-2222-2222-222222222222");
@@ -322,6 +331,7 @@ class PlaybackBufferCacheTest {
                         artifact,
                         0L,
                         1_000_000_000L)),
+                GLOBAL,
                 reader,
                 cache,
                 new ReplaySegmentReader(),
@@ -338,6 +348,17 @@ class PlaybackBufferCacheTest {
         assertEquals(frames, buffer.framesBetween(
                         Duration.ZERO,
                         Duration.ofSeconds(2L))
+                .toCompletableFuture()
+                .join());
+        // A seek to the very end reads up to just after the replay duration.
+        assertEquals(List.of(frames.getLast()), buffer.framesBetween(
+                        Duration.ofSeconds(1L),
+                        Duration.ofNanos(4_000_000_001L))
+                .toCompletableFuture()
+                .join());
+        assertThrows(java.util.concurrent.CompletionException.class, () -> buffer.framesBetween(
+                        Duration.ZERO,
+                        Duration.ofNanos(4_000_000_002L))
                 .toCompletableFuture()
                 .join());
         assertTrue(progress.bufferedAhead().compareTo(Duration.ZERO) > 0);
@@ -380,6 +401,7 @@ class PlaybackBufferCacheTest {
                                 0, firstArtifact, 0L, 1_000_000_000L),
                         new SegmentCache.SegmentRef(
                                 1, secondArtifact, 2_000_000_000L, 4_000_000_000L)),
+                GLOBAL,
                 reader,
                 cache,
                 new ReplaySegmentReader(),
@@ -442,6 +464,7 @@ class PlaybackBufferCacheTest {
                                 0, firstArtifact, 0L, 1_000_000_000L),
                         new SegmentCache.SegmentRef(
                                 1, secondArtifact, 2_000_000_000L, 3_000_000_000L)),
+                GLOBAL,
                 reader,
                 cache,
                 new ReplaySegmentReader(),
@@ -506,6 +529,7 @@ class PlaybackBufferCacheTest {
                                 0, firstArtifact, 30_000_000L, 1_000_000_000L),
                         new SegmentCache.SegmentRef(
                                 1, secondArtifact, 2_000_000_000L, 3_000_000_000L)),
+                GLOBAL,
                 reader,
                 cache,
                 new ReplaySegmentReader(),
@@ -563,6 +587,7 @@ class PlaybackBufferCacheTest {
                                 0, firstArtifact, 30_000_000L, 1_000_000_000L),
                         new SegmentCache.SegmentRef(
                                 1, secondArtifact, 2_000_000_000L, 3_000_000_000L)),
+                GLOBAL,
                 reader,
                 cache,
                 new ReplaySegmentReader(),
@@ -616,6 +641,7 @@ class PlaybackBufferCacheTest {
                                 0, firstArtifact, 30_000_000L, 1_000_000_000L),
                         new SegmentCache.SegmentRef(
                                 1, secondArtifact, 2_000_000_000L, 3_000_000_000L)),
+                GLOBAL,
                 reader,
                 cache,
                 new ReplaySegmentReader(),
@@ -653,6 +679,7 @@ class PlaybackBufferCacheTest {
         PlaybackBuffer buffer = new PlaybackBuffer(
                 replay,
                 List.of(new SegmentCache.SegmentRef(0, artifact, 0L, 1L)),
+                GLOBAL,
                 reader,
                 cache,
                 new ReplaySegmentReader(),
@@ -692,6 +719,7 @@ class PlaybackBufferCacheTest {
         PlaybackBuffer buffer = new PlaybackBuffer(
                 replay,
                 List.of(new SegmentCache.SegmentRef(0, artifact, 10L, 30L)),
+                GLOBAL,
                 reader,
                 cache,
                 new ReplaySegmentReader(),
@@ -735,7 +763,7 @@ class PlaybackBufferCacheTest {
     private static ArtifactFile segmentArtifact(byte[] bytes, int ordinal) {
         return new ArtifactFile(
                 ArtifactType.SEGMENT,
-                "segments/" + String.format("%08d", ordinal) + ".segment",
+                "tracks/0/segments/" + String.format("%08d", ordinal) + ".segment",
                 bytes.length,
                 sha256(bytes));
     }
@@ -754,7 +782,8 @@ class PlaybackBufferCacheTest {
                 "fingerprint",
                 ReplayManifest.CURRENT_FORMAT_REVISION,
                 duration.toNanos(),
-                artifacts);
+                List.of(GLOBAL),
+                withIndex(artifacts));
         return new ReplayArtifactReader.VerifiedReplay(REPLAY_ID, manifest);
     }
 
@@ -773,7 +802,7 @@ class PlaybackBufferCacheTest {
     private static byte[] writeSegment(Path temporaryDirectory, List<RawPacketFrame> frames)
             throws IOException {
         Path target = temporaryDirectory.resolve("source-" + UUID.randomUUID() + ".segment");
-        try (ReplaySegmentWriter writer = new ReplaySegmentWriter(target, "paper-26.2")) {
+        try (ReplaySegmentWriter writer = new ReplaySegmentWriter(target, "paper-26.2", GLOBAL)) {
             for (RawPacketFrame frame : frames) {
                 writer.append(frame);
             }

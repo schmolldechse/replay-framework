@@ -163,6 +163,29 @@ public final class ReplayManifestCodec {
         integerAdapter.write(writer, manifest.formatRevision());
         writer.name("durationNanos");
         longAdapter.write(writer, manifest.durationNanos());
+        writer.name("tracks");
+        writer.beginArray();
+        for (TrackDescriptor track : manifest.tracks()) {
+            writer.beginObject();
+            writer.name("id");
+            integerAdapter.write(writer, track.id());
+            writer.name("kind");
+            stringAdapter.write(writer, track.kind().name());
+            if (track.world().isPresent()) {
+                writer.name("world");
+                stringAdapter.write(writer, track.world().get());
+            }
+            if (track.subject().isPresent()) {
+                writer.name("subjectKind");
+                stringAdapter.write(writer, track.subject().get().kind().name());
+                writer.name("subjectId");
+                stringAdapter.write(writer, track.subject().get().id().toString());
+            }
+            writer.name("label");
+            stringAdapter.write(writer, track.label());
+            writer.endObject();
+        }
+        writer.endArray();
         writer.name("files");
         writer.beginArray();
         for (ReplayManifest.ArtifactFile file : manifest.files()) {
@@ -190,7 +213,9 @@ public final class ReplayManifestCodec {
         String registryFingerprint = null;
         Integer formatRevision = null;
         Long durationNanos = null;
+        List<TrackDescriptor> tracks = null;
         List<ReplayManifest.ArtifactFile> files = null;
+        boolean tracksSeen = false;
         boolean replayIdSeen = false;
         boolean adapterIdSeen = false;
         boolean protocolVersionSeen = false;
@@ -231,6 +256,11 @@ public final class ReplayManifestCodec {
                     durationNanosSeen = true;
                     durationNanos = requiredLong(reader, name);
                 }
+                case "tracks" -> {
+                    ensureNotSeen(tracksSeen, name);
+                    tracksSeen = true;
+                    tracks = readTracks(reader);
+                }
                 case "files" -> {
                     ensureNotSeen(filesSeen, name);
                     filesSeen = true;
@@ -245,7 +275,7 @@ public final class ReplayManifestCodec {
         }
         if (!replayIdSeen || !adapterIdSeen || !protocolVersionSeen
                 || !registryFingerprintSeen || !formatRevisionSeen
-                || !durationNanosSeen || !filesSeen) {
+                || !durationNanosSeen || !tracksSeen || !filesSeen) {
             throw corrupt("manifest is missing a required field");
         }
         try {
@@ -256,10 +286,72 @@ public final class ReplayManifestCodec {
                     registryFingerprint,
                     formatRevision,
                     durationNanos,
+                    tracks,
                     files);
         } catch (IllegalArgumentException | NullPointerException exception) {
             throw corrupt("manifest values are invalid", exception);
         }
+    }
+
+    private List<TrackDescriptor> readTracks(JsonReader reader)
+            throws IOException, CorruptReplayArtifactException {
+        if (reader.peek() != JsonToken.BEGIN_ARRAY) {
+            throw corrupt("manifest tracks must be an array");
+        }
+        List<TrackDescriptor> tracks = new ArrayList<>();
+        reader.beginArray();
+        while (reader.hasNext()) {
+            reader.beginObject();
+            Integer id = null;
+            String kind = null;
+            String world = null;
+            String subjectKind = null;
+            String subjectId = null;
+            String label = null;
+            java.util.Set<String> seen = new java.util.HashSet<>();
+            while (reader.hasNext()) {
+                String name = reader.nextName();
+                if (!seen.add(name)) {
+                    throw corrupt("duplicate manifest track field: " + name);
+                }
+                switch (name) {
+                    case "id" -> id = requiredInteger(reader, name);
+                    case "kind" -> kind = requiredString(reader, name);
+                    case "world" -> world = requiredString(reader, name);
+                    case "subjectKind" -> subjectKind = requiredString(reader, name);
+                    case "subjectId" -> subjectId = requiredString(reader, name);
+                    case "label" -> label = requiredString(reader, name);
+                    default -> throw corrupt("unknown manifest track field: " + name);
+                }
+            }
+            reader.endObject();
+            if (id == null || kind == null || label == null
+                    || (subjectKind == null) != (subjectId == null)) {
+                throw corrupt("manifest track is missing a required field");
+            }
+            try {
+                java.util.Optional<TrackSubject> subject = subjectKind == null
+                        ? java.util.Optional.empty()
+                        : java.util.Optional.of(new TrackSubject(
+                                TrackSubject.Kind.valueOf(subjectKind),
+                                canonicalUuid(subjectId)));
+                tracks.add(new TrackDescriptor(
+                        id, TrackKind.valueOf(kind), java.util.Optional.ofNullable(world),
+                        subject, label));
+            } catch (IllegalArgumentException | NullPointerException exception) {
+                throw corrupt("manifest track values are invalid", exception);
+            }
+        }
+        reader.endArray();
+        return tracks;
+    }
+
+    private static java.util.UUID canonicalUuid(String value) {
+        java.util.UUID uuid = java.util.UUID.fromString(value);
+        if (!uuid.toString().equals(value)) {
+            throw new IllegalArgumentException("subject id must be a canonical UUID string");
+        }
+        return uuid;
     }
 
     private List<ReplayManifest.ArtifactFile> readFiles(JsonReader reader)

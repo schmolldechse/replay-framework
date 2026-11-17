@@ -1,9 +1,12 @@
 package dev.voldechse.replayframework.format;
 
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -16,7 +19,8 @@ import java.util.UUID;
  * @param registryFingerprint adapter registry fingerprint
  * @param formatRevision manifest format revision
  * @param durationNanos replay duration in nanoseconds
- * @param files published replay artifacts
+ * @param tracks the tracks of the replay, ordered by ID
+ * @param files published replay artifacts; every file belongs to a track
  */
 public record ReplayManifest(
         String replayId,
@@ -25,14 +29,15 @@ public record ReplayManifest(
         String registryFingerprint,
         int formatRevision,
         long durationNanos,
+        List<TrackDescriptor> tracks,
         List<ArtifactFile> files) {
 
     /**
      * Must equal the adapter format revision: recording, finalization and
      * playback all compare the adapter descriptor revision with this value.
-     * Revision 4 is the packet-definition pipeline payload format.
+     * Revision 5 stores a replay as tracks; see {@link TrackDescriptor}.
      */
-    public static final int CURRENT_FORMAT_REVISION = 4;
+    public static final int CURRENT_FORMAT_REVISION = 5;
 
     /** Validates and canonicalizes the replay manifest. */
     public ReplayManifest {
@@ -48,17 +53,74 @@ public record ReplayManifest(
         if (durationNanos < 0L) {
             throw new IllegalArgumentException("durationNanos must not be negative");
         }
+        tracks = validateTracks(tracks);
         Objects.requireNonNull(files, "files");
         Set<String> paths = new HashSet<>();
+        Map<Integer, Integer> indexes = new HashMap<>();
+        Set<Integer> trackIds = new HashSet<>();
+        tracks.forEach(track -> trackIds.add(track.id()));
         for (ArtifactFile file : files) {
             Objects.requireNonNull(file, "files contains null");
             if (!paths.add(file.path())) {
                 throw new IllegalArgumentException("duplicate manifest artifact path: " + file.path());
             }
+            if (!trackIds.contains(file.trackId())) {
+                throw new IllegalArgumentException("artifact belongs to no track: " + file.path());
+            }
+            if (file.type() == ArtifactType.INDEX) {
+                indexes.merge(file.trackId(), 1, Integer::sum);
+            }
+        }
+        for (TrackDescriptor track : tracks) {
+            if (indexes.getOrDefault(track.id(), 0) != 1) {
+                throw new IllegalArgumentException("track " + track.id() + " needs exactly one index");
+            }
         }
         files = files.stream()
                 .sorted(Comparator.comparing(ArtifactFile::path))
                 .toList();
+    }
+
+    /** Returns the track with the given ID. */
+    public Optional<TrackDescriptor> track(int id) {
+        return tracks.stream().filter(track -> track.id() == id).findFirst();
+    }
+
+    /** Returns the files of one track, ordered by path. */
+    public List<ArtifactFile> files(TrackDescriptor track) {
+        Objects.requireNonNull(track, "track");
+        return files.stream().filter(file -> file.trackId() == track.id()).toList();
+    }
+
+    private static List<TrackDescriptor> validateTracks(List<TrackDescriptor> tracks) {
+        Objects.requireNonNull(tracks, "tracks");
+        Set<Integer> ids = new HashSet<>();
+        Set<String> worlds = new HashSet<>();
+        Set<TrackSubject> subjects = new HashSet<>();
+        int globals = 0;
+        for (TrackDescriptor track : tracks) {
+            Objects.requireNonNull(track, "tracks contains null");
+            if (!ids.add(track.id())) {
+                throw new IllegalArgumentException("duplicate track id: " + track.id());
+            }
+            switch (track.kind()) {
+                case GLOBAL -> globals++;
+                case WORLD -> {
+                    if (!worlds.add(track.world().orElseThrow())) {
+                        throw new IllegalArgumentException("duplicate world track: " + track.world().get());
+                    }
+                }
+                case STATE -> {
+                    if (!subjects.add(track.subject().orElseThrow())) {
+                        throw new IllegalArgumentException("duplicate state track: " + track.subject().get());
+                    }
+                }
+            }
+        }
+        if (globals > 1) {
+            throw new IllegalArgumentException("a replay has at most one global track");
+        }
+        return tracks.stream().sorted(Comparator.comparingInt(TrackDescriptor::id)).toList();
     }
 
     /** Artifact categories addressable by the manifest. */
@@ -99,13 +161,41 @@ public record ReplayManifest(
             validateTypePath(type, path);
         }
 
+        /** The ID of the track the file belongs to: {@code tracks/<id>/...}. */
+        public int trackId() {
+            return trackIdOf(path);
+        }
+
+        /** The path of the file inside its track directory. */
+        public String trackPath() {
+            return path.substring(path.indexOf('/', TRACKS.length()) + 1);
+        }
+
+        private static final String TRACKS = "tracks/";
+
+        private static int trackIdOf(String path) {
+            int end = path.indexOf('/', TRACKS.length());
+            if (!path.startsWith(TRACKS) || end < 0) {
+                throw new IllegalArgumentException("artifact path is not inside a track: " + path);
+            }
+            String id = path.substring(TRACKS.length(), end);
+            if (!id.matches("0|[1-9][0-9]{0,8}")) {
+                throw new IllegalArgumentException("artifact path has an invalid track id: " + path);
+            }
+            return Integer.parseInt(id);
+        }
+
         private static void validateTypePath(ArtifactType type, String path) {
+            trackIdOf(path);
+            String local = path.substring(path.indexOf('/', TRACKS.length()) + 1);
             boolean valid = switch (type) {
-                case INDEX -> path.equals("index.bin");
-                case SEGMENT -> path.startsWith("segments/") && path.endsWith(".segment")
-                        && path.length() > "segments/.segment".length();
-                case CHECKPOINT -> path.startsWith("checkpoints/") && path.endsWith(".checkpoint")
-                        && path.length() > "checkpoints/.checkpoint".length();
+                case INDEX -> local.equals("index.bin");
+                case SEGMENT -> local.startsWith("segments/") && local.endsWith(".segment")
+                        && local.length() > "segments/.segment".length()
+                        && local.indexOf('/', "segments/".length()) < 0;
+                case CHECKPOINT -> local.startsWith("checkpoints/") && local.endsWith(".checkpoint")
+                        && local.length() > "checkpoints/.checkpoint".length()
+                        && local.indexOf('/', "checkpoints/".length()) < 0;
             };
             if (!valid) {
                 throw new IllegalArgumentException(

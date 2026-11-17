@@ -261,8 +261,8 @@ list only for the players that stay. When nobody is left online, Argus
 publishes the removal from the server's player list instead.
 
 **Worlds.** A recording can span several worlds, because companions follow
-players through portals. Every frame in segments and checkpoints therefore
-carries the world it belongs to; chat, the tab list and other world-wide
+players through portals. Every world is therefore recorded in a track of
+its own (see [recording tracks](recording-tracks.md)); chat, the tab list and other world-wide
 packets carry none and apply everywhere. Playback sends a viewer only the
 frames of one recorded world: a chunk of another dimension has a different
 height and breaks the client's connection. The viewer's live world does not

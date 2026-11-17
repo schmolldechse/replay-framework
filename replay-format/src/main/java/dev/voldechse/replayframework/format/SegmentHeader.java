@@ -28,7 +28,7 @@ public record SegmentHeader(
         long uncompressedLength) {
 
     /** Revision three is the neutral segment wire format. */
-    public static final int CURRENT_FORMAT_VERSION = 4;
+    public static final int CURRENT_FORMAT_VERSION = 5;
 
     public SegmentHeader {
         if (formatVersion != CURRENT_FORMAT_VERSION) {

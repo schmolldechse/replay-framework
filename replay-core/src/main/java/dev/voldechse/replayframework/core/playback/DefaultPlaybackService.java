@@ -32,6 +32,8 @@ import dev.voldechse.replayframework.format.ReplayManifest;
 import dev.voldechse.replayframework.format.ReplaySegmentReader;
 import dev.voldechse.replayframework.format.RawPacketFrame;
 import dev.voldechse.replayframework.format.SeekPoint;
+import dev.voldechse.replayframework.format.TrackDescriptor;
+import dev.voldechse.replayframework.format.TrackKind;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -236,21 +238,45 @@ final class DefaultPlaybackService implements PlaybackService {
             ReplayArtifactReader.VerifiedReplay verified,
             OpenResources resources) {
         ReplayManifest manifest = verified.manifest();
-        return fetchAndReadIndex(verified)
-                .thenApply(index -> new PreparedArtifacts(
-                        index,
-                        buildSegmentRefs(manifest, index),
-                        buildCheckpointFiles(manifest, index)))
-                .thenCompose(artifacts -> {
-                    PlaybackBuffer buffer = new PlaybackBuffer(
-                            verified,
-                            artifacts.segments(),
-                            artifactReader,
-                            sharedSegmentCache,
-                            segmentReader,
-                            request.bufferOptions(),
-                            ioExecutor);
-                    resources.buffer.set(buffer);
+        List<CompletableFuture<PreparedArtifacts>> preparing = manifest.tracks().stream()
+                .map(track -> fetchAndReadIndex(verified, track)
+                        .thenApply(index -> new PreparedArtifacts(
+                                track,
+                                index,
+                                buildSegmentRefs(manifest, track, index),
+                                buildCheckpointFiles(manifest, track, index)))
+                        .toCompletableFuture())
+                .toList();
+        return CompletableFuture.allOf(preparing.toArray(CompletableFuture[]::new))
+                .thenApply(ignored -> preparing.stream().map(CompletableFuture::join).toList())
+                .thenCompose(prepared -> {
+                    PreparedArtifacts reference = prepared.stream()
+                            .filter(track -> track.track().kind() == TrackKind.GLOBAL)
+                            .findFirst()
+                            .orElseThrow(() -> corrupt("replay has no global track"));
+                    List<MergedTrackData.Track> tracks = new ArrayList<>(prepared.size());
+                    List<PlaybackBuffer> buffers = new ArrayList<>(prepared.size());
+                    for (PreparedArtifacts track : prepared) {
+                        PlaybackBuffer buffer = new PlaybackBuffer(
+                                verified,
+                                track.segments(),
+                                track.track(),
+                                artifactReader,
+                                sharedSegmentCache,
+                                segmentReader,
+                                request.bufferOptions(),
+                                ioExecutor);
+                        buffers.add(buffer);
+                        Map<SeekPoint, CompletionStage<List<RawPacketFrame>>> cache =
+                                new ConcurrentHashMap<>();
+                        tracks.add(MergedTrackData.Track.of(
+                                PlaybackTimeline.adapt(
+                                        buffer,
+                                        point -> cachedCheckpoint(cache, verified, track, point)),
+                                track.index()));
+                    }
+                    resources.buffers.set(List.copyOf(buffers));
+                    MergedTrackData data = new MergedTrackData(tracks);
 
                     PlaybackBridge bridge = Objects.requireNonNull(
                             adapter.openPlayback(
@@ -264,18 +290,10 @@ final class DefaultPlaybackService implements PlaybackService {
                             sessionId,
                             request.replayId(),
                             viewerId);
-                    Map<SeekPoint, CompletionStage<List<RawPacketFrame>>> checkpoints =
-                            new ConcurrentHashMap<>();
                     PlaybackTimeline timeline = new PlaybackTimeline(
                             Duration.ofNanos(manifest.durationNanos()),
-                            artifacts.index(),
-                            PlaybackTimeline.adapt(
-                                    buffer,
-                                    point -> cachedCheckpoint(
-                                            checkpoints,
-                                            verified,
-                                            artifacts.checkpoints(),
-                                            point)),
+                            reference.index(),
+                            data,
                             bridge,
                             request.bufferOptions(),
                             commandExecutor,
@@ -283,14 +301,10 @@ final class DefaultPlaybackService implements PlaybackService {
                             listener);
                     bridge.setFailureHandler(timeline::failFromBridge);
                     resources.timeline.set(timeline);
-                    SeekPoint initialPoint = artifacts.index()
+                    SeekPoint initialPoint = reference.index()
                             .seekCheckpointFloor(Duration.ZERO)
                             .orElseThrow(() -> corrupt("replay has no initial checkpoint"));
-                    return cachedCheckpoint(
-                                    checkpoints,
-                                    verified,
-                                    artifacts.checkpoints(),
-                                    initialPoint)
+                    return data.checkpointFrames(initialPoint)
                             .thenCompose(frames -> placeObserver(request, bridge, frames))
                             .thenRun(bridge::activateReplayIsolation)
                             .thenCompose(ignored -> timeline.prepare());
@@ -350,12 +364,13 @@ final class DefaultPlaybackService implements PlaybackService {
     }
 
     private CompletionStage<ReplayIndex> fetchAndReadIndex(
-            ReplayArtifactReader.VerifiedReplay verified) {
-        ReplayManifest.ArtifactFile indexArtifact = verified.manifest().files().stream()
+            ReplayArtifactReader.VerifiedReplay verified,
+            TrackDescriptor track) {
+        ReplayManifest.ArtifactFile indexArtifact = verified.manifest().files(track).stream()
                 .filter(file -> file.type() == ReplayManifest.ArtifactType.INDEX)
                 .findFirst()
                 .orElseThrow(() -> new CompletionException(
-                        new CorruptReplayArtifactException("replay has no index artifact")));
+                        new CorruptReplayArtifactException("track has no index artifact")));
 
         return CompletableFuture.supplyAsync(
                         () -> createTemporaryFile("replay-index-", ".bin"),
@@ -371,9 +386,9 @@ final class DefaultPlaybackService implements PlaybackService {
     private CompletionStage<List<RawPacketFrame>>
             fetchAndDecodeCheckpoint(
                     ReplayArtifactReader.VerifiedReplay verified,
-                    Map<Integer, ReplayManifest.ArtifactFile> checkpointFiles,
+                    PreparedArtifacts track,
                     SeekPoint point) {
-        ReplayManifest.ArtifactFile artifact = checkpointFiles.get(point.checkpointOrdinal());
+        ReplayManifest.ArtifactFile artifact = track.checkpoints().get(point.checkpointOrdinal());
         if (artifact == null) {
             return CompletableFuture.failedFuture(new CorruptReplayArtifactException(
                     "index references missing checkpoint ordinal: " + point.checkpointOrdinal()));
@@ -382,14 +397,14 @@ final class DefaultPlaybackService implements PlaybackService {
                         () -> createTemporaryFile("replay-checkpoint-", ".bin"),
                         ioExecutor)
                 .thenCompose(target -> artifactReader.fetchVerified(verified, artifact, target)
-                        .thenApplyAsync(fetched -> readCheckpoint(fetched, point), ioExecutor)
+                        .thenApplyAsync(fetched -> readCheckpoint(fetched, track.track(), point), ioExecutor)
                         .whenComplete((ignored, failure) -> deleteQuietly(target)));
     }
 
     private CompletionStage<List<RawPacketFrame>> cachedCheckpoint(
             Map<SeekPoint, CompletionStage<List<RawPacketFrame>>> cache,
             ReplayArtifactReader.VerifiedReplay verified,
-            Map<Integer, ReplayManifest.ArtifactFile> checkpointFiles,
+            PreparedArtifacts track,
             SeekPoint point) {
         CompletableFuture<List<RawPacketFrame>> loading = new CompletableFuture<>();
         CompletionStage<List<RawPacketFrame>> existing = cache.putIfAbsent(point, loading);
@@ -397,7 +412,7 @@ final class DefaultPlaybackService implements PlaybackService {
             return existing;
         }
 
-        fetchAndDecodeCheckpoint(verified, checkpointFiles, point)
+        fetchAndDecodeCheckpoint(verified, track, point)
                 .whenComplete((frames, failure) -> {
                     if (failure != null) {
                         cache.remove(point, loading);
@@ -424,9 +439,10 @@ final class DefaultPlaybackService implements PlaybackService {
 
     private List<RawPacketFrame> readCheckpoint(
             Path source,
+            TrackDescriptor track,
             SeekPoint point) {
         try {
-            ReplayCheckpoint checkpoint = checkpointReader.read(source);
+            ReplayCheckpoint checkpoint = checkpointReader.read(source, track);
             if (checkpoint.ordinal() != point.checkpointOrdinal()
                     || checkpoint.elapsedNanos() != point.elapsedNanos()) {
                 throw new CompletionException(new CorruptReplayArtifactException(
@@ -438,20 +454,31 @@ final class DefaultPlaybackService implements PlaybackService {
         }
     }
 
+    /**
+     * The segments of one track with their time windows. A track may have no
+     * segments; then its index holds only checkpoint anchors.
+     */
     static List<SegmentCache.SegmentRef> buildSegmentRefs(
             ReplayManifest manifest,
+            TrackDescriptor track,
             ReplayIndex index) {
-        List<ReplayManifest.ArtifactFile> artifacts = manifest.files().stream()
+        List<ReplayManifest.ArtifactFile> artifacts = manifest.files(track).stream()
                 .filter(file -> file.type() == ReplayManifest.ArtifactType.SEGMENT)
                 .sorted(Comparator.comparing(ReplayManifest.ArtifactFile::path))
                 .toList();
         if (artifacts.isEmpty()) {
-            throw corrupt("replay has no segment artifacts");
+            for (SeekPoint point : index.points()) {
+                if (point.elapsedNanos() > manifest.durationNanos()
+                        || point.segmentOrdinal() != 0 || point.frameOffset() != 0L) {
+                    throw corrupt("index of a track without segments references a segment");
+                }
+            }
+            return List.of();
         }
 
         Map<Integer, ReplayManifest.ArtifactFile> filesByOrdinal = new HashMap<>();
         for (ReplayManifest.ArtifactFile artifact : artifacts) {
-            int ordinal = parseOrdinal(artifact.path(), SEGMENT_PATH, "segment");
+            int ordinal = parseOrdinal(artifact.trackPath(), SEGMENT_PATH, "segment");
             if (filesByOrdinal.putIfAbsent(ordinal, artifact) != null) {
                 throw corrupt("duplicate segment ordinal: " + ordinal);
             }
@@ -504,13 +531,14 @@ final class DefaultPlaybackService implements PlaybackService {
 
     private Map<Integer, ReplayManifest.ArtifactFile> buildCheckpointFiles(
             ReplayManifest manifest,
+            TrackDescriptor track,
             ReplayIndex index) {
         Map<Integer, ReplayManifest.ArtifactFile> result = new HashMap<>();
-        for (ReplayManifest.ArtifactFile artifact : manifest.files()) {
+        for (ReplayManifest.ArtifactFile artifact : manifest.files(track)) {
             if (artifact.type() != ReplayManifest.ArtifactType.CHECKPOINT) {
                 continue;
             }
-            int ordinal = parseOrdinal(artifact.path(), CHECKPOINT_PATH, "checkpoint");
+            int ordinal = parseOrdinal(artifact.trackPath(), CHECKPOINT_PATH, "checkpoint");
             if (result.putIfAbsent(ordinal, artifact) != null) {
                 throw corrupt("duplicate checkpoint ordinal: " + ordinal);
             }
@@ -689,35 +717,17 @@ final class DefaultPlaybackService implements PlaybackService {
         return Objects.requireNonNull(stage, "completion stage");
     }
 
-    private static final class PreparedArtifacts {
-        private final ReplayIndex index;
-        private final List<SegmentCache.SegmentRef> segments;
-        private final Map<Integer, ReplayManifest.ArtifactFile> checkpoints;
-
-        private PreparedArtifacts(
-                ReplayIndex index,
-                List<SegmentCache.SegmentRef> segments,
-                Map<Integer, ReplayManifest.ArtifactFile> checkpoints) {
-            this.index = index;
-            this.segments = segments;
-            this.checkpoints = checkpoints;
-        }
-
-        private ReplayIndex index() {
-            return index;
-        }
-
-        private List<SegmentCache.SegmentRef> segments() {
-            return segments;
-        }
-
-        private Map<Integer, ReplayManifest.ArtifactFile> checkpoints() {
-            return checkpoints;
-        }
+    /** The playback artifacts of one track. */
+    private record PreparedArtifacts(
+            TrackDescriptor track,
+            ReplayIndex index,
+            List<SegmentCache.SegmentRef> segments,
+            Map<Integer, ReplayManifest.ArtifactFile> checkpoints) {
     }
 
     private static final class OpenResources {
-        private final AtomicReference<PlaybackBuffer> buffer = new AtomicReference<>();
+        private final AtomicReference<List<PlaybackBuffer>> buffers =
+                new AtomicReference<>(List.of());
         private final AtomicReference<PlaybackBridge> bridge = new AtomicReference<>();
         private final AtomicReference<PlaybackTimeline> timeline = new AtomicReference<>();
 
@@ -727,10 +737,7 @@ final class DefaultPlaybackService implements PlaybackService {
                 currentTimeline.closeAsync().exceptionally(ignored -> null);
                 return;
             }
-            PlaybackBuffer currentBuffer = buffer.get();
-            if (currentBuffer != null) {
-                currentBuffer.close();
-            }
+            buffers.get().forEach(PlaybackBuffer::close);
             PlaybackBridge currentBridge = bridge.get();
             if (currentBridge != null) {
                 currentBridge.close();

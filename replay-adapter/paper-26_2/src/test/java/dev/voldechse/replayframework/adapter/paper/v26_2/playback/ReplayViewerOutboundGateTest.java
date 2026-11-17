@@ -108,6 +108,36 @@ class ReplayViewerOutboundGateTest {
     }
 
     @Test
+    void aWorldChangeLetsTheLiveWorldPassUntilTheViewIsRebuilt() {
+        PacketDescriptor respawn = new PacketDescriptor(
+                "play.clientbound.minecraft:respawn",
+                PacketPhase.PLAY,
+                PacketDescriptor.Direction.CLIENTBOUND,
+                82,
+                PacketDisposition.STATEFUL,
+                true,
+                true,
+                false,
+                "paper-26.2/minecraft:respawn",
+                PacketDescriptor.PlaybackScope.VIEWER_LOCAL);
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        ReplayViewerOutboundGate gate = gateFor(PacketRegistry.of(List.of(REPLAYABLE, respawn)), failure);
+        EmbeddedChannel channel = new EmbeddedChannel(gate);
+
+        TestPacket worldChange = new TestPacket(82);
+        assertTrue(channel.writeOutbound(worldChange));
+        assertSame(worldChange, channel.readOutbound());
+        TestPacket liveChunk = new TestPacket(7);
+        assertTrue(channel.writeOutbound(liveChunk));
+        assertSame(liveChunk, channel.readOutbound());
+
+        gate.resumeIsolation();
+        assertFalse(channel.writeOutbound(new TestPacket(7)));
+        assertTrue(channel.outboundMessages().isEmpty());
+        assertNull(failure.get());
+    }
+
+    @Test
     void forwardsControlPackets() {
         PacketRegistry registry = PacketRegistry.of(List.of(REPLAYABLE, CONTROL));
         AtomicReference<Throwable> failure = new AtomicReference<>();

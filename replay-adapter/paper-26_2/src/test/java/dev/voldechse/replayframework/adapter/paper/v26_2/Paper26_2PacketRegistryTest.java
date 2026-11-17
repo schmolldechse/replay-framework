@@ -160,7 +160,7 @@ final class Paper26_2PacketRegistryTest {
 
         assertEquals("paper-26.2", adapter.descriptor().adapterId());
         assertEquals(snapshot.protocolVersion(), adapter.descriptor().protocolVersion());
-        assertEquals(4, adapter.descriptor().adapterFormatRevision());
+        assertEquals(5, adapter.descriptor().adapterFormatRevision());
         assertEquals(registry.fingerprint(), adapter.descriptor().registryFingerprint());
         assertEquals(registry.fingerprint(), adapter.packetRegistry().fingerprint());
         adapter.verifyDescriptorAndRegistry();

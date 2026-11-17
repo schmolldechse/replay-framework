@@ -8,15 +8,15 @@ import dev.voldechse.replayframework.api.recording.ReplayFailureCode;
 import dev.voldechse.replayframework.core.capture.CapturedPacket;
 import dev.voldechse.replayframework.format.RawPacketFrame;
 import dev.voldechse.replayframework.format.ReplayCheckpoint;
-import dev.voldechse.replayframework.format.ReplayCheckpointWriter;
-import dev.voldechse.replayframework.format.ReplaySegmentWriter;
-import dev.voldechse.replayframework.format.SeekPoint;
+import dev.voldechse.replayframework.format.TrackDescriptor;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Queue;
@@ -57,17 +57,13 @@ final class RecordingSegmentAppender implements AutoCloseable {
     private final AtomicBoolean signalInstalled = new AtomicBoolean();
     private final AtomicBoolean failureReported = new AtomicBoolean();
     private final AtomicBoolean completionReported = new AtomicBoolean();
-    private final List<Path> segmentFiles = new ArrayList<>();
-    private final List<Path> checkpointFiles = new ArrayList<>();
-    private final List<SeekPoint> seekPoints = new ArrayList<>();
+    /** The tracks of the recording by world; the empty key is the global track. */
+    private final Map<Optional<String>, TrackWriter> tracks = new LinkedHashMap<>();
+    /** The replay time of every checkpoint barrier, by ordinal. */
+    private final List<Long> checkpointTimes = new ArrayList<>();
 
     private State state = State.NEW;
-    private ReplaySegmentWriter segmentWriter;
-    private Path segmentTarget;
-    private int segmentOrdinal = -1;
-    private int lastSealedSegmentOrdinal = -1;
-    private long lastSealedSegmentLength;
-    private long segmentStartElapsedNanos;
+    private long segmentCount;
     private long lastElapsedNanos = -1L;
     private long lastServerTick = -1L;
     private int lastSequence = -1;
@@ -197,17 +193,10 @@ final class RecordingSegmentAppender implements AutoCloseable {
     }
 
     private void initializeArtifacts() throws IOException {
-        Path segments = safeDirectory("segments");
-        Path checkpoints = safeDirectory("checkpoints");
-        Files.createDirectories(segments);
-        Files.createDirectories(checkpoints);
-
         checkpointScheduler.registerInitial(initialCheckpoint);
-        Path initialPath = safeArtifact("checkpoints", 0, "checkpoint");
-        writeCheckpoint(initialPath, initialCheckpoint);
-        checkpointFiles.add(initialPath);
-        activeCheckpointOrdinal = 0;
-        seekPoints.add(new SeekPoint(0L, 0, 0, 0L));
+        // The global track always exists, so every recording has track 0.
+        track(Optional.empty());
+        writeBarrier(initialCheckpoint);
         for (RawPacketFrame frame : initialCheckpoint.initializationFrames()) {
             RecordingBudgetTracker.BudgetObservation observation = budgetTracker.afterFrame(
                     frame, RecordingBudgetTracker.UnitKind.CHECKPOINT_FRAME);
@@ -228,22 +217,34 @@ final class RecordingSegmentAppender implements AutoCloseable {
     private void appendPacket(CapturedPacket captured) throws IOException {
         RawPacketFrame frame = toFrame(captured);
         validateOrder(frame);
-        openSegmentIfNeeded(frame.elapsedNanos());
-        rotateForDurationIfNeeded(frame.elapsedNanos());
-        if (segmentWriter == null) {
-            openSegmentIfNeeded(frame.elapsedNanos());
+        TrackWriter track = track(frame.world());
+        boolean rotate;
+        try {
+            rotate = track.segmentDurationReached(frame.elapsedNanos());
+        } catch (ArithmeticException overflow) {
+            throw new CorruptWriterException(
+                    new IllegalArgumentException("segment duration calculation overflow", overflow));
+        }
+        if (rotate && !budgetTracker.stopRequested()) {
+            finishSegment(track);
         }
 
-        long frameOffset = segmentWriter.uncompressedLength();
+        // A structural rotation may have sealed the previous segment before a
+        // budget callback became visible. Already accepted queue entries still
+        // need a complete artifact, even if that creates the documented
+        // frame-accurate overhang beyond the configured session budget.
+        boolean opened;
         try {
-            segmentWriter.append(frame);
+            opened = track.append(frame);
         } catch (IOException exception) {
             throw new StorageWriteException(exception);
         } catch (IllegalArgumentException formatFailure) {
             throw new CorruptWriterException(formatFailure);
         }
-        seekPoints.add(new SeekPoint(
-                frame.elapsedNanos(), activeCheckpointOrdinal, segmentOrdinal, frameOffset));
+        if (opened) {
+            segmentCount++;
+            notifyBudgetStop(budgetTracker.afterSegmentOpened(segmentCount).completionReason());
+        }
         lastElapsedNanos = frame.elapsedNanos();
         lastServerTick = frame.serverTick();
         lastSequence = frame.sequence();
@@ -251,60 +252,59 @@ final class RecordingSegmentAppender implements AutoCloseable {
                 frame, RecordingBudgetTracker.UnitKind.DELTA_FRAME);
         notifyBudgetStop(observation.completionReason());
 
-        if (segmentWriter.uncompressedLength() >= budget.maxSegmentBytes()
-                && !budgetTracker.stopRequested()) {
-            finishOpenSegment();
+        if (track.segmentSizeReached() && !budgetTracker.stopRequested()) {
+            finishSegment(track);
         }
-
     }
 
-    private void openSegmentIfNeeded(long elapsedNanos) throws IOException {
-        if (segmentWriter != null) {
-            return;
+    /**
+     * The track of a world, or the global track for the empty key. A track
+     * created after the first barrier gets empty checkpoints for the earlier
+     * barriers, so all tracks share their checkpoint ordinals.
+     */
+    private TrackWriter track(Optional<String> world) throws IOException {
+        TrackWriter existing = tracks.get(world);
+        if (existing != null) {
+            return existing;
         }
-        // A structural rotation may have sealed the previous segment before a
-        // budget callback became visible. Already accepted queue entries still
-        // need a complete artifact, even if that creates the documented
-        // frame-accurate overhang beyond the configured session budget.
-        int nextOrdinal = segmentOrdinal + 1;
-        Path target = safeArtifact("segments", nextOrdinal, "segment");
-        segmentWriter = new ReplaySegmentWriter(target, adapterId);
-        segmentTarget = target;
-        segmentOrdinal = nextOrdinal;
-        segmentStartElapsedNanos = elapsedNanos;
-        RecordingBudgetTracker.BudgetObservation observation =
-                budgetTracker.afterSegmentOpened(segmentOrdinal + 1L);
-        notifyBudgetStop(observation.completionReason());
+        int id = tracks.size();
+        TrackDescriptor descriptor = world.map(key -> TrackDescriptor.world(id, key))
+                .orElseGet(() -> TrackDescriptor.global(id));
+        TrackWriter created;
+        try {
+            created = new TrackWriter(descriptor, workspace, adapterId, budget);
+            for (int ordinal = 0; ordinal < checkpointTimes.size(); ordinal++) {
+                created.writeCheckpoint(new ReplayCheckpoint(
+                        ordinal, checkpointTimes.get(ordinal), List.of()));
+            }
+        } catch (IllegalArgumentException formatFailure) {
+            throw new CorruptWriterException(formatFailure);
+        }
+        tracks.put(world, created);
+        return created;
     }
 
-    private void rotateForDurationIfNeeded(long elapsedNanos) throws IOException {
-        if (segmentWriter == null || segmentWriter.frameCount() == 0L) {
-            return;
+    /** Writes one checkpoint barrier: each track gets the frames of its world. */
+    private void writeBarrier(ReplayCheckpoint checkpoint) throws IOException {
+        Map<Optional<String>, List<RawPacketFrame>> byWorld = new LinkedHashMap<>();
+        for (RawPacketFrame frame : checkpoint.initializationFrames()) {
+            byWorld.computeIfAbsent(frame.world(), ignored -> new ArrayList<>()).add(frame);
         }
-        Optional<java.time.Duration> limit = budget.maxSegmentDuration();
-        if (limit.isEmpty()) {
-            return;
+        for (Optional<String> world : byWorld.keySet()) {
+            track(world);
         }
-        long segmentElapsed;
         try {
-            segmentElapsed = Math.subtractExact(elapsedNanos, segmentStartElapsedNanos);
-        } catch (ArithmeticException overflow) {
-            throw new CorruptWriterException(
-                    new IllegalArgumentException("segment duration calculation overflow", overflow));
+            for (Map.Entry<Optional<String>, TrackWriter> entry : tracks.entrySet()) {
+                entry.getValue().writeCheckpoint(new ReplayCheckpoint(
+                        checkpoint.ordinal(),
+                        checkpoint.elapsedNanos(),
+                        byWorld.getOrDefault(entry.getKey(), List.of())));
+            }
+        } catch (IllegalArgumentException formatFailure) {
+            throw new CorruptWriterException(formatFailure);
         }
-        long limitNanos;
-        try {
-            limitNanos = limit.orElseThrow().toNanos();
-        } catch (ArithmeticException overflow) {
-            limitNanos = Long.MAX_VALUE;
-        }
-        if (segmentElapsed < limitNanos) {
-            return;
-        }
-        if (budgetTracker.stopRequested()) {
-            return;
-        }
-        finishOpenSegment();
+        checkpointTimes.add(checkpoint.elapsedNanos());
+        activeCheckpointOrdinal = checkpoint.ordinal();
     }
 
     private void processDimensionSignals() throws IOException {
@@ -378,28 +378,17 @@ final class RecordingSegmentAppender implements AutoCloseable {
         } catch (IllegalArgumentException formatFailure) {
             throw new CorruptWriterException(formatFailure);
         }
-        Path target = safeArtifact("checkpoints", ordinal, "checkpoint");
-        writeCheckpoint(target, canonical);
-        checkpointFiles.add(target);
+        writeBarrier(canonical);
         for (RawPacketFrame frame : canonical.initializationFrames()) {
             RecordingBudgetTracker.BudgetObservation observation = budgetTracker.afterFrame(
                     frame, RecordingBudgetTracker.UnitKind.CHECKPOINT_FRAME);
             notifyBudgetStop(observation.completionReason());
         }
-        long offset = segmentWriter == null
-                ? lastSealedSegmentLength
-                : segmentWriter.uncompressedLength();
-        int seekSegment = segmentWriter == null
-                ? Math.max(0, lastSealedSegmentOrdinal)
-                : segmentOrdinal;
-        seekPoints.add(new SeekPoint(
-                canonical.elapsedNanos(), canonical.ordinal(), seekSegment, offset));
         try {
             checkpointScheduler.markWritten(canonical, capture.point().serverTick());
         } catch (IllegalArgumentException invariantFailure) {
             throw new CorruptWriterException(invariantFailure);
         }
-        activeCheckpointOrdinal = canonical.ordinal();
     }
 
     /**
@@ -444,14 +433,6 @@ final class RecordingSegmentAppender implements AutoCloseable {
                 || (packet.captureTimeNanos() == point.captureTimeNanos()
                 && packet.serverTick() == point.serverTick()
                 && packet.sequence() > point.sequence());
-    }
-
-    private void writeCheckpoint(Path target, ReplayCheckpoint checkpoint) throws IOException {
-        try {
-            new ReplayCheckpointWriter(target, adapterId).write(checkpoint);
-        } catch (IllegalArgumentException formatFailure) {
-            throw new CorruptWriterException(formatFailure);
-        }
     }
 
     private RawPacketFrame toFrame(CapturedPacket captured) {
@@ -501,30 +482,21 @@ final class RecordingSegmentAppender implements AutoCloseable {
         }
     }
 
-    private void finishOpenSegment() throws IOException {
-        if (segmentWriter == null) {
-            return;
-        }
-        long sealedLength = segmentWriter.uncompressedLength();
+    private static void finishSegment(TrackWriter track) {
         try {
-            segmentWriter.finish();
+            track.finishOpenSegment();
         } catch (IOException exception) {
             throw new StorageWriteException(exception);
         } catch (IllegalArgumentException formatFailure) {
             throw new CorruptWriterException(formatFailure);
         }
-        segmentFiles.add(Objects.requireNonNull(segmentTarget, "segmentTarget"));
-        lastSealedSegmentOrdinal = segmentOrdinal;
-        lastSealedSegmentLength = sealedLength;
-        segmentWriter = null;
-        segmentTarget = null;
     }
 
     private void seal() throws IOException {
         if (state != State.RUNNING) {
             return;
         }
-        finishOpenSegment();
+        tracks.values().forEach(RecordingSegmentAppender::finishSegment);
         checkpointSignals.uninstall(signalListener);
         signalInstalled.set(false);
         state = State.SEALED;
@@ -542,14 +514,13 @@ final class RecordingSegmentAppender implements AutoCloseable {
     private RecordingArtifacts snapshotArtifacts(Optional<ReplayCompletionReason> reason) {
         RecordingBudgetTracker.BudgetSnapshot snapshot = budgetTracker.snapshot();
         return new RecordingArtifacts(
-                List.copyOf(segmentFiles),
-                List.copyOf(checkpointFiles),
-                List.copyOf(seekPoints),
+                workspace,
+                tracks.values().stream().map(TrackWriter::artifacts).toList(),
                 snapshot.lastElapsedNanos(),
                 snapshot.payloadBytes(),
                 snapshot.packetCount(),
-                segmentFiles.size(),
-                checkpointFiles.size(),
+                segmentCount,
+                checkpointTimes.size(),
                 reason);
     }
 
@@ -576,15 +547,7 @@ final class RecordingSegmentAppender implements AutoCloseable {
         } catch (Throwable ignored) {
             // The original writer failure remains authoritative.
         }
-        if (segmentWriter != null) {
-            try {
-                segmentWriter.abort();
-            } catch (IOException cleanupFailure) {
-                cause.addSuppressed(cleanupFailure);
-            }
-            segmentWriter = null;
-            segmentTarget = null;
-        }
+        tracks.values().forEach(track -> track.abort(cause));
         if (failureReported.compareAndSet(false, true)) {
             try {
                 failure.accept(code, cause);
@@ -616,32 +579,6 @@ final class RecordingSegmentAppender implements AutoCloseable {
             current = current.getCause();
         }
         return current;
-    }
-
-    private Path safeArtifact(String directory, int ordinal, String suffix) {
-        if (ordinal < 0) {
-            throw new IllegalArgumentException("artifact ordinal must not be negative");
-        }
-        Path relative = Path.of(directory, "%08d.%s".formatted(ordinal, suffix));
-        Path target = workspace.resolve(relative).normalize();
-        if (!target.startsWith(workspace) || target.isAbsolute() && !target.startsWith(workspace)) {
-            throw new SecurityException("artifact path escapes the recording workspace");
-        }
-        if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IllegalStateException("artifact target already exists: " + relative);
-        }
-        return target;
-    }
-
-    private Path safeDirectory(String name) {
-        Path directory = workspace.resolve(name).normalize();
-        if (!directory.startsWith(workspace)) {
-            throw new SecurityException("artifact directory escapes the recording workspace");
-        }
-        if (Files.isSymbolicLink(directory)) {
-            throw new SecurityException("artifact directory must not be a symbolic link");
-        }
-        return directory;
     }
 
     private static Path requireWorkspace(Path workspace) {
@@ -693,10 +630,21 @@ final class RecordingSegmentAppender implements AutoCloseable {
     private record DimensionSignal(long captureTimeNanos, long serverTick) {
     }
 
+    /**
+     * The sealed artifacts of a recording.
+     *
+     * @param workspace the recording workspace; every track's files are below it
+     * @param tracks the tracks in order of their IDs
+     * @param durationNanos replay duration
+     * @param payloadBytes recorded payload bytes
+     * @param packetCount recorded packets
+     * @param segmentCount segments over all tracks
+     * @param checkpointCount checkpoint barriers; every track has one checkpoint per barrier
+     * @param completionReason why the recording ended, when a budget ended it
+     */
     record RecordingArtifacts(
-            List<Path> segmentFiles,
-            List<Path> checkpointFiles,
-            List<SeekPoint> seekPoints,
+            Path workspace,
+            List<TrackWriter.TrackArtifacts> tracks,
             long durationNanos,
             long payloadBytes,
             long packetCount,
@@ -704,10 +652,8 @@ final class RecordingSegmentAppender implements AutoCloseable {
             long checkpointCount,
             Optional<ReplayCompletionReason> completionReason) {
         RecordingArtifacts {
-            segmentFiles = List.copyOf(Objects.requireNonNull(segmentFiles, "segmentFiles"));
-            checkpointFiles = List.copyOf(
-                    Objects.requireNonNull(checkpointFiles, "checkpointFiles"));
-            seekPoints = List.copyOf(Objects.requireNonNull(seekPoints, "seekPoints"));
+            Objects.requireNonNull(workspace, "workspace");
+            tracks = List.copyOf(Objects.requireNonNull(tracks, "tracks"));
             completionReason = Objects.requireNonNull(completionReason, "completionReason");
             if (durationNanos < 0L || payloadBytes < 0L || packetCount < 0L
                     || segmentCount < 0L || checkpointCount < 0L) {

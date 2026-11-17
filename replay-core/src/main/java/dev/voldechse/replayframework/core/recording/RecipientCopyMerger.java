@@ -51,8 +51,10 @@ final class RecipientCopyMerger {
         }
         long tick = packet.serverTick();
         sweep(tick);
-        EventKey key = new EventKey(
-                packet.packetId(), packet.context().world().orElse(null), copy.get().identity());
+        // A world-wide packet, such as a broadcast message, reaches recipients
+        // in every world; its copies differ only in the recipient's world.
+        Key world = packet.context().worldWide() ? null : packet.context().world().orElse(null);
+        EventKey key = new EventKey(packet.packetId(), world, copy.get().identity());
         OpenEvent event = open.get(key);
         if (event == null || event.expiredAt(tick)) {
             event = new OpenEvent(tick);

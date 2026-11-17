@@ -17,11 +17,11 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
-/** Strict reader for revision-three checkpoint artifacts. */
+/** Strict reader for the checkpoints of one track. */
 public final class ReplayCheckpointReader {
 
     private static final byte[] MAGIC = "RFC1".getBytes(StandardCharsets.US_ASCII);
-    private static final int FORMAT_VERSION = 4;
+    private static final int FORMAT_VERSION = 5;
 
     /** Creates a stateless checkpoint reader. */
     public ReplayCheckpointReader() {
@@ -31,13 +31,16 @@ public final class ReplayCheckpointReader {
      * Reads and validates one complete checkpoint.
      *
      * @param source checkpoint path
+     * @param track the track the checkpoint belongs to; supplies the world of its frames
      * @return decoded checkpoint
      * @throws IOException when the source cannot be opened
      * @throws CorruptReplayArtifactException when the source is invalid
      */
-    public ReplayCheckpoint read(Path source)
+    public ReplayCheckpoint read(Path source, TrackDescriptor track)
             throws IOException, CorruptReplayArtifactException {
         Objects.requireNonNull(source, "source");
+        ReplayFrameCodec.Decoder decoder = new ReplayFrameCodec.Decoder(
+                Objects.requireNonNull(track, "track"));
         try (InputStream file = new BufferedInputStream(Files.newInputStream(source))) {
             try {
                 readMagic(file);
@@ -81,7 +84,7 @@ public final class ReplayCheckpointReader {
                     List<RawPacketFrame> frames = new ArrayList<>();
                     RawPacketFrame previous = null;
                     for (long index = 0L; index < frameCount; index++) {
-                        RawPacketFrame frame = ReplayFrameCodec.readRecord(body);
+                        RawPacketFrame frame = decoder.read(body);
                         if (previous != null && isBefore(frame, previous)) {
                             throw corrupt(
                                     "checkpoint frames are not ordered by elapsed time, server tick and sequence");

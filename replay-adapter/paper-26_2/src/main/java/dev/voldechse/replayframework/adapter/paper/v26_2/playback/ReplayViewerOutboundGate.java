@@ -27,6 +27,7 @@ final class ReplayViewerOutboundGate extends ChannelOutboundHandlerAdapter {
 
     static final String HANDLER_NAME = "replay-framework-playback-gate";
     private static final String CLIENTBOUND_TYPE_PREFIX = "play.clientbound.";
+    private static final String RESPAWN = CLIENTBOUND_TYPE_PREFIX + "minecraft:respawn";
 
     private final PacketRegistry registry;
     private final Function<Object, PaperConnectionAccessor.WirePacket> inspector;
@@ -35,6 +36,8 @@ final class ReplayViewerOutboundGate extends ChannelOutboundHandlerAdapter {
     private final AtomicReference<State> state = new AtomicReference<>(State.NEW);
     private final AtomicBoolean failureReported = new AtomicBoolean();
     private final AtomicBoolean isolationActive = new AtomicBoolean();
+    /** Whether the playback asked for isolation; a world change pauses it until the next view rebuild. */
+    private final AtomicBoolean isolationRequested = new AtomicBoolean();
     private volatile ChannelHandlerContext context;
 
     ReplayViewerOutboundGate(
@@ -66,6 +69,7 @@ final class ReplayViewerOutboundGate extends ChannelOutboundHandlerAdapter {
             Consumer<Throwable> failureHandler) {
         this(registry, inspector, () -> {}, failureHandler);
         isolationActive.set(isolationInitiallyActive);
+        isolationRequested.set(isolationInitiallyActive);
     }
 
     private ReplayViewerOutboundGate(
@@ -106,10 +110,14 @@ final class ReplayViewerOutboundGate extends ChannelOutboundHandlerAdapter {
             context.write(message, promise);
             return;
         }
-
         try {
             PaperConnectionAccessor.WirePacket wirePacket = inspector.apply(message);
-            if (shouldSuppress(wirePacket)) {
+            if (isWorldChange(wirePacket)) {
+                // The viewer changes worlds. Since 26.x a client keeps its
+                // player frozen until the chunk it stands in has arrived, so
+                // the live world passes until the playback rebuilds its view.
+                isolationActive.set(false);
+            } else if (shouldSuppress(wirePacket)) {
                 ReferenceCountUtil.release(message);
                 promise.trySuccess();
                 return;
@@ -129,6 +137,7 @@ final class ReplayViewerOutboundGate extends ChannelOutboundHandlerAdapter {
         if (current == null || state.get() != State.ACTIVE) {
             throw new IllegalStateException("replay viewer gate is not active");
         }
+        isolationRequested.set(true);
         if (current.executor().inEventLoop()) {
             isolationActive.set(true);
         } else {
@@ -136,10 +145,29 @@ final class ReplayViewerOutboundGate extends ChannelOutboundHandlerAdapter {
         }
     }
 
+    /**
+     * Suppresses live replay-state packets again after a world change, once
+     * the playback rebuilds its view. Must run on the channel event loop, in
+     * order with the rebuilt replay packets.
+     */
+    void resumeIsolation() {
+        if (isolationRequested.get()) {
+            isolationActive.set(true);
+        }
+    }
+
     /** Marks the gate closed before the accessor removes the pipeline entry. */
     void close() {
         state.set(State.CLOSED);
         context = null;
+    }
+
+    private boolean isWorldChange(PaperConnectionAccessor.WirePacket wirePacket) {
+        return wirePacket.phase() == PacketPhase.PLAY
+                && wirePacket.direction() == PacketDescriptor.Direction.CLIENTBOUND
+                && registry.find(wirePacket.phase(), wirePacket.direction(), wirePacket.packetId())
+                        .map(descriptor -> RESPAWN.equals(descriptor.typeName()))
+                        .orElse(false);
     }
 
     private boolean shouldSuppress(PaperConnectionAccessor.WirePacket wirePacket) {

@@ -8,8 +8,21 @@ import java.util.Objects;
 /**
  * Package-private wire codec shared by segment and checkpoint bodies.
  *
- * <p>The record layout is deliberately kept in one place so both artifact
- * types preserve the exact wire frame representation.</p>
+ * <p>A body is a sequence of frame records of one track. A record holds:</p>
+ * <ol>
+ *     <li>record length (VarInt),</li>
+ *     <li>elapsed time since the previous frame of the body (VarLong),</li>
+ *     <li>server tick change since the previous frame (zigzag VarLong),</li>
+ *     <li>sequence within the server tick (VarInt),</li>
+ *     <li>packet ID (VarInt),</li>
+ *     <li>payload length (VarInt) and payload.</li>
+ * </ol>
+ *
+ * <p>The first frame of a body is relative to zero. Phase and world are not
+ * stored: every frame is a {@link PacketPhase#PLAY} packet, and its world is
+ * the world of its track. A body is therefore only decoded from its start,
+ * with an {@link Encoder} and a {@link Decoder} that carry the previous
+ * frame.</p>
  */
 final class ReplayFrameCodec {
 
@@ -18,95 +31,138 @@ final class ReplayFrameCodec {
     private ReplayFrameCodec() {
     }
 
-    static long encodedRecordLength(RawPacketFrame frame) {
-        Objects.requireNonNull(frame, "frame");
-        byte[] payload = frame.payload();
-        long recordLength = 0L;
-        recordLength = addLength(recordLength,
-                SegmentWire.sizeOfUnsignedVarLong(frame.elapsedNanos()));
-        recordLength = addLength(recordLength,
-                SegmentWire.sizeOfUnsignedVarLong(frame.serverTick()));
-        recordLength = addLength(recordLength,
-                SegmentWire.sizeOfUnsignedVarInt(frame.sequence()));
-        recordLength = addLength(recordLength,
-                SegmentWire.sizeOfUnsignedVarInt(frame.phase().wireCode()));
-        recordLength = addLength(recordLength,
-                SegmentWire.sizeOfUnsignedVarInt(frame.packetId()));
-        recordLength = addLength(recordLength, worldLength(frame));
-        recordLength = addLength(recordLength,
-                SegmentWire.sizeOfUnsignedVarInt(payload.length));
-        recordLength = addLength(recordLength, payload.length);
-        if (recordLength > Integer.MAX_VALUE) {
-            throw new IllegalArgumentException("frame record is too large");
+    /** Encodes the frames of one body in order. */
+    static final class Encoder {
+        private final TrackDescriptor track;
+        private long previousElapsedNanos;
+        private long previousServerTick;
+
+        Encoder(TrackDescriptor track) {
+            this.track = Objects.requireNonNull(track, "track");
         }
-        return addLength(
-                SegmentWire.sizeOfUnsignedVarInt((int) recordLength), recordLength);
+
+        /**
+         * Returns the encoded length of the next record, including its length
+         * prefix, without accepting the frame.
+         */
+        long encodedLength(RawPacketFrame frame) {
+            validate(frame);
+            int bodyLength = bodyLength(frame);
+            return SegmentWire.sizeOfUnsignedVarInt(bodyLength) + (long) bodyLength;
+        }
+
+        /** Writes the next record and makes it the base of the following one. */
+        void write(OutputStream output, RawPacketFrame frame) throws IOException {
+            Objects.requireNonNull(output, "output");
+            validate(frame);
+            byte[] payload = frame.payload();
+            SegmentWire.writeUnsignedVarInt(output, bodyLength(frame));
+            SegmentWire.writeUnsignedVarLong(output, frame.elapsedNanos() - previousElapsedNanos);
+            SegmentWire.writeUnsignedVarLong(
+                    output, zigzag(frame.serverTick() - previousServerTick));
+            SegmentWire.writeUnsignedVarInt(output, frame.sequence());
+            SegmentWire.writeUnsignedVarInt(output, frame.packetId());
+            SegmentWire.writeUnsignedVarInt(output, payload.length);
+            output.write(payload);
+            previousElapsedNanos = frame.elapsedNanos();
+            previousServerTick = frame.serverTick();
+        }
+
+        private void validate(RawPacketFrame frame) {
+            Objects.requireNonNull(frame, "frame");
+            if (frame.phase() != PacketPhase.PLAY) {
+                throw new IllegalArgumentException("a track only holds PLAY frames");
+            }
+            if (!frame.world().equals(track.frameWorld())) {
+                throw new IllegalArgumentException(
+                        "frame world " + frame.world().orElse("-")
+                                + " does not belong to track " + track.id());
+            }
+            if (frame.elapsedNanos() < previousElapsedNanos) {
+                throw new IllegalArgumentException("frames must be ordered by elapsed time");
+            }
+            if (frame.payload().length > MAX_PAYLOAD_LENGTH) {
+                throw new IllegalArgumentException("frame payload exceeds maximum length");
+            }
+        }
+
+        private int bodyLength(RawPacketFrame frame) {
+            int payloadLength = frame.payload().length;
+            long length = SegmentWire.sizeOfUnsignedVarLong(frame.elapsedNanos() - previousElapsedNanos)
+                    + (long) SegmentWire.sizeOfUnsignedVarLong(
+                            zigzag(frame.serverTick() - previousServerTick))
+                    + SegmentWire.sizeOfUnsignedVarInt(frame.sequence())
+                    + SegmentWire.sizeOfUnsignedVarInt(frame.packetId())
+                    + SegmentWire.sizeOfUnsignedVarInt(payloadLength)
+                    + payloadLength;
+            if (length > Integer.MAX_VALUE) {
+                throw new IllegalArgumentException("frame record is too large");
+            }
+            return (int) length;
+        }
     }
 
-    static void writeRecord(OutputStream output, RawPacketFrame frame) throws IOException {
-        Objects.requireNonNull(output, "output");
-        Objects.requireNonNull(frame, "frame");
-        byte[] payload = frame.payload();
-        long recordLength = recordBodyLength(frame, payload);
-        SegmentWire.writeUnsignedVarInt(output, (int) recordLength);
-        SegmentWire.writeUnsignedVarLong(output, frame.elapsedNanos());
-        SegmentWire.writeUnsignedVarLong(output, frame.serverTick());
-        SegmentWire.writeUnsignedVarInt(output, frame.sequence());
-        SegmentWire.writeUnsignedVarInt(output, frame.phase().wireCode());
-        SegmentWire.writeUnsignedVarInt(output, frame.packetId());
-        // The world key, or length zero for a frame of no world.
-        byte[] world = worldBytes(frame);
-        SegmentWire.writeUnsignedVarInt(output, world.length);
-        output.write(world);
-        SegmentWire.writeUnsignedVarInt(output, payload.length);
-        output.write(payload);
+    /** Decodes the frames of one body in order. */
+    static final class Decoder {
+        private final TrackDescriptor track;
+        private long previousElapsedNanos;
+        private long previousServerTick;
+
+        Decoder(TrackDescriptor track) {
+            this.track = Objects.requireNonNull(track, "track");
+        }
+
+        RawPacketFrame read(InputStream input)
+                throws IOException, CorruptReplayArtifactException {
+            Objects.requireNonNull(input, "input");
+            int recordLength = readUnsignedVarInt(input, "frame record length");
+            if (recordLength <= 0) {
+                throw corrupt("frame record length must be positive");
+            }
+            LimitedInputStream record = new LimitedInputStream(input, recordLength);
+            long elapsedDelta = readUnsignedVarLong(record, "frame elapsed time");
+            long tickDelta = unzigzag(readUnsignedVarLong(record, "frame server tick"));
+            int sequence = readUnsignedVarInt(record, "frame sequence");
+            int packetId = readUnsignedVarInt(record, "frame packet id");
+            int payloadLength = readUnsignedVarInt(record, "frame payload length");
+            if (payloadLength > MAX_PAYLOAD_LENGTH) {
+                throw corrupt("frame payload exceeds maximum length");
+            }
+            if (payloadLength > record.remaining()) {
+                throw corrupt("payload length exceeds its frame record");
+            }
+            byte[] payload = readBytes(record, payloadLength, "frame payload");
+            if (record.remaining() != 0L) {
+                throw corrupt("frame record contains trailing bytes");
+            }
+            long elapsedNanos;
+            long serverTick;
+            try {
+                elapsedNanos = Math.addExact(previousElapsedNanos, elapsedDelta);
+                serverTick = Math.addExact(previousServerTick, tickDelta);
+            } catch (ArithmeticException exception) {
+                throw corrupt("frame time or tick overflows", exception);
+            }
+            RawPacketFrame frame;
+            try {
+                frame = new RawPacketFrame(
+                        elapsedNanos, serverTick, sequence, PacketPhase.PLAY,
+                        packetId, payload, track.frameWorld());
+            } catch (IllegalArgumentException | NullPointerException exception) {
+                throw corrupt("decoded frame values are invalid", exception);
+            }
+            previousElapsedNanos = elapsedNanos;
+            previousServerTick = serverTick;
+            return frame;
+        }
     }
 
-    static RawPacketFrame readRecord(InputStream input)
-            throws IOException, CorruptReplayArtifactException {
-        Objects.requireNonNull(input, "input");
-        int recordLength = readUnsignedVarInt(input, "frame record length");
-        if (recordLength <= 0) {
-            throw corrupt("frame record length must be positive");
-        }
-        LimitedInputStream record = new LimitedInputStream(input, recordLength);
-        long elapsedNanos = readUnsignedVarLong(record, "frame elapsed time");
-        long serverTick = readUnsignedVarLong(record, "frame server tick");
-        int sequence = readUnsignedVarInt(record, "frame sequence");
-        int phaseCode = readUnsignedVarInt(record, "frame phase");
-        PacketPhase phase;
-        try {
-            phase = PacketPhase.fromWireCode(phaseCode);
-        } catch (IllegalArgumentException exception) {
-            throw corrupt("unknown frame phase code: " + phaseCode, exception);
-        }
-        int packetId = readUnsignedVarInt(record, "frame packet id");
-        int worldLength = readUnsignedVarInt(record, "frame world length");
-        if (worldLength > RawPacketFrame.MAX_WORLD_LENGTH || worldLength > record.remaining()) {
-            throw corrupt("frame world key exceeds its frame record");
-        }
-        java.util.Optional<String> world = worldLength == 0
-                ? java.util.Optional.empty()
-                : java.util.Optional.of(new String(
-                        readBytes(record, worldLength, "frame world"),
-                        java.nio.charset.StandardCharsets.UTF_8));
-        int payloadLength = readUnsignedVarInt(record, "frame payload length");
-        if (payloadLength > MAX_PAYLOAD_LENGTH) {
-            throw corrupt("frame payload exceeds maximum length");
-        }
-        if (payloadLength > record.remaining()) {
-            throw corrupt("payload length exceeds its frame record");
-        }
-        byte[] payload = readBytes(record, payloadLength, "frame payload");
-        if (record.remaining() != 0L) {
-            throw corrupt("frame record contains trailing bytes");
-        }
-        try {
-            return new RawPacketFrame(
-                    elapsedNanos, serverTick, sequence, phase, packetId, payload, world);
-        } catch (IllegalArgumentException | NullPointerException exception) {
-            throw corrupt("decoded frame values are invalid", exception);
-        }
+    private static long zigzag(long value) {
+        return (value << 1) ^ (value >> 63);
+    }
+
+    private static long unzigzag(long value) {
+        return (value >>> 1) ^ -(value & 1L);
     }
 
     static int readUnsignedVarInt(InputStream input, String field)
@@ -180,42 +236,6 @@ final class ReplayFrameCodec {
             }
         }
         return result;
-    }
-
-    private static long recordBodyLength(RawPacketFrame frame, byte[] payload) {
-        if (payload.length > MAX_PAYLOAD_LENGTH) {
-            throw new IllegalArgumentException("frame payload exceeds maximum length");
-        }
-        long recordLength = 0L;
-        recordLength = addLength(recordLength,
-                SegmentWire.sizeOfUnsignedVarLong(frame.elapsedNanos()));
-        recordLength = addLength(recordLength,
-                SegmentWire.sizeOfUnsignedVarLong(frame.serverTick()));
-        recordLength = addLength(recordLength,
-                SegmentWire.sizeOfUnsignedVarInt(frame.sequence()));
-        recordLength = addLength(recordLength,
-                SegmentWire.sizeOfUnsignedVarInt(frame.phase().wireCode()));
-        recordLength = addLength(recordLength,
-                SegmentWire.sizeOfUnsignedVarInt(frame.packetId()));
-        recordLength = addLength(recordLength, worldLength(frame));
-        recordLength = addLength(recordLength,
-                SegmentWire.sizeOfUnsignedVarInt(payload.length));
-        recordLength = addLength(recordLength, payload.length);
-        if (recordLength > Integer.MAX_VALUE) {
-            throw new IllegalArgumentException("frame record is too large");
-        }
-        return recordLength;
-    }
-
-    private static byte[] worldBytes(RawPacketFrame frame) {
-        return frame.world()
-                .map(world -> world.getBytes(java.nio.charset.StandardCharsets.UTF_8))
-                .orElse(new byte[0]);
-    }
-
-    private static long worldLength(RawPacketFrame frame) {
-        int length = worldBytes(frame).length;
-        return SegmentWire.sizeOfUnsignedVarInt(length) + (long) length;
     }
 
     private static long addLength(long left, long right) {

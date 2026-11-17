@@ -204,10 +204,14 @@ final class Paper26_2CheckpointFixtureTest {
         assertTrue(capture.initializationFrames().stream()
                 .allMatch(frame -> frame.elapsedNanos() == 50L && frame.serverTick() == 8L));
 
+        dev.voldechse.replayframework.format.TrackDescriptor track = checkpoint.initializationFrames()
+                .getFirst().world()
+                .map(world -> dev.voldechse.replayframework.format.TrackDescriptor.world(1, world))
+                .orElse(dev.voldechse.replayframework.format.TrackDescriptor.global(0));
         Path checkpointPath = temporaryDirectory.resolve("initial.rfc");
-        new ReplayCheckpointWriter(checkpointPath, Paper26_2CheckpointEncoder.ADAPTER_ID)
+        new ReplayCheckpointWriter(checkpointPath, Paper26_2CheckpointEncoder.ADAPTER_ID, track)
                 .write(checkpoint);
-        ReplayCheckpoint decoded = new ReplayCheckpointReader().read(checkpointPath);
+        ReplayCheckpoint decoded = new ReplayCheckpointReader().read(checkpointPath, track);
         assertEquals(checkpoint.ordinal(), decoded.ordinal());
         assertEquals(checkpoint.elapsedNanos(), decoded.elapsedNanos());
         assertEquals(checkpoint.initializationFrames(), decoded.initializationFrames());
@@ -217,7 +221,7 @@ final class Paper26_2CheckpointFixtureTest {
         Path truncatedPath = temporaryDirectory.resolve("initial-truncated.rfc");
         Files.write(truncatedPath, truncated);
         assertThrows(CorruptReplayArtifactException.class,
-                () -> new ReplayCheckpointReader().read(truncatedPath));
+                () -> new ReplayCheckpointReader().read(truncatedPath, track));
     }
 
     @Test

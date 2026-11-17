@@ -59,6 +59,20 @@ class RecipientCopyMergerTest {
     }
 
     @Test
+    void mergesWorldWideCopiesOfRecipientsInDifferentWorlds() {
+        CaptureContext overworld = new CaptureContext(
+                Optional.empty(), Optional.of(OVERWORLD), Optional.empty(), Optional.empty(), Optional.empty())
+                .asWorldWide().asRecipientCopy(new RecipientCopy(ALEX, "advancement"));
+        CaptureContext nether = new CaptureContext(
+                Optional.empty(), Optional.of(Key.key("minecraft:the_nether")), Optional.empty(),
+                Optional.empty(), Optional.empty())
+                .asWorldWide().asRecipientCopy(new RecipientCopy(STEVE, "advancement"));
+
+        assertTrue(merger.record(new CapturedPacket(0L, 20L, 0, PacketPhase.PLAY, 7, new byte[] {1}, overworld)));
+        assertFalse(merger.record(new CapturedPacket(0L, 20L, 1, PacketPhase.PLAY, 7, new byte[] {1}, nether)));
+    }
+
+    @Test
     void recordsEveryPacketThatIsNoRecipientCopy() {
         for (int repeat = 0; repeat < 3; repeat++) {
             assertTrue(merger.record(packet(20L, 7, OVERWORLD, Optional.empty())));

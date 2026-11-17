@@ -15,6 +15,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ReplaySegmentCodecTest {
 
+    private static final TrackDescriptor TRACK = TrackDescriptor.global(0);
+
     @TempDir
     Path temporaryDirectory;
 
@@ -26,9 +28,9 @@ class ReplaySegmentCodecTest {
         byte[] playPayload = {0x7F, 0x00, (byte) 0xFF};
 
         SegmentHeader writtenHeader;
-        try (ReplaySegmentWriter writer = new ReplaySegmentWriter(target, "paper-26.2")) {
+        try (ReplaySegmentWriter writer = new ReplaySegmentWriter(target, "paper-26.2", TRACK)) {
             writer.append(new RawPacketFrame(
-                    100L, 40L, 0, PacketPhase.CONFIGURATION, 3, configurationPayload));
+                    100L, 40L, 0, PacketPhase.PLAY, 3, configurationPayload));
             configurationPayload[0] = 0x55;
             writer.append(new RawPacketFrame(
                     200L, 40L, 1, PacketPhase.PLAY, 7, emptyPayload));
@@ -38,7 +40,7 @@ class ReplaySegmentCodecTest {
         }
 
         ReplaySegmentReader.DecodedSegment decoded =
-                new ReplaySegmentReader().read(target);
+                new ReplaySegmentReader().read(target, TRACK);
 
         assertNotNull(decoded);
         assertEquals(SegmentHeader.CURRENT_FORMAT_VERSION, writtenHeader.formatVersion());
@@ -57,7 +59,7 @@ class ReplaySegmentCodecTest {
         assertTrue(decoded.frameOffsets().getLast() < writtenHeader.uncompressedLength());
 
         assertFrame(decoded.frames().get(0), 100L, 40L, 0,
-                PacketPhase.CONFIGURATION, 3, new byte[]{0x01, 0x02, 0x03});
+                PacketPhase.PLAY, 3, new byte[]{0x01, 0x02, 0x03});
         assertFrame(decoded.frames().get(1), 200L, 40L, 1,
                 PacketPhase.PLAY, 7, new byte[0]);
         assertFrame(decoded.frames().get(2), 300L, 41L, 0,
@@ -67,7 +69,7 @@ class ReplaySegmentCodecTest {
     @Test
     void truncatedSegmentFailsWithCorruptReplaySegmentException() throws Exception {
         Path target = temporaryDirectory.resolve("00000001.segment");
-        try (ReplaySegmentWriter writer = new ReplaySegmentWriter(target, "paper-26.2")) {
+        try (ReplaySegmentWriter writer = new ReplaySegmentWriter(target, "paper-26.2", TRACK)) {
             writer.append(new RawPacketFrame(
                     1L, 1L, 0, PacketPhase.PLAY, 1, new byte[]{0x01}));
             writer.append(new RawPacketFrame(
@@ -81,7 +83,7 @@ class ReplaySegmentCodecTest {
 
         assertThrows(
                 CorruptReplaySegmentException.class,
-                () -> new ReplaySegmentReader().read(truncated));
+                () -> new ReplaySegmentReader().read(truncated, TRACK));
     }
 
     private static void assertFrame(
