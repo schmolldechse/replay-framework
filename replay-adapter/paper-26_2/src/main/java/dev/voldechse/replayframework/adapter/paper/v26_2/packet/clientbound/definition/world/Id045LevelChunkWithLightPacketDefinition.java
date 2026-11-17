@@ -7,9 +7,6 @@ import dev.voldechse.replayframework.adapter.paper.packet.clientbound.Clientboun
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketRewriteResult;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
 import net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket;
-import dev.voldechse.replayframework.adapter.CaptureContext;
-import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketCaptureState;
-import java.util.UUID;
 
 /**
  * Complete chunk terrain, block entity, heightmap and light state for
@@ -51,20 +48,6 @@ final class Id045LevelChunkWithLightPacketDefinition
                             + ", expected " + ClientboundLevelChunkWithLightPacket.class.getName());
         }
         return PacketRewriteResult.send(packet);
-    }
-
-    /** A chunk sent again after a respawn replaces the withheld one in place. */
-    @Override
-    public CaptureContext captureContext(
-            Object decodedPacket,
-            PacketDescriptor descriptor,
-            UUID connectionId,
-            PacketCaptureState state,
-            long serverTick) {
-        ClientboundLevelChunkWithLightPacket packet =
-                ClientboundLevelChunkWithLightPacket.class.cast(decodedPacket);
-        state.viewTeardown().chunkLoaded(connectionId, packet.getX(), packet.getZ(), serverTick);
-        return super.captureContext(decodedPacket, descriptor, connectionId, state, serverTick);
     }
 
     @Override

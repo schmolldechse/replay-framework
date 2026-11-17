@@ -4,10 +4,6 @@ import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketClassification;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
-import net.minecraft.network.protocol.game.ClientboundSetChunkCacheCenterPacket;
-import dev.voldechse.replayframework.adapter.CaptureContext;
-import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketCaptureState;
-import java.util.UUID;
 
 /**
  * Contract for {@code minecraft:set_chunk_cache_center}.
@@ -28,19 +24,6 @@ final class Id094SetChunkCacheCenterPacketDefinition extends ClientboundPacketDe
                 PACKET_ID,
                 IDENTIFIER,
                 PacketClassification.stateful(PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
-    }
-
-    /** The view center decides which chunks withheld during a death teardown are sent again. */
-    @Override
-    public CaptureContext captureContext(
-            Object decodedPacket,
-            PacketDescriptor descriptor,
-            UUID connectionId,
-            PacketCaptureState state,
-            long serverTick) {
-        ClientboundSetChunkCacheCenterPacket packet = ClientboundSetChunkCacheCenterPacket.class.cast(decodedPacket);
-        state.viewTeardown().viewCenter(connectionId, packet.getX(), packet.getZ());
-        return super.captureContext(decodedPacket, descriptor, connectionId, state, serverTick);
     }
 
     @Override

@@ -68,13 +68,6 @@ final class Id102SetEquipmentPacketDefinition extends RebuildingPacketDefinition
     }
 
     @Override
-    public boolean suppressesRecipientState(
-            Object decodedPacket, PacketCaptureState state, long serverTick) {
-        return state.equipmentIsAuthoritative(
-                ClientboundSetEquipmentPacket.class.cast(decodedPacket).getEntity());
-    }
-
-    @Override
     protected Value read(ClientboundSetEquipmentPacket packet) {
         return new Value(
                 packet.getEntity(),

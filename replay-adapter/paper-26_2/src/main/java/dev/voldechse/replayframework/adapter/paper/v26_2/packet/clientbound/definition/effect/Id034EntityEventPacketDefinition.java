@@ -63,13 +63,6 @@ final class Id034EntityEventPacketDefinition extends RebuildingPacketDefinition<
     }
 
     @Override
-    public boolean suppressesRecipientState(
-            Object decodedPacket, PacketCaptureState state, long serverTick) {
-        Value value = read(ClientboundEntityEventPacket.class.cast(decodedPacket));
-        return value.eventStatus() == 55 && state.equipmentIsAuthoritative(value.entityId());
-    }
-
-    @Override
     protected Value read(ClientboundEntityEventPacket packet) {
         FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
         try {

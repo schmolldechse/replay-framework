@@ -3,90 +3,43 @@
 ## Purpose
 
 Replay capture must describe server state independently of an arbitrary packet
-recipient. The preferred source is therefore the Minecraft protocol itself.
-PacketEvents and version-bound channel handling provide the protocol boundary;
-Paper or Bukkit events are fallback sources only when no complete packet-driven
-source exists.
+recipient. The preferred source is therefore the Minecraft protocol itself:
+clientbound packets the server sends, captured as the server built them.
+Paper or Bukkit events are not a capture source.
 
-This policy applies to current Paper adapters and to future adapter work. It is
-intentionally independent of a specific Minecraft packet registry. Each adapter
-documents the concrete packet names and encodings that implement the policy for
-its version.
+This policy applies to every Paper adapter. It is intentionally independent of
+a specific Minecraft packet registry. Each adapter documents the concrete
+packet names and encodings that implement the policy for its version.
 
 ## Source precedence
 
-Capture sources are selected in the following order:
+A recording takes every packet from exactly one of three sources, recorded as
+the packet's `CaptureOrigin`:
 
-1. **Clientbound packet capture.** A verified clientbound packet is copied when
-   it represents scene state completely and does not depend on which player
-   received it. This remains the default for chunks, blocks, entity lifecycle,
-   metadata, effects, sounds, particles, and other protocol-visible state.
-2. **Serverbound packet trigger with authoritative sampling.** Some server state
-   is not sent back to the acting client and may not have another tracking
-   recipient. In that case an accepted serverbound packet identifies that the
-   player can have changed. The adapter coalesces the signal and samples the
-   authoritative player state on the server thread, then emits the corresponding
-   version-specific clientbound representation into the neutral recording
-   stream. Every serverbound packet has its own definition that decides what
-   it triggers; serverbound packets themselves are never recorded.
-3. **Channel handler boundary.** A channel handler is used where the exact
-   transport boundary is the required contract, such as preventing replay
-   packets and live connection-local packets from affecting one another. A
-   channel handler must preserve event-loop ordering and must not turn a
-   connection-local value into global scene state.
-4. **Server event fallback.** A Paper or Bukkit event may be used only when the
-   state has no reliable packet source or owner connection from which it can be
-   sampled. The fallback must be documented with the missing packet capability,
-   and its output must still be encoded as an adapter-native clientbound packet.
+1. **Argus eyes (`OBSERVER`).** The scene, meaning chunks, blocks, block
+   entities and every tracked entity including players, comes from the
+   virtual observers of the recording (see
+   [virtual observers](virtual-observer.md)). An eye receives exactly what a
+   neutral player at its position would receive, independent of the players
+   that happen to be connected.
+2. **Player connections (`PLAYER_ONLY`).** Packets the server sends only to
+   listed players, such as sounds, particles, level events, explosions, chat
+   and the tab list, are captured from the connections of real players. The
+   server sends one packet object to all recipients, so copies of different
+   recipients are merged.
+3. **Effects that bypass their actor.** The server sends some effects of a
+   player's action to everyone except that player. With nobody else in range
+   no connection receives them. A serverbound packet then serves as the
+   trigger, and the adapter rebuilds the clientbound packet the server would
+   have sent (see below).
 
-An event must not duplicate a state family that can be captured reliably from
-packets. In particular, player movement, player equipment, and player arm swings
-must not be based on `PlayerMoveEvent`, inventory/equipment events, or arm-swing
-events while the accepted serverbound packet stream is available.
+Serverbound packets are never recorded. Every serverbound packet has its own
+definition that decides whether it triggers anything; most trigger nothing
+because whatever they change reaches the recording through an eye.
 
-## Derived scene packets
-
-Some connection-local packets imply a scene change that the protocol sends to
-other recipients as separate packets. A respawn is the main case: the
-respawning client replaces its own entity, while tracking players receive an
-entity removal and a new spawn. When nobody else tracks the player, the
-recipient-independent form never appears on the wire.
-
-A packet definition may therefore derive the equivalent scene packets from the
-decoded connection-local packet and packet-owned capture state. The capture
-bridge encodes them with the native codec and publishes them directly after
-the observed packet, inside the same capture-order lock. Derivation runs on
-the capture callback and must not read mutable server state.
-
-When an adapter derives such a replacement, recipient copies of the same
-entity spawn observed in that tick or the next are suppressed, and the
-player-state sampler forgets its baseline so position, head rotation and
-equipment are emitted again for the new entity.
-
-## View teardown of a dead player
-
-The server removes a dead player from its level, either when the death
-animation ends or at the respawn. The connection then receives a chunk unload
-for every loaded chunk followed by an entity removal for every tracked entity,
-and after the respawn the same chunks and entities are sent again. These
-unloads describe the recipient's view, not the scene; replaying them makes the
-world disappear and reload for the neutral observer.
-
-Capture recognizes the teardown from packets of the affected connection only:
-the receiving player's health reaching zero marks it as dead, and because a
-dead player cannot move its view, its first chunk unload starts the teardown.
-The respawn packet ends it. Unloads observed in between are withheld and
-resolved afterwards:
-
-- a chunk or entity that is sent again replaces the withheld one in place;
-- a withheld chunk outside the respawned view (announced center and radius,
-  plus one column) is published as an unload together with its entities;
-- a withheld entity that does not reappear within one second after its chunk
-  was sent again is published as a removal; and
-- a respawn into another world publishes every withheld unload.
-
-Unloads of living players, and removals observed between death and the
-teardown, remain ordinary scene changes.
+Packets a player's own view receives, such as its chunk cache center or its
+own position correction, describe that view, not the scene. They carry the
+origin `PLAYER_VIEW`, and no recording accepts them.
 
 ## Effects that bypass their actor
 
@@ -119,71 +72,34 @@ PacketEvents callbacks and the serverbound receiver execute on a Netty
 event-loop thread. They must not read mutable Bukkit, Paper, CraftBukkit, or
 NMS world state. Serverbound packets are seen as decoded objects by a channel
 handler directly before the server's packet handler; it never changes, drops
-or delays a packet. A serverbound definition may copy only immutable
-protocol semantics needed to schedule work, such as:
-
-- the player UUID and protocol entity ID;
-- the packet type;
-- a decoded hand or other self-contained packet field; and
-- the current capture tick used for bounded duplicate suppression.
-
-Authoritative state sampling runs on the server thread. Multiple accepted
-packets for the same player are coalesced into one pending sample. The sampler
-reads the current entity position, orientation, ground state, and equipment,
-compares them with its previous snapshot, and emits only changed state plus any
-queued ephemeral actions. No Bukkit entity or live connection reference is
-stored in a replay frame.
+or delays a packet. A serverbound definition may only read fields of its
+packet.
 
 Clientbound packet bytes are copied by a PacketEvents post-task before leaving
 the callback. The post-task runs after all listeners and any wrapper
 re-encoding, so capture parses the final VarInt packet ID and copies the final
 uncompressed body without changing the live buffer's reader index.
-Channel-handler work remains on the channel event loop. Cross-thread publication
-uses the adapter's capture-order allocator so timestamps, server ticks, sequence
-numbers, checkpoint barriers, and recording-scope filtering retain one ordering
-contract.
 
-## Recipient independence and duplicate suppression
+Eyes, sampled time and weather, and actor effects run on the server thread.
+Cross-thread publication uses the adapter's capture-order allocator so
+timestamps, server ticks, sequence numbers, checkpoint barriers, and
+recording-scope filtering retain one ordering contract.
 
-Serverbound-triggered samples and event fallbacks produce recipient-independent
-clientbound packets with the actor's world and position in their capture context.
-The recording router therefore evaluates a bounded scope against the recorded
-entity rather than against a packet recipient.
+## Duplicate suppression
 
-Once an adapter owns a state family for an entity, recipient-derived copies of
-that family are suppressed before publication:
+Copies of one packet that several players received are recognized by their
+packet ID, world and payload within a server tick, when the packet's
+definition declares that recipient copies are possible. Eye packets need no
+such comparison: the server hands the same object to every eye, and Argus
+merges by object identity and reference counts.
 
-- movement authority suppresses relative movement, rotation, teleport, head
-  rotation, and absolute position-sync copies;
-- equipment authority suppresses equipment copies and the hand-swap entity
-  event that would otherwise apply the swap twice; and
-- a serverbound arm animation suppresses only the matching clientbound swing
-  form in its server tick. Other animation actions and later plugin-originated
-  swings remain capturable.
+A definition may also suppress an observation that must not become part of
+the scene at all, such as a chat message addressed to one player.
 
-Suppression logic is version-bound and parses only packet layouts verified by
-that adapter. It must not infer an entity ID from an arbitrary integer field.
-Entity removal clears all retained authority for that protocol entity ID.
-
-## Event fallback criteria
-
-An event fallback is acceptable only when all of the following are true:
-
-- no accepted serverbound packet belongs to the entity that changed;
-- the normal clientbound stream is recipient-dependent or otherwise incomplete;
-- authoritative state cannot be sampled from another packet-owned source; and
-- the event can be translated into a verified native packet without changing
-  gameplay.
-
-The current Paper adapters use `EntityMoveEvent` and
-`EntityEquipmentChangedEvent` only for non-player entities. Such entities have
-no owner connection and therefore no serverbound player stream. Entity-removal
-notification is used for lifecycle cleanup of capture indexes; it is not a
-source of replay presentation. Player state does not use those event fallbacks.
-
-If a future protocol exposes a complete packet-driven source for a fallback
-family, the fallback should be removed. Conversely, a new event dependency must
-be justified in the relevant adapter documentation before implementation.
+Known gap: in 26.2 only entity packets and system chat declare recipient
+copies. Sounds, particles, level and block events, block-break progress,
+explosions, player chat and tab-list updates are recorded once per player
+that received them; with several players in range a replay repeats them.
 
 ## Adapter responsibilities
 
@@ -191,13 +107,12 @@ Packet-driven capture is divided into small version-bound responsibilities:
 
 - the capture bridge owns PacketEvents registration, packet byte copying,
   capture ordering, and failure propagation;
-- a main-thread player-scene index publishes immutable world keys for Netty
-  capture callbacks; callbacks never query Bukkit player/world state;
-- the player-state sampler owns receive-signal coalescing and main-thread state
-  comparison;
-- the entity-state coordinator owns non-player fallbacks and lifecycle cleanup;
-- the native packet factory owns version-specific packet construction;
-- the authoritative-state index owns duplicate suppression; and
+- the clientbound definitions own context, distribution and playback policy
+  of their packet;
+- the serverbound receiver hands every received packet to its serverbound
+  definition;
+- the actor effects own the before and after reads and the effect families;
+- the Argus platform owns the eye, sampled world state and player queries; and
 - the playback rewriter owns session-local entity and UUID references.
 
 Replay injection is not an event fallback. The version bridge first encodes a
@@ -213,12 +128,13 @@ it must preserve these responsibility and thread boundaries.
 
 ## Validation requirements
 
-Each adapter must test its own packet layouts and source decisions. At minimum,
-tests cover movement and equipment authority, hand-swap suppression, the
-version-specific swing representation, tick-scoped ephemeral suppression,
-changed and cleared equipment slots, and entity-reference metadata rewriting.
+Each adapter must test its own packet layouts and source decisions: every
+clientbound and serverbound definition against the live registry, the
+distribution and scene membership of observable packets, the reactions of
+triggering serverbound packets, every effect family, and entity-reference
+rewriting.
 
-Generic core tests continue to cover ordering, checkpoint boundaries, scope
-routing, buffering, seek reconstruction, and neutral-observer contracts. An
-adapter test must not be replaced by a generic test when the asserted packet
-layout differs between Minecraft versions.
+Generic tests continue to cover ordering, checkpoint boundaries, scope
+routing, merging of eyes, buffering, seek reconstruction, and neutral-observer
+contracts. An adapter test must not be replaced by a generic test when the
+asserted packet layout differs between Minecraft versions.

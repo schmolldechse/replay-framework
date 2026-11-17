@@ -84,13 +84,6 @@ final class Id035EntityPositionSyncPacketDefinition extends RebuildingPacketDefi
     }
 
     @Override
-    public boolean suppressesRecipientState(
-            Object decodedPacket, PacketCaptureState state, long serverTick) {
-        return state.movementIsAuthoritative(
-                ClientboundEntityPositionSyncPacket.class.cast(decodedPacket).id());
-    }
-
-    @Override
     protected Value read(ClientboundEntityPositionSyncPacket packet) {
         return new Value(packet.id(), packet.values(), packet.onGround());
     }

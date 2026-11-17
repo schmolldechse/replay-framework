@@ -25,9 +25,10 @@ included example plugin demonstrates one possible implementation.
 
 ## Support boundary
 
-The runtime supports **Paper 26.2 and 26.3** on **Java 26**. It selects the
-matching adapter when the server starts; one runtime JAR contains both. Paper
-The verified build targets are Paper 26.2 build 135 and Paper 26.3 build 244 (stable). Replay content contains
+The runtime supports **Paper 26.2** on **Java 26**. Adapters for further
+versions are built on the same version contract (see
+[virtual observers](docs/virtual-observer.md#version-contract)); 26.3 is planned.
+The verified build target is Paper 26.2 build 135. Replay content contains
 raw protocol packets and is tied to the adapter, protocol version, and packet
 registry that produced it. A replay is not a portable video file or a
 cross-version format.
@@ -69,8 +70,7 @@ integration independently when needed:
 .\gradlew.bat :replay-example-plugin:jar
 ```
 
-The local `runServer` task uses the newest adapter, 26.3, by default. Set
-`-PminecraftVersion=26.2` to start a 26.2 development server instead.
+The local `runServer` task starts a Paper 26.2 development server.
 
 The relevant modules are:
 
@@ -80,7 +80,6 @@ The relevant modules are:
 | `replay-runtime-paper` | Paper plugin that composes and publishes the framework. |
 | `replay-core` | Recording, playback, artifact, metadata, and catalog orchestration. |
 | `replay-adapter:paper-26_2` | Paper 26.2 packet capture, checkpoints, and playback bridge. |
-| `replay-adapter:paper-26_3` | Paper 26.3 packet capture, checkpoints, and playback bridge. |
 | `replay-format` | Packet segment, checkpoint, index, and manifest codecs. |
 | `replay-storage:*` | Local, S3, and SFTP artifact storage implementations. |
 | `replay-database:postgresql` | PostgreSQL repositories, Flyway migrations, and metadata persistence. |

@@ -1,20 +1,9 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.definition.player;
 
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
-import dev.voldechse.replayframework.adapter.paper.packet.clientbound.DerivedScenePacket;
-import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketCaptureState;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketClassification;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
-import java.util.List;
-import java.util.Optional;
-import java.util.OptionalInt;
-import java.util.UUID;
-import net.minecraft.network.protocol.game.ClientboundAddEntityPacket;
-import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket;
-import net.minecraft.network.protocol.game.ClientboundRemoveEntitiesPacket;
-import net.minecraft.world.entity.EntityTypes;
-import net.minecraft.world.phys.Vec3;
 
 /**
  * Replay policy for {@code minecraft:player_position}.
@@ -47,59 +36,5 @@ final class Id072PlayerPositionPacketDefinition
                 IDENTIFIER,
                 PacketClassification.stateful(
                         PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
-    }
-
-    @Override
-    public List<DerivedScenePacket> derivedScenePackets(
-            Object decodedPacket,
-            UUID connectionId,
-            PacketCaptureState state,
-            long serverTick) {
-        super.derivedScenePackets(decodedPacket, connectionId, state, serverTick);
-        ClientboundPlayerPositionPacket packet =
-                ClientboundPlayerPositionPacket.class.cast(decodedPacket);
-        // A relative correction carries no spawn placement; the respawn stays
-        // pending until the absolute teleport that Paper sends right after it.
-        if (connectionId == null || !packet.relatives().isEmpty()) {
-            return List.of();
-        }
-        if (!state.consumeRespawnPending(connectionId)) {
-            return List.of();
-        }
-        OptionalInt entityId = state.connectionEntityId(connectionId);
-        Optional<String> world = state.world(connectionId);
-        if (entityId.isEmpty() || world.isEmpty()) {
-            return List.of();
-        }
-
-        Vec3 position = packet.change().position();
-        float yaw = packet.change().yRot();
-        float pitch = packet.change().xRot();
-        PacketCaptureState.EntityPosition scenePosition = new PacketCaptureState.EntityPosition(
-                world.get(), position.x, position.y, position.z);
-        state.entityPosition(
-                connectionId, entityId.getAsInt(), world.get(), position.x, position.y, position.z);
-        state.markEntityReplaced(entityId.getAsInt(), serverTick);
-
-        // The PacketEvents connection ID is the player's profile UUID, which
-        // is also the UUID of the player entity.
-        return List.of(
-                new DerivedScenePacket(
-                        new ClientboundRemoveEntitiesPacket(entityId.getAsInt()),
-                        scenePosition),
-                new DerivedScenePacket(
-                        new ClientboundAddEntityPacket(
-                                entityId.getAsInt(),
-                                connectionId,
-                                position.x,
-                                position.y,
-                                position.z,
-                                pitch,
-                                yaw,
-                                EntityTypes.PLAYER,
-                                0,
-                                Vec3.ZERO,
-                                yaw),
-                        scenePosition));
     }
 }

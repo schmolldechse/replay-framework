@@ -1,13 +1,13 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.serverbound.definition.player;
 
 import dev.voldechse.replayframework.adapter.paper.packet.serverbound.ServerboundPacketDefinition;
-import dev.voldechse.replayframework.adapter.paper.packet.serverbound.ServerboundReaction;
 
 /**
  * Serverbound contract for {@code minecraft:accept_teleportation}.
  *
- * Confirms a server-side teleport. The confirmed position is the sender's
- * own entity position, which the player-state sampler reads.
+ * Confirms a server-side teleport. Whatever it changes about the sender's
+ * own entity reaches the recording through the entity tracker of the eye
+ * that follows the sender.
  */
 final class Id000AcceptTeleportationPacketDefinition extends ServerboundPacketDefinition {
 
@@ -16,11 +16,5 @@ final class Id000AcceptTeleportationPacketDefinition extends ServerboundPacketDe
 
     Id000AcceptTeleportationPacketDefinition() {
         super(PACKET_ID, IDENTIFIER);
-    }
-
-    @Override
-    public ServerboundReaction react(Object decodedPacket) {
-        super.react(decodedPacket);
-        return ServerboundReaction.PLAYER_STATE;
     }
 }

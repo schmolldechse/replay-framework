@@ -1,12 +1,13 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.serverbound.definition.player;
 
 import dev.voldechse.replayframework.adapter.paper.packet.serverbound.ServerboundPacketDefinition;
-import dev.voldechse.replayframework.adapter.paper.packet.serverbound.ServerboundReaction;
 
 /**
  * Serverbound contract for {@code minecraft:move_player_status_only}.
  *
- * Reports ground and wall contact of the sender.
+ * Reports ground and wall contact of the sender. Whatever it changes about
+ * the sender's own entity reaches the recording through the entity tracker
+ * of the eye that follows the sender.
  */
 final class Id033MovePlayerStatusOnlyPacketDefinition extends ServerboundPacketDefinition {
 
@@ -15,11 +16,5 @@ final class Id033MovePlayerStatusOnlyPacketDefinition extends ServerboundPacketD
 
     Id033MovePlayerStatusOnlyPacketDefinition() {
         super(PACKET_ID, IDENTIFIER);
-    }
-
-    @Override
-    public ServerboundReaction react(Object decodedPacket) {
-        super.react(decodedPacket);
-        return ServerboundReaction.PLAYER_STATE;
     }
 }

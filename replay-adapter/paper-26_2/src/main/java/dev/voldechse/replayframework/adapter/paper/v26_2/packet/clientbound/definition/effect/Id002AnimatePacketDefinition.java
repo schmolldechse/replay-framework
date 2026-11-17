@@ -59,15 +59,6 @@ final class Id002AnimatePacketDefinition extends RebuildingPacketDefinition<
     }
 
     @Override
-    public boolean suppressesRecipientState(
-            Object decodedPacket, PacketCaptureState state, long serverTick) {
-        Value value = read(ClientboundAnimatePacket.class.cast(decodedPacket));
-        return (value.action() == ClientboundAnimatePacket.SWING_MAIN_HAND
-                        || value.action() == ClientboundAnimatePacket.SWING_OFF_HAND)
-                && state.swingIsAuthoritative(value.entityId(), serverTick);
-    }
-
-    @Override
     protected Value read(ClientboundAnimatePacket packet) {
         return new Value(packet.getId(), packet.getAction());
     }

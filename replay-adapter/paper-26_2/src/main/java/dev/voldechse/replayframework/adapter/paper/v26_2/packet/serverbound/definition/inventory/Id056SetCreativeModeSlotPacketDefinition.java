@@ -1,13 +1,13 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.serverbound.definition.inventory;
 
 import dev.voldechse.replayframework.adapter.paper.packet.serverbound.ServerboundPacketDefinition;
-import dev.voldechse.replayframework.adapter.paper.packet.serverbound.ServerboundReaction;
 
 /**
  * Serverbound contract for {@code minecraft:set_creative_mode_slot}.
  *
- * Sets an inventory slot in creative mode. The sender's equipment may
- * change.
+ * Sets an inventory slot in creative mode. Whatever it changes about the
+ * sender's own entity reaches the recording through the entity tracker of
+ * the eye that follows the sender.
  */
 final class Id056SetCreativeModeSlotPacketDefinition extends ServerboundPacketDefinition {
 
@@ -16,11 +16,5 @@ final class Id056SetCreativeModeSlotPacketDefinition extends ServerboundPacketDe
 
     Id056SetCreativeModeSlotPacketDefinition() {
         super(PACKET_ID, IDENTIFIER);
-    }
-
-    @Override
-    public ServerboundReaction react(Object decodedPacket) {
-        super.react(decodedPacket);
-        return ServerboundReaction.PLAYER_STATE;
     }
 }

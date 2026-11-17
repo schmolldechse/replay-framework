@@ -52,13 +52,6 @@ final class Id056MoveEntityRotPacketDefinition extends RebuildingPacketDefinitio
     }
 
     @Override
-    public boolean suppressesRecipientState(
-            Object decodedPacket, PacketCaptureState state, long serverTick) {
-        return state.movementIsAuthoritative(
-                read(ClientboundMoveEntityPacket.Rot.class.cast(decodedPacket)).entityId());
-    }
-
-    @Override
     protected Value read(ClientboundMoveEntityPacket.Rot packet) {
         FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
         try {

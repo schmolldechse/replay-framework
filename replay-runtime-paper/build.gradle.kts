@@ -12,7 +12,6 @@ dependencies {
     implementation(project(":replay-format"))
     implementation(project(":replay-adapter:api"))
     implementation(project(":replay-adapter:paper-26_2"))
-    implementation(project(":replay-adapter:paper-26_3"))
     implementation(project(":replay-storage:api"))
     implementation(project(":replay-storage:local"))
     implementation(project(":replay-storage:s3"))
@@ -29,7 +28,7 @@ dependencies {
 }
 
 tasks.runServer {
-    minecraftVersion(providers.gradleProperty("minecraftVersion").orElse("26.3").get())
+    minecraftVersion(providers.gradleProperty("minecraftVersion").orElse("26.2").get())
 }
 
 tasks.processResources {

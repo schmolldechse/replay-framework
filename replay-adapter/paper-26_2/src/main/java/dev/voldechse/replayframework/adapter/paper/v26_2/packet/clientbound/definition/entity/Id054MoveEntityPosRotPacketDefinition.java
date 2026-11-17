@@ -54,13 +54,6 @@ final class Id054MoveEntityPosRotPacketDefinition extends RebuildingPacketDefini
     }
 
     @Override
-    public boolean suppressesRecipientState(
-            Object decodedPacket, PacketCaptureState state, long serverTick) {
-        return state.movementIsAuthoritative(
-                read(ClientboundMoveEntityPacket.PosRot.class.cast(decodedPacket)).entityId());
-    }
-
-    @Override
     protected Value read(ClientboundMoveEntityPacket.PosRot packet) {
         FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
         try {

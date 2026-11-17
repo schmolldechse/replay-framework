@@ -1,13 +1,12 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.serverbound.definition.player;
 
 import dev.voldechse.replayframework.adapter.paper.packet.serverbound.ServerboundPacketDefinition;
-import dev.voldechse.replayframework.adapter.paper.packet.serverbound.ServerboundReaction;
 
 /**
  * Serverbound contract for {@code minecraft:move_vehicle}.
  *
- * Moves the vehicle the sender rides. The vehicle reaches the recording
- * through the tracker; the rider is sampled.
+ * Moves the vehicle the sender rides. The vehicle and its rider reach the
+ * recording through the entity tracker.
  */
 final class Id034MoveVehiclePacketDefinition extends ServerboundPacketDefinition {
 
@@ -16,11 +15,5 @@ final class Id034MoveVehiclePacketDefinition extends ServerboundPacketDefinition
 
     Id034MoveVehiclePacketDefinition() {
         super(PACKET_ID, IDENTIFIER);
-    }
-
-    @Override
-    public ServerboundReaction react(Object decodedPacket) {
-        super.react(decodedPacket);
-        return ServerboundReaction.PLAYER_STATE;
     }
 }

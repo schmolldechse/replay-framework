@@ -15,7 +15,6 @@ flowchart TD
     runtime --> adapterApi["replay-adapter:api<br/>Shared adapter contract"]
     adapterApi --> paperCommon["paper-common<br/>Packet definitions and policy flow"]
     paperCommon --> adapter262["paper-26_2<br/>Capture, checkpoints, playback"]
-    paperCommon --> adapter263["paper-26_3<br/>Capture, checkpoints, playback"]
     runtime --> format["replay-format<br/>Segments, indexes, checkpoints, manifests"]
     runtime --> storage["replay-storage:*<br/>Local, S3, SFTP artifacts"]
     runtime --> database["replay-database:postgresql<br/>Catalog, leases, metadata revisions"]
@@ -183,7 +182,8 @@ they own while handling their own Paper plugin shutdown.
 
 - The framework records raw Minecraft network packets, not a standardized video
   or cross-version replay format.
-- Paper 26.2 and 26.3 have separate adapters. Both adapters target stable Paper builds (26.2 build 135 and 26.3 build 244).
+- Only Paper 26.2 has an adapter (build 135). Further versions are added as
+  separate adapters on the shared version contract.
 - There is no HTTP or REST API.
 - There is no framework-owned GUI, hotbar, command tree, resource pack, or
   player-state policy.

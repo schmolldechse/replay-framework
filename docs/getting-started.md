@@ -8,8 +8,8 @@ plugins only use the `ReplayFramework` service after it has been published.
 
 Prepare a Paper server with the following components:
 
-- Paper **26.2 or 26.3** running on **Java 26**. The runtime selects the
-  matching adapter at startup. The pinned builds are Paper 26.2 build 135 and Paper 26.3 build 244 (stable).
+- Paper **26.2** running on **Java 26**. The pinned build is Paper 26.2
+  build 135.
 - PacketEvents installed as a server plugin. The runtime declares it as a
   required dependency.
 - A reachable PostgreSQL database. The framework uses it for the replay

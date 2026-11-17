@@ -1,13 +1,10 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.capture;
 
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketCaptureState;
-import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ViewTeardownState;
 import dev.voldechse.replayframework.adapter.CaptureContext;
 import dev.voldechse.replayframework.adapter.PacketDisposition;
 import java.util.Map;
 import java.util.Optional;
-import java.util.OptionalInt;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import net.kyori.adventure.key.Key;
@@ -21,17 +18,6 @@ final class Paper26_2AuthoritativeStateIndex implements PacketCaptureState {
             new ConcurrentHashMap<>();
     private final Map<Integer, EntityPosition> checkpointEntityPositions =
             new ConcurrentHashMap<>();
-    private final Set<Integer> movementEntityIds = ConcurrentHashMap.newKeySet();
-    private final Set<Integer> equipmentEntityIds = ConcurrentHashMap.newKeySet();
-    private final Map<Integer, Long> swingTicks = new ConcurrentHashMap<>();
-    private final Set<UUID> respawnPendingConnections = ConcurrentHashMap.newKeySet();
-    private final Map<Integer, Long> replacedEntityTicks = new ConcurrentHashMap<>();
-    private final Paper26_2ViewTeardownIndex viewTeardown = new Paper26_2ViewTeardownIndex();
-
-    @Override
-    public ViewTeardownState viewTeardown() {
-        return viewTeardown;
-    }
 
     @Override
     public Optional<String> world(UUID connectionId) {
@@ -71,41 +57,6 @@ final class Paper26_2AuthoritativeStateIndex implements PacketCaptureState {
         if (previous != null && previous != entityId) {
             remove(previous);
         }
-    }
-
-    @Override
-    public OptionalInt connectionEntityId(UUID connectionId) {
-        Integer entityId = connectionId == null ? null : connectionEntityIds.get(connectionId);
-        return entityId == null ? OptionalInt.empty() : OptionalInt.of(entityId);
-    }
-
-    @Override
-    public void markRespawnPending(UUID connectionId) {
-        if (connectionId != null) {
-            respawnPendingConnections.add(connectionId);
-        }
-    }
-
-    @Override
-    public boolean consumeRespawnPending(UUID connectionId) {
-        return connectionId != null && respawnPendingConnections.remove(connectionId);
-    }
-
-    @Override
-    public void markEntityReplaced(int entityId, long serverTick) {
-        if (serverTick < 0L) {
-            throw new IllegalArgumentException("serverTick must not be negative");
-        }
-        replacedEntityTicks.put(entityId, serverTick);
-    }
-
-    @Override
-    public boolean entityReplacedAt(int entityId, long serverTick) {
-        Long replacedTick = replacedEntityTicks.get(entityId);
-        // The tracker's copies leave on other event loops and may be observed
-        // one tick after the owning connection's respawn.
-        return replacedTick != null
-                && (serverTick == replacedTick || serverTick == replacedTick + 1L);
     }
 
     @Override
@@ -168,43 +119,7 @@ final class Paper26_2AuthoritativeStateIndex implements PacketCaptureState {
     void remove(int entityId) {
         checkpointEntityPositions.remove(entityId);
         connectionEntityPositions.keySet().removeIf(key -> key.entityId() == entityId);
-        movementEntityIds.remove(entityId);
-        equipmentEntityIds.remove(entityId);
-        swingTicks.remove(entityId);
         connectionEntityIds.values().removeIf(value -> value == entityId);
-    }
-
-    @Override
-    public void markMovementAuthoritative(int entityId) {
-        movementEntityIds.add(entityId);
-    }
-
-    @Override
-    public void markEquipmentAuthoritative(int entityId) {
-        equipmentEntityIds.add(entityId);
-    }
-
-    @Override
-    public void markSwingAuthoritative(int entityId, long serverTick) {
-        if (serverTick < 0L) {
-            throw new IllegalArgumentException("serverTick must not be negative");
-        }
-        swingTicks.put(entityId, serverTick);
-    }
-
-    @Override
-    public boolean movementIsAuthoritative(int entityId) {
-        return movementEntityIds.contains(entityId);
-    }
-
-    @Override
-    public boolean equipmentIsAuthoritative(int entityId) {
-        return equipmentEntityIds.contains(entityId);
-    }
-
-    @Override
-    public boolean swingIsAuthoritative(int entityId, long serverTick) {
-        return swingTicks.getOrDefault(entityId, Long.MIN_VALUE) == serverTick;
     }
 
     @Override
@@ -213,13 +128,10 @@ final class Paper26_2AuthoritativeStateIndex implements PacketCaptureState {
             return;
         }
         connectionWorlds.remove(connectionId);
-        respawnPendingConnections.remove(connectionId);
-        viewTeardown.removeConnection(connectionId);
         connectionEntityPositions.keySet().removeIf(key -> key.connectionId().equals(connectionId));
         Integer entityId = connectionEntityIds.remove(connectionId);
         if (entityId != null) {
             remove(entityId);
-            replacedEntityTicks.remove(entityId);
         }
     }
 
@@ -228,12 +140,6 @@ final class Paper26_2AuthoritativeStateIndex implements PacketCaptureState {
         connectionEntityIds.clear();
         connectionEntityPositions.clear();
         checkpointEntityPositions.clear();
-        movementEntityIds.clear();
-        equipmentEntityIds.clear();
-        swingTicks.clear();
-        respawnPendingConnections.clear();
-        replacedEntityTicks.clear();
-        viewTeardown.clear();
     }
 
     private record ConnectionEntity(UUID connectionId, int entityId) {

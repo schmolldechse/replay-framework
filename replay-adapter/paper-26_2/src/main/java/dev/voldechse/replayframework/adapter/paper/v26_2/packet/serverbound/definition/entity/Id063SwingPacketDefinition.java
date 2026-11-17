@@ -1,15 +1,12 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.serverbound.definition.entity;
 
 import dev.voldechse.replayframework.adapter.paper.packet.serverbound.ServerboundPacketDefinition;
-import dev.voldechse.replayframework.adapter.paper.packet.serverbound.ServerboundReaction;
-import net.minecraft.network.protocol.game.ServerboundSwingPacket;
-import net.minecraft.world.InteractionHand;
 
 /**
  * Serverbound contract for {@code minecraft:swing}.
  *
  * Swings a hand. The server sends the animation to everyone except the
- * sender, so the swing is emitted with the sender's sampled state.
+ * sender, so the eye that follows the sender receives it.
  */
 final class Id063SwingPacketDefinition extends ServerboundPacketDefinition {
 
@@ -18,13 +15,5 @@ final class Id063SwingPacketDefinition extends ServerboundPacketDefinition {
 
     Id063SwingPacketDefinition() {
         super(PACKET_ID, IDENTIFIER);
-    }
-
-    @Override
-    public ServerboundReaction react(Object decodedPacket) {
-        InteractionHand hand = ServerboundSwingPacket.class.cast(decodedPacket).getHand();
-        return ServerboundReaction.swing(hand == InteractionHand.OFF_HAND
-                ? ServerboundReaction.SwingHand.OFF_HAND
-                : ServerboundReaction.SwingHand.MAIN_HAND);
     }
 }

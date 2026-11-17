@@ -33,19 +33,16 @@ final class Paper26_2ServerboundReceiver extends ChannelInboundHandlerAdapter {
 
     private final Connection connection;
     private final BooleanSupplier installed;
-    private final Paper26_2PlayerStateCapture playerState;
     private final Paper26_2ActorEffects actorEffects;
     private final Consumer<Throwable> failureHandler;
 
     Paper26_2ServerboundReceiver(
             Connection connection,
             BooleanSupplier installed,
-            Paper26_2PlayerStateCapture playerState,
             Paper26_2ActorEffects actorEffects,
             Consumer<Throwable> failureHandler) {
         this.connection = Objects.requireNonNull(connection, "connection");
         this.installed = Objects.requireNonNull(installed, "installed");
-        this.playerState = Objects.requireNonNull(playerState, "playerState");
         this.actorEffects = Objects.requireNonNull(actorEffects, "actorEffects");
         this.failureHandler = Objects.requireNonNull(failureHandler, "failureHandler");
     }
@@ -72,12 +69,6 @@ final class Paper26_2ServerboundReceiver extends ChannelInboundHandlerAdapter {
                     () -> context.fireChannelRead(message));
         } else {
             context.fireChannelRead(message);
-        }
-        if (reaction.samplePlayerState()) {
-            // The player object and its ID stay the same for the connection,
-            // including across respawns.
-            playerState.request(
-                    listener.player.getUUID(), listener.player.getId(), reaction.swing());
         }
     }
 

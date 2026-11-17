@@ -4,10 +4,6 @@ import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketClassification;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
-import net.minecraft.network.protocol.game.ClientboundSetChunkCacheRadiusPacket;
-import dev.voldechse.replayframework.adapter.CaptureContext;
-import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketCaptureState;
-import java.util.UUID;
 
 /**
  * Contract for {@code minecraft:set_chunk_cache_radius}.
@@ -26,19 +22,6 @@ final class Id095SetChunkCacheRadiusPacketDefinition extends ClientboundPacketDe
                 PACKET_ID,
                 IDENTIFIER,
                 PacketClassification.stateful(PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
-    }
-
-    /** The view radius decides which chunks withheld during a death teardown are sent again. */
-    @Override
-    public CaptureContext captureContext(
-            Object decodedPacket,
-            PacketDescriptor descriptor,
-            UUID connectionId,
-            PacketCaptureState state,
-            long serverTick) {
-        ClientboundSetChunkCacheRadiusPacket packet = ClientboundSetChunkCacheRadiusPacket.class.cast(decodedPacket);
-        state.viewTeardown().viewRadius(connectionId, packet.getRadius());
-        return super.captureContext(decodedPacket, descriptor, connectionId, state, serverTick);
     }
 
     @Override

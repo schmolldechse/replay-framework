@@ -1,9 +1,8 @@
 # Argus: virtual observers
 
-Status: phases 1 and 2a are implemented for Paper 26.2. Every 26.2
-recording takes its scene from eyes: fixed eyes for regions, companion eyes
-for worlds. The compensation logic of the player-view source is still in
-place and is removed next. See [Implementation](#implementation).
+Status: phases 1 and 2 are implemented for Paper 26.2. Every recording takes
+its scene from eyes: fixed eyes for regions, companion eyes for worlds. See
+[Implementation](#implementation) and the [version contract](#version-contract).
 
 Argus is the internal codename of the observer system. One virtual observer
 is an **eye**; a real player whose connection contributes ambient effects is
@@ -185,10 +184,9 @@ playback policy and additionally declares its `PacketDistribution`:
 
 Definitions receive the packet object, not bytes.
 
-Capture logic that only compensates for the player-connection source
-disappears for observer-sourced recordings: the player-state sampler, the
-movement/equipment/swing authority index, the respawn replacement and the
-death-teardown withholding.
+The capture logic that only compensated for the player-connection source is
+removed: the player-state sampler, the movement, equipment and swing
+authority, the respawn replacement and the death-teardown withholding.
 
 ## Developer extension points
 
@@ -363,14 +361,35 @@ writes as plain text is therefore treated as private.
 
 1. Done: scene model, lattice placement, sampled time and weather, and the
    distribution kind on packet definitions, for bounded regions.
-2. Done (2a): companion eyes for whole worlds, configurable grace period and
-   budgets, moving coverage, tab-list departures, viewer-centered playback.
-   Next (2b): remove the compensation logic of the player-view source and
-   delete the old adapters.
-3. Developer anchors.
-4. Developer API.
-5. Playback scene server and scene-model checkpoints.
+2. Done: companion eyes for whole worlds, configurable grace period and
+   budgets, moving coverage, tab-list departures, worlds per frame,
+   viewer-centered playback; the compensation logic of the player-view
+   source and the old 26.3 adapter are removed.
+3. Observer menu: switch the viewed world and go to a recorded player,
+   later further player details such as the inventory.
+4. Developer anchors.
+5. Developer API.
+6. Playback scene server and scene-model checkpoints.
 
-The 26.3 adapter keeps the default `SceneObservation.none()` and records
-from player views as before. It is deleted in phase 2b; a 26.3 adapter is
-built again on this concept later.
+## Version contract
+
+A Minecraft version is supported by one adapter module. Everything that does
+not depend on the version lives in `paper-common`, `replay-adapter:api` and
+the core and is inherited: Argus with its placement, merging and lifecycle,
+the actor-effect orchestration, both definition catalogs, scope routing,
+recording, checkpoints and playback.
+
+A version adapter provides:
+
+| Part | Contract |
+|---|---|
+| Protocol registry | discovery of the live packet registry and its fingerprint |
+| Native codec | encoding and decoding of the version's packets |
+| Clientbound definitions | one per PLAY clientbound packet: playback policy, capture context, distribution and scene membership |
+| Serverbound definitions | one per PLAY serverbound packet: what it triggers |
+| `ArgusPlatform` | the eye, sampled time and weather, the online players, the native packets Argus builds |
+| Effect families | one per kind of effect that bypasses its actor |
+| Snapshot provider | the checkpoint of a coverage |
+| Playback bridge | rewriting, the viewer gate and injection |
+
+A 26.3 adapter will be built again on this contract.

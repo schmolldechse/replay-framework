@@ -54,13 +54,6 @@ final class Id053MoveEntityPosPacketDefinition extends RebuildingPacketDefinitio
     }
 
     @Override
-    public boolean suppressesRecipientState(
-            Object decodedPacket, PacketCaptureState state, long serverTick) {
-        return state.movementIsAuthoritative(
-                read(ClientboundMoveEntityPacket.Pos.class.cast(decodedPacket)).entityId());
-    }
-
-    @Override
     protected Value read(ClientboundMoveEntityPacket.Pos packet) {
         return new Value(
                 readEntityId(packet),

@@ -90,9 +90,6 @@ final class Id053MoveEntityPosPacketDefinitionTest {
         assertEquals(0.0, position.z());
         assertTrue(definition.deduplicateRecipientCopies());
         assertFalse(definition.suppressesRecipientState(packet, captureState, 17L));
-
-        captureState.markMovementAuthoritative(300);
-        assertTrue(definition.suppressesRecipientState(packet, captureState, 17L));
     }
 
     @Test

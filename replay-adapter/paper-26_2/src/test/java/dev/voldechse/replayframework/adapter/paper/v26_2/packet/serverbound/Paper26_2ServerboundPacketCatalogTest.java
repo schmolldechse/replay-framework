@@ -64,22 +64,6 @@ class Paper26_2ServerboundPacketCatalogTest {
             assertEquals(
                     Optional.of(ActorAction.destroy(new BlockPosition(3, 64, -7))),
                     reaction.actorAction());
-            assertTrue(reaction.samplePlayerState());
-        }
-    }
-
-    @Test
-    void samplesOnlyTheSenderForOtherPlayerActions() {
-        for (var action : new ServerboundPlayerActionPacket.Action[] {
-            ServerboundPlayerActionPacket.Action.ABORT_DESTROY_BLOCK,
-            ServerboundPlayerActionPacket.Action.DROP_ITEM,
-            ServerboundPlayerActionPacket.Action.DROP_ALL_ITEMS,
-            ServerboundPlayerActionPacket.Action.RELEASE_USE_ITEM,
-            ServerboundPlayerActionPacket.Action.SWAP_ITEM_WITH_OFFHAND,
-            ServerboundPlayerActionPacket.Action.STAB
-        }) {
-            assertEquals(ServerboundReaction.PLAYER_STATE, react(new ServerboundPlayerActionPacket(
-                    action, BlockPos.ZERO, Direction.DOWN)), action.name());
         }
     }
 
@@ -98,20 +82,22 @@ class Paper26_2ServerboundPacketCatalogTest {
     }
 
     @Test
-    void reportsTheSwungHand() {
-        assertEquals(
-                ServerboundReaction.swing(ServerboundReaction.SwingHand.OFF_HAND),
-                react(new ServerboundSwingPacket(InteractionHand.OFF_HAND)));
-        assertEquals(
-                ServerboundReaction.swing(ServerboundReaction.SwingHand.MAIN_HAND),
-                react(new ServerboundSwingPacket(InteractionHand.MAIN_HAND)));
-    }
-
-    @Test
-    void samplesTheSenderAfterMovementAndEveryClientTick() {
-        assertEquals(ServerboundReaction.PLAYER_STATE, react(
+    void triggersNothingForActionsWhoseResultsTheTrackerDelivers() {
+        for (var action : new ServerboundPlayerActionPacket.Action[] {
+            ServerboundPlayerActionPacket.Action.ABORT_DESTROY_BLOCK,
+            ServerboundPlayerActionPacket.Action.DROP_ITEM,
+            ServerboundPlayerActionPacket.Action.DROP_ALL_ITEMS,
+            ServerboundPlayerActionPacket.Action.RELEASE_USE_ITEM,
+            ServerboundPlayerActionPacket.Action.SWAP_ITEM_WITH_OFFHAND,
+            ServerboundPlayerActionPacket.Action.STAB
+        }) {
+            assertEquals(ServerboundReaction.NONE, react(new ServerboundPlayerActionPacket(
+                    action, BlockPos.ZERO, Direction.DOWN)), action.name());
+        }
+        assertEquals(ServerboundReaction.NONE, react(new ServerboundSwingPacket(InteractionHand.OFF_HAND)));
+        assertEquals(ServerboundReaction.NONE, react(
                 new ServerboundMovePlayerPacket.Pos(1.0, 2.0, 3.0, true, false)));
-        assertEquals(ServerboundReaction.PLAYER_STATE, react(ServerboundClientTickEndPacket.INSTANCE));
+        assertEquals(ServerboundReaction.NONE, react(ServerboundClientTickEndPacket.INSTANCE));
     }
 
     @Test

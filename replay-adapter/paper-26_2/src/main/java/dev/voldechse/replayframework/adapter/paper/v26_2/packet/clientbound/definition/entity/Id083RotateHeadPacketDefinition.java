@@ -59,13 +59,6 @@ final class Id083RotateHeadPacketDefinition extends RebuildingPacketDefinition<
     }
 
     @Override
-    public boolean suppressesRecipientState(
-            Object decodedPacket, PacketCaptureState state, long serverTick) {
-        return state.movementIsAuthoritative(
-                read(ClientboundRotateHeadPacket.class.cast(decodedPacket)).entityId());
-    }
-
-    @Override
     protected Value read(ClientboundRotateHeadPacket packet) {
         FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
         try {

@@ -1,12 +1,13 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.serverbound.definition.inventory;
 
 import dev.voldechse.replayframework.adapter.paper.packet.serverbound.ServerboundPacketDefinition;
-import dev.voldechse.replayframework.adapter.paper.packet.serverbound.ServerboundReaction;
 
 /**
  * Serverbound contract for {@code minecraft:set_carried_item}.
  *
- * Selects a hotbar slot. The sender's held item changes.
+ * Selects a hotbar slot. Whatever it changes about the sender's own entity
+ * reaches the recording through the entity tracker of the eye that follows
+ * the sender.
  */
 final class Id053SetCarriedItemPacketDefinition extends ServerboundPacketDefinition {
 
@@ -15,11 +16,5 @@ final class Id053SetCarriedItemPacketDefinition extends ServerboundPacketDefinit
 
     Id053SetCarriedItemPacketDefinition() {
         super(PACKET_ID, IDENTIFIER);
-    }
-
-    @Override
-    public ServerboundReaction react(Object decodedPacket) {
-        super.react(decodedPacket);
-        return ServerboundReaction.PLAYER_STATE;
     }
 }

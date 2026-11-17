@@ -13,8 +13,8 @@ import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
  * Digging, dropping items, releasing a used item, swapping hands and
  * stabbing. Starting or finishing to dig can break a block; the server
  * sends the break particles and sound to everyone except the digger, so
- * this packet derives them. All other actions may change the sender's own
- * equipment.
+ * this packet derives them. Everything else reaches the recording through
+ * the entity tracker.
  */
 final class Id041PlayerActionPacketDefinition extends ServerboundPacketDefinition {
 
@@ -35,7 +35,7 @@ final class Id041PlayerActionPacketDefinition extends ServerboundPacketDefinitio
                         new BlockPosition(pos.getX(), pos.getY(), pos.getZ())));
             }
             case ABORT_DESTROY_BLOCK, DROP_ALL_ITEMS, DROP_ITEM, RELEASE_USE_ITEM,
-                    SWAP_ITEM_WITH_OFFHAND, STAB -> ServerboundReaction.PLAYER_STATE;
+                    SWAP_ITEM_WITH_OFFHAND, STAB -> ServerboundReaction.NONE;
         };
     }
 }

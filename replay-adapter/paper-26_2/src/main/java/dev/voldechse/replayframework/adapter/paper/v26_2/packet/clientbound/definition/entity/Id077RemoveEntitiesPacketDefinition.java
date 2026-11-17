@@ -6,7 +6,6 @@ import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketCapt
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketClassification;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RebuildingPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ValueRewriteResult;
-import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ViewTeardownState;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
 import java.util.List;
 import java.util.Objects;
@@ -45,34 +44,8 @@ final class Id077RemoveEntitiesPacketDefinition extends RebuildingPacketDefiniti
             PacketCaptureState state,
             long serverTick) {
         ClientboundRemoveEntitiesPacket packet = ClientboundRemoveEntitiesPacket.class.cast(decodedPacket);
-        ViewTeardownState teardown = state.viewTeardown();
-        if (teardown.tearingDown(connectionId)) {
-            // The server is untracking every entity from a dead player's
-            // view. The entities still exist, so their capture state stays.
-            packet.getEntityIds().intStream().forEach(entityId -> teardown.withholdEntityRemoval(
-                    connectionId,
-                    entityId,
-                    state.entityPosition(connectionId, entityId)
-                            .map(position -> ViewTeardownState.ChunkCoordinate.containing(
-                                    position.x(), position.z()))));
-        } else {
-            packet.getEntityIds().intStream().forEach(state::removeEntity);
-        }
+        packet.getEntityIds().intStream().forEach(state::removeEntity);
         return super.captureContext(decodedPacket, descriptor, connectionId, state, serverTick);
-    }
-
-    /**
-     * Removals that only tear down a dead player's view are withheld; the
-     * teardown state releases those the respawned view does not bring back.
-     */
-    @Override
-    public boolean suppressesRecipientState(
-            Object decodedPacket,
-            UUID connectionId,
-            PacketCaptureState state,
-            long serverTick) {
-        return state.viewTeardown().tearingDown(connectionId)
-                || super.suppressesRecipientState(decodedPacket, connectionId, state, serverTick);
     }
 
     @Override

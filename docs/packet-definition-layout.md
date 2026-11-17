@@ -30,11 +30,9 @@ Examples:
 
 | Version | ID | Identifier | Class |
 |---|---:|---|---|
-| 26.2 / 26.3 | 0 | `minecraft:bundle_delimiter` | `Id000BundleDelimiterPacketDefinition` |
-| 26.2 / 26.3 | 1 | `minecraft:add_entity` | `Id001AddEntityPacketDefinition` |
+| 26.2 | 0 | `minecraft:bundle_delimiter` | `Id000BundleDelimiterPacketDefinition` |
+| 26.2 | 1 | `minecraft:add_entity` | `Id001AddEntityPacketDefinition` |
 | 26.2 | 37 | `minecraft:forget_level_chunk` | `Id037ForgetLevelChunkPacketDefinition` |
-| 26.3 | 37 | `minecraft:add_transient_block` | `Id037AddTransientBlockPacketDefinition` |
-| 26.3 | 38 | `minecraft:forget_level_chunk` | `Id038ForgetLevelChunkPacketDefinition` |
 
 The class name does not contain a Paper version because the version package
 already owns that context. The numeric ID is version-local, so the same
@@ -70,33 +68,11 @@ replay-adapter/paper-common/src/main/java/
         └── ServerboundReaction.java
 ```
 
-The 26.2 adapter uses this split. The 26.3 adapter keeps its previous
-layout, with only the shared types renamed, until it moves to a legacy
-location.
+Every version adapter uses this split.
 
 Each version adapter exposes `packet` as a sibling of the runtime consumers:
 
 ```text
-replay-adapter/paper-26_3/src/main/java/
-└── dev/voldechse/replayframework/adapter/paper/v26_3/
-    ├── capture/
-    ├── checkpoint/
-    ├── packet/
-    │   ├── Paper26_3PacketCatalog.java
-    │   ├── Paper26_3PacketCodec.java
-    │   └── definition/
-    │       ├── connection/
-    │       ├── diagnostic/
-    │       ├── world/
-    │       ├── entity/
-    │       ├── player/
-    │       ├── inventory/
-    │       ├── chat/
-    │       ├── scoreboard/
-    │       ├── ui/
-    │       └── effect/
-    └── playback/
-
 replay-adapter/paper-26_2/src/main/java/
 └── dev/voldechse/replayframework/adapter/paper/v26_2/
     ├── actor/

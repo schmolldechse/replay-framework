@@ -188,7 +188,7 @@ test status.
 | 34 | `minecraft:entity_event` | Entity-specific transient status byte; rewrite its entity ID and preserve unknown values. Player debug and permission statuses belong to the recorded connection | REWRITE / DROP_LOCAL* | no |
 | 35 | `minecraft:entity_position_sync` | Absolute entity position, movement vector, rotation and ground state; preserve as essential scene state with playback-session identity rewriting | REWRITE | yes |
 | 36 | `minecraft:explode` | Explosion scene effect with sound and weighted particle data; suppress recorded-player knockback and remap entity-backed vibration destinations | REWRITE | no |
-| 37 | `minecraft:forget_level_chunk` | Unloads a recorded chunk column from the client view; preserve its signed coordinates to remove stale terrain. Unloads sent to a dead player's connection only tear down that view; capture withholds them and releases only those the respawned view does not cover | SEND | yes |
+| 37 | `minecraft:forget_level_chunk` | Unloads a recorded chunk column from the client view; preserve its signed coordinates to remove stale terrain. | SEND | yes |
 | 38 | `minecraft:game_event` | Forward rain and thunder changes; keep recorded-player, game-rule and loading-screen events from changing the observer | SEND / DROP_LOCAL* | no |
 | 39 | `minecraft:game_rule_values` | Carries serialized values for the recorded player's available game rules in response to a privileged request; keep the observer's rule view unchanged | DROP_LOCAL | no |
 | 40 | `minecraft:game_test_highlight_pos` | GameTest `showPos` highlight for a selected block and its test-relative coordinates; no general replay target exists | BLOCKED | no |
@@ -223,17 +223,17 @@ test status.
 | 69 | `minecraft:player_info_remove` | Length-prefixed list of profile UUIDs; removes listed profiles from the player list | Rewrite every UUID into the replay identity space so only replay profiles can be removed | yes |
 | 70 | `minecraft:player_info_update` | Ordered profile UUID entries with action-selected name/properties, optional chat session, game mode, listed state, latency, display name, hat visibility, and list order; essential player-profile state | Rewrite profile UUIDs, force `listed=false` when that action is present, and discard source chat-session credentials | yes |
 | 71 | `minecraft:player_look_at` | Rotates the receiving player's view from feet/eyes toward an absolute position or an entity ID and target anchor; entity mode retains an absolute-coordinate fallback; personal camera state | DROP_LOCAL to leave the observer's view unchanged | no |
-| 72 | `minecraft:player_position` | Teleport ID, position, delta movement, yaw/pitch and nine relative-position, rotation and velocity flags; server correction and confirmation state for the receiving player's own connection. The first absolute correction after an entity-discarding `minecraft:respawn` is the new client entity's spawn placement | DROP_LOCAL to preserve the observer's position, movement and connection state; capture derives `remove_entities` + `add_entity` for the respawned player's own entity from it | no |
+| 72 | `minecraft:player_position` | Teleport ID, position, delta movement, yaw/pitch and nine relative-position, rotation and velocity flags; server correction and confirmation state for the receiving player's own connection. | DROP_LOCAL to preserve the observer's position, movement and connection state; capture derives `remove_entities` + `add_entity` for the respawned player's own entity from it | no |
 | 73 | `minecraft:player_rotation` | Yaw and pitch angles with independent relative flags; server correction for the receiving player's own view rotation | DROP_LOCAL to preserve the observer's view | no |
 | 74 | `minecraft:recipe_book_add` | List of recipe display entries with registry-backed display/category data, optional group and crafting requirements, notification/highlight flags; replace or add to the receiving player's known recipe book | DROP_LOCAL to preserve the observer's recipe-book contents and notifications | no |
 | 75 | `minecraft:recipe_book_remove` | Variable list of recipe display IDs to remove from the receiving player's known recipe book and highlights | DROP_LOCAL to preserve the observer's recipe-book contents | no |
 | 76 | `minecraft:recipe_book_settings` | For crafting, furnace, blast furnace and smoker: whether each recipe book is open and whether its craftable-only filter is active; per-player recipe-book UI preferences | DROP_LOCAL to preserve the observer's open tabs and filters | no |
-| 77 | `minecraft:remove_entities` | Ordered list of entity IDs to destroy in the client scene; target IDs are translated into the playback identity namespace. Removals that follow a dead player's chunk unloads are withheld like those unloads | REWRITE | yes |
+| 77 | `minecraft:remove_entities` | Ordered list of entity IDs to destroy in the client scene; target IDs are translated into the playback identity namespace. | REWRITE | yes |
 | 78 | `minecraft:remove_mob_effect` | Removes one registry-backed status effect from the target entity; target entity identity is translated into the playback identity namespace | REWRITE | yes |
 | 79 | `minecraft:reset_score` | Owner string with optional objective: remove that score, or every score for the owner when absent; recorded-viewer scoreboard state | DROP_LOCAL to preserve the observer's scoreboard | no |
 | 80 | `minecraft:resource_pack_pop` | Optional UUID of a server-provided resource pack to remove; if absent, removes all server-provided packs and changes the receiving client's resource assets | BLOCKED | no |
 | 81 | `minecraft:resource_pack_push` | UUID, download URL, SHA-1 hash, required flag and optional prompt component; asks the receiving client to download and apply server resource assets | BLOCKED | no |
-| 82 | `minecraft:respawn` | Dimension type and key, world seed, current/previous game mode, debug and flat flags, optional last-death position, portal cooldown, sea level, and attribute/entity-data keep mask; respawn state for the receiving player. Carries no entity ID; without the keep-entity-data bit the client replaces its own entity, which other recipients only see as `remove_entities` + `add_entity` | DROP_LOCAL to preserve the observer's world and player state; without the keep-entity-data bit capture marks the connection so the following `minecraft:player_position` replaces the scene entity | no |
+| 82 | `minecraft:respawn` | Dimension type and key, world seed, current/previous game mode, debug and flat flags, optional last-death position, portal cooldown, sea level, and attribute/entity-data keep mask; respawn state for the receiving player. Carries no entity ID; eyes see the respawned player as `remove_entities` + `add_entity` | DROP_LOCAL to preserve the observer's world and player state; without the keep-entity-data bit capture marks the connection so the following `minecraft:player_position` replaces the scene entity | no |
 | 83 | `minecraft:rotate_head` | Entity ID and absolute head yaw angle in 1/256-turn steps; head orientation is independent of body rotation | REWRITE the entity ID into the playback identity space | yes |
 | 84 | `minecraft:section_blocks_update` | Packed section position, VarInt update count, then ordered VarLong records (`global block-state ID << 12 | local X << 8 | local Z << 4 | local Y`); each record changes one block using a global state and three 4-bit section-relative coordinates | SEND | yes |
 | 85 | `minecraft:select_advancements_tab` | Optional advancement-tab identifier; switches tabs after a client selection or an advancement in another tab; an absent or unknown identifier selects the first available tab | DROP_LOCAL to preserve the observer's advancements view | no |
@@ -245,8 +245,8 @@ test status.
 | 91 | `minecraft:set_border_warning_delay` | Nonnegative VarInt warning threshold stored as ticks in Paper 26.2; configures when the shared world border warning appears | SEND | yes |
 | 92 | `minecraft:set_border_warning_distance` | Nonnegative VarInt distance in blocks; configures how far from the shared world border its distance warning appears | SEND | yes |
 | 93 | `minecraft:set_camera` | Entity ID selecting the entity followed by the receiving client's camera; changing it would take control of the observer's view | DROP_LOCAL | no |
-| 94 | `minecraft:set_chunk_cache_center` | Chunk X and Z coordinates as signed VarInts; centers the receiving client's chunk cache and view area | SEND | yes |
-| 95 | `minecraft:set_chunk_cache_radius` | Server-imposed view radius as a VarInt number of chunks; changes the receiving client's effective chunk view distance | SEND | yes |
+| 94 | `minecraft:set_chunk_cache_center` | Chunk X and Z coordinates as signed VarInts; centers the receiving client's chunk cache and view area | DROP_LOCAL | no |
+| 95 | `minecraft:set_chunk_cache_radius` | Server-imposed view radius as a VarInt number of chunks; changes the receiving client's effective chunk view distance | DROP_LOCAL | no |
 | 96 | `minecraft:set_cursor_item` | Optional Slot containing the cursor ItemStack and its data components; sets the receiving player's cursor independently of a container | DROP_LOCAL | no |
 | 97 | `minecraft:set_default_spawn_position` | Dimension key, packed block position, yaw and pitch; sets that dimension's default spawn destination and compass target | SEND | yes |
 | 98 | `minecraft:set_display_objective` | VarInt display slot and objective name (empty clears it); selects a player-list, sidebar, below-name, or team-colored sidebar objective, all part of the observer's local scoreboard presentation | DROP_LOCAL | no |
@@ -255,7 +255,7 @@ test status.
 | 101 | `minecraft:set_entity_motion` | Target entity VarInt and velocity as a variable-length low-precision `LpVec3`; updates that entity's current motion, including zero velocity | REWRITE | yes |
 | 102 | `minecraft:set_equipment` | Updates one or more equipment slots on an entity; ordered optional item stacks preserve item components and empty stacks clear slots | REWRITE | yes |
 | 103 | `minecraft:set_experience` | Receiver-local experience HUD: progress Float, level VarInt, and total-experience VarInt; retain in recordings but do not replace the observer's own XP state | DROP_LOCAL | no |
-| 104 | `minecraft:set_health` | Receiver-local vitals: health Float, food VarInt, and saturation Float; retain for recording completeness but leave the observer's own health and hunger state unchanged. Health at or below zero marks the connection's player as dead for view-teardown handling | DROP_LOCAL | no |
+| 104 | `minecraft:set_health` | Receiver-local vitals: health Float, food VarInt, and saturation Float; retain for recording completeness but leave the observer's own health and hunger state unchanged | DROP_LOCAL | no |
 | 105 | `minecraft:set_held_slot` | Receiver-local hotbar selection as a VarInt (slot 0–8); retain in recordings but do not change the observer's selected item | DROP_LOCAL | no |
 | 106 | `minecraft:set_objective` | Objective name and method byte (add, remove, change); add/change also carry display text, integer/hearts render type, and optional blank/styled/fixed score-number format; mutates the recorded viewer's local scoreboard | DROP_LOCAL | no |
 | 107 | `minecraft:set_passengers` | Vehicle ID VarInt followed by the ordered VarInt array of direct passenger IDs; an empty array clears the vehicle's passengers; rewrite the vehicle and every passenger ID; checkpoint family `PASSENGERS` | REWRITE | yes |
@@ -300,16 +300,15 @@ Serverbound packets are never recorded or replayed. Each has a definition in
 `packet.serverbound.definition.<domain>` that decides what it triggers:
 
 - **nothing**: whatever the packet changes reaches the recording as
-  clientbound packets;
-- **own state**: the sender's own position, rotation or equipment may have
-  changed and is sampled on the server thread;
+  clientbound packets, including the sender's own entity, which the eye that
+  follows the sender tracks;
 - **actor effect**: the server answers the packet with an effect it sends to
   everyone except the sender, which is derived for the recording (see
   [capture source policy](../capture-source-policy.md#effects-that-bypass-their-actor)).
 
 | ID | Identifier | Domain | Triggers | Reason |
 |---:|---|---|---|---|
-| 0 | `minecraft:accept_teleportation` | player | own state | Confirms a server-side teleport. The confirmed position is the sender's own entity position, which the player-state sampler reads. |
+| 0 | `minecraft:accept_teleportation` | player | nothing | Confirms a server-side teleport. Whatever it changes about the sender's own entity reaches the recording through the entity tracker of the eye that follows the sender. |
 | 1 | `minecraft:attack` | entity | nothing | Attacks an entity. Hit, critical and sweep sounds, the damage event and the victim's reaction reach every recipient, including the attacker. Known gap: a piercing weapon (spear) plays its sound to everyone except the attacker; it is not derived yet. |
 | 2 | `minecraft:block_entity_tag_query` | diagnostic | nothing | Debug query for block-entity data. Changes nothing. |
 | 3 | `minecraft:bundle_item_selected` | inventory | nothing | Selects a slot inside a bundle. Inventory state of the sender only. |
@@ -322,12 +321,12 @@ Serverbound packets are never recorded or replayed. Each has a definition in
 | 10 | `minecraft:chat_session_update` | chat | nothing | Publishes the sender's chat key. Other players receive it as a clientbound player_info_update. |
 | 11 | `minecraft:chunk_batch_received` | connection | nothing | Reports the client's chunk throughput. Connection state only. |
 | 12 | `minecraft:client_command` | player | nothing | Requests a respawn or statistics. A respawn reaches the recording through the clientbound respawn sequence. |
-| 13 | `minecraft:client_tick_end` | connection | own state | Ends one client tick. It arrives every tick and drives the regular sample of the sender's own state, including changes the server makes without a client action, such as equipment breaking. |
+| 13 | `minecraft:client_tick_end` | connection | nothing | Ends one client tick. Connection state only. |
 | 14 | `minecraft:client_information` | connection | nothing | Language, view distance, skin parts and main hand. Skin parts and main hand reach other recipients as entity metadata through the tracker. |
 | 15 | `minecraft:command_suggestion` | chat | nothing | Requests tab completion. Changes nothing. |
 | 16 | `minecraft:configuration_acknowledged` | connection | nothing | Confirms the switch into the configuration phase. Connection state only. |
 | 17 | `minecraft:container_button_click` | inventory | nothing | Clicks a menu button such as an enchantment option, loom pattern or stonecutter recipe. Resulting sounds are sent to every player. |
-| 18 | `minecraft:container_click` | inventory | own state | Moves items in an open container. The sender's equipment may change, for example when armor is put on. |
+| 18 | `minecraft:container_click` | inventory | nothing | Moves items in an open container. Whatever it changes about the sender's own entity reaches the recording through the entity tracker of the eye that follows the sender. |
 | 19 | `minecraft:container_close` | inventory | nothing | Closes a container. Chest, barrel and shulker box sounds and lid animations are sent to every player. |
 | 20 | `minecraft:container_slot_state_changed` | inventory | nothing | Toggles a crafter slot. The block change is sent as a clientbound block update. |
 | 21 | `minecraft:cookie_response` | connection | nothing | Answers a cookie request. Connection state only. |
@@ -339,18 +338,18 @@ Serverbound packets are never recorded or replayed. Each has a definition in
 | 27 | `minecraft:jigsaw_generate` | diagnostic | nothing | Generates a jigsaw structure. The placed blocks are sent as clientbound block updates. |
 | 28 | `minecraft:keep_alive` | connection | nothing | Answers a keep-alive. Connection state only. |
 | 29 | `minecraft:lock_difficulty` | player | nothing | Locks the difficulty. A setting, not part of the scene. |
-| 30 | `minecraft:move_player_pos` | player | own state | Moves the sender. Known gap: step, swim, splash and landing sounds are played to everyone except the sender; they are not derived yet. |
-| 31 | `minecraft:move_player_pos_rot` | player | own state | Moves and turns the sender. Known gap: step, swim, splash and landing sounds are played to everyone except the sender; they are not derived yet. |
-| 32 | `minecraft:move_player_rot` | player | own state | Turns the sender. |
-| 33 | `minecraft:move_player_status_only` | player | own state | Reports ground and wall contact of the sender. |
-| 34 | `minecraft:move_vehicle` | player | own state | Moves the vehicle the sender rides. The vehicle reaches the recording through the tracker; the rider is sampled. |
+| 30 | `minecraft:move_player_pos` | player | nothing | Moves the sender. Whatever it changes about the sender's own entity reaches the recording through the entity tracker of the eye that follows the sender. Known gap: step, swim, splash and landing sounds are played to everyone except the sender; they are not derived yet. |
+| 31 | `minecraft:move_player_pos_rot` | player | nothing | Moves and turns the sender. Whatever it changes about the sender's own entity reaches the recording through the entity tracker of the eye that follows the sender. Known gap: step, swim, splash and landing sounds are played to everyone except the sender; they are not derived yet. |
+| 32 | `minecraft:move_player_rot` | player | nothing | Turns the sender. Whatever it changes about the sender's own entity reaches the recording through the entity tracker of the eye that follows the sender. |
+| 33 | `minecraft:move_player_status_only` | player | nothing | Reports ground and wall contact of the sender. Whatever it changes about the sender's own entity reaches the recording through the entity tracker of the eye that follows the sender. |
+| 34 | `minecraft:move_vehicle` | player | nothing | Moves the vehicle the sender rides. The vehicle and its rider reach the recording through the entity tracker. |
 | 35 | `minecraft:paddle_boat` | player | nothing | Reports paddle state. Paddle sounds are played to every player. |
-| 36 | `minecraft:pick_item_from_block` | inventory | own state | Picks the block's item into the hand. The sender's held item may change. |
-| 37 | `minecraft:pick_item_from_entity` | inventory | own state | Picks the entity's item into the hand. The sender's held item may change. |
+| 36 | `minecraft:pick_item_from_block` | inventory | nothing | Picks the block's item into the hand. Whatever it changes about the sender's own entity reaches the recording through the entity tracker of the eye that follows the sender. |
+| 37 | `minecraft:pick_item_from_entity` | inventory | nothing | Picks the entity's item into the hand. Whatever it changes about the sender's own entity reaches the recording through the entity tracker of the eye that follows the sender. |
 | 38 | `minecraft:ping_request` | connection | nothing | Measures latency. Connection state only. |
 | 39 | `minecraft:place_recipe` | inventory | nothing | Fills a crafting grid from the recipe book. Not part of the scene. |
 | 40 | `minecraft:player_abilities` | player | nothing | Starts or stops creative flight. The resulting movement arrives with movement packets. |
-| 41 | `minecraft:player_action` | world | actor effect, own state | Digging, dropping items, releasing a used item, swapping hands and stabbing. Starting or finishing to dig can break a block; the server sends the break particles and sound to everyone except the digger, so this packet derives them. All other actions may change the sender's own equipment. |
+| 41 | `minecraft:player_action` | world | actor effect | Digging, dropping items, releasing a used item, swapping hands and stabbing. Starting or finishing to dig can break a block; the server sends the break particles and sound to everyone except the digger, so this packet derives them. Everything else reaches the recording through the entity tracker. |
 | 42 | `minecraft:player_command` | player | nothing | Sprinting, elytra flight, horse jumps, leaving a bed. The results are entity metadata sent through the tracker. |
 | 43 | `minecraft:player_input` | player | nothing | Movement keys, sneaking and jumping. The results are entity metadata sent through the tracker. |
 | 44 | `minecraft:player_loaded` | connection | nothing | Reports that the client finished loading. Connection state only. |
@@ -362,19 +361,19 @@ Serverbound packets are never recorded or replayed. Each has a definition in
 | 50 | `minecraft:seen_advancements` | ui | nothing | Opens an advancement tab. Not part of the scene. |
 | 51 | `minecraft:select_trade` | inventory | nothing | Selects a merchant offer. Not part of the scene. |
 | 52 | `minecraft:set_beacon` | inventory | nothing | Selects beacon effects. The beacon sound is sent to every player. |
-| 53 | `minecraft:set_carried_item` | inventory | own state | Selects a hotbar slot. The sender's held item changes. |
+| 53 | `minecraft:set_carried_item` | inventory | nothing | Selects a hotbar slot. Whatever it changes about the sender's own entity reaches the recording through the entity tracker of the eye that follows the sender. |
 | 54 | `minecraft:set_command_block` | diagnostic | nothing | Configures a command block. Its block entity data is sent as a clientbound packet. |
 | 55 | `minecraft:set_command_minecart` | diagnostic | nothing | Configures a command minecart. Its metadata is sent through the tracker. |
-| 56 | `minecraft:set_creative_mode_slot` | inventory | own state | Sets an inventory slot in creative mode. The sender's equipment may change. |
+| 56 | `minecraft:set_creative_mode_slot` | inventory | nothing | Sets an inventory slot in creative mode. Whatever it changes about the sender's own entity reaches the recording through the entity tracker of the eye that follows the sender. |
 | 57 | `minecraft:set_game_rule` | world | nothing | Changes a game rule. A setting; its effects reach the recording as clientbound packets. |
 | 58 | `minecraft:set_jigsaw_block` | diagnostic | nothing | Configures a jigsaw block. Its block entity data is sent as a clientbound packet. |
 | 59 | `minecraft:set_structure_block` | diagnostic | nothing | Configures a structure block. Its block entity data is sent as a clientbound packet. |
 | 60 | `minecraft:set_test_block` | diagnostic | nothing | Configures a test block. Its block entity data is sent as a clientbound packet. |
 | 61 | `minecraft:sign_update` | world | nothing | Sets the text of a sign. The sign's block entity data is sent to every player. |
-| 62 | `minecraft:spectator_action` | player | own state | Spectator teleport. The sender's position changes. |
-| 63 | `minecraft:swing` | entity | own state with swing | Swings a hand. The server sends the animation to everyone except the sender, so the swing is emitted with the sender's sampled state. |
-| 64 | `minecraft:teleport_to_entity` | player | own state | Spectator teleport to an entity. The sender's position changes. |
+| 62 | `minecraft:spectator_action` | player | nothing | Spectator teleport. Whatever it changes about the sender's own entity reaches the recording through the entity tracker of the eye that follows the sender. |
+| 63 | `minecraft:swing` | entity | nothing | Swings a hand. The server sends the animation to everyone except the sender, so the eye that follows the sender receives it. |
+| 64 | `minecraft:teleport_to_entity` | player | nothing | Spectator teleport to an entity. Whatever it changes about the sender's own entity reaches the recording through the entity tracker of the eye that follows the sender. |
 | 65 | `minecraft:test_instance_block_action` | diagnostic | nothing | Operates a test instance block. Its block entity data is sent as a clientbound packet. |
-| 66 | `minecraft:use_item_on` | world | actor effect, own state | Uses an item on a block face. Placing a block, opening a door, trapdoor or fence gate, pulling a lever and pressing a button play their sound to everyone except the sender, so this packet derives them. Known gap: tool, bucket, flint and steel, honeycomb, brush and comparator sounds are not derived yet. |
-| 67 | `minecraft:use_item` | entity | own state | Uses the held item in the air. The sender's equipment may change. Known gap: bucket and bottle filling, goat horns, lance sounds and eating or drinking are played to everyone except the sender; they are not derived yet. |
+| 66 | `minecraft:use_item_on` | world | actor effect | Uses an item on a block face. Placing a block, opening a door, trapdoor or fence gate, pulling a lever and pressing a button play their sound to everyone except the sender, so this packet derives them. Known gap: tool, bucket, flint and steel, honeycomb, brush and comparator sounds are not derived yet. |
+| 67 | `minecraft:use_item` | entity | nothing | Uses the held item in the air. Whatever it changes about the sender's own entity reaches the recording through the entity tracker of the eye that follows the sender. Known gap: bucket and bottle filling, goat horns, lance sounds and eating or drinking are played to everyone except the sender; they are not derived yet. |
 | 68 | `minecraft:custom_click_action` | connection | nothing | Clicks a custom dialog action. Whatever a plugin changes in response reaches the recording as clientbound packets. |

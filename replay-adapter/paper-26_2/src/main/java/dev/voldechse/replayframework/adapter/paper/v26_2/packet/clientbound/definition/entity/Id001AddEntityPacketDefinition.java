@@ -80,27 +80,12 @@ final class Id001AddEntityPacketDefinition extends RebuildingPacketDefinition<
         CaptureContext base = super.captureContext(
                 decodedPacket, descriptor, connectionId, state, serverTick);
         Value value = read(ClientboundAddEntityPacket.class.cast(decodedPacket));
-        // An entity sent again after a respawn replaces the withheld one in place.
-        state.viewTeardown().entityAdded(connectionId, value.entityId());
         Optional<Key> world = base.world();
         world.ifPresent(key -> state.entityPosition(
                 connectionId, value.entityId(), key.toString(), value.x(), value.y(), value.z()));
         return world.<CaptureContext>map(key -> Paper26_2CaptureContexts.atPosition(
                         base, key, value.x(), value.y(), value.z()))
                 .orElse(base);
-    }
-
-    /**
-     * A respawn replacement derived from the owning connection already added
-     * this entity; a tracking recipient's copy would replace it once more and
-     * discard the state applied in between.
-     */
-    @Override
-    public boolean suppressesRecipientState(
-            Object decodedPacket, PacketCaptureState state, long serverTick) {
-        super.suppressesRecipientState(decodedPacket, state, serverTick);
-        return state.entityReplacedAt(
-                ClientboundAddEntityPacket.class.cast(decodedPacket).getId(), serverTick);
     }
 
     @Override

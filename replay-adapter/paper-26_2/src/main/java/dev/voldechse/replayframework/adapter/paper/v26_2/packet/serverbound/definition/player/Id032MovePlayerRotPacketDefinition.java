@@ -1,12 +1,13 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.serverbound.definition.player;
 
 import dev.voldechse.replayframework.adapter.paper.packet.serverbound.ServerboundPacketDefinition;
-import dev.voldechse.replayframework.adapter.paper.packet.serverbound.ServerboundReaction;
 
 /**
  * Serverbound contract for {@code minecraft:move_player_rot}.
  *
- * Turns the sender.
+ * Turns the sender. Whatever it changes about the sender's own entity
+ * reaches the recording through the entity tracker of the eye that follows
+ * the sender.
  */
 final class Id032MovePlayerRotPacketDefinition extends ServerboundPacketDefinition {
 
@@ -15,11 +16,5 @@ final class Id032MovePlayerRotPacketDefinition extends ServerboundPacketDefiniti
 
     Id032MovePlayerRotPacketDefinition() {
         super(PACKET_ID, IDENTIFIER);
-    }
-
-    @Override
-    public ServerboundReaction react(Object decodedPacket) {
-        super.react(decodedPacket);
-        return ServerboundReaction.PLAYER_STATE;
     }
 }

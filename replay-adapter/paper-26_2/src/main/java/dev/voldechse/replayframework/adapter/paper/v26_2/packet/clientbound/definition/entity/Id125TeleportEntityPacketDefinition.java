@@ -81,13 +81,6 @@ final class Id125TeleportEntityPacketDefinition extends RebuildingPacketDefiniti
     }
 
     @Override
-    public boolean suppressesRecipientState(
-            Object decodedPacket, PacketCaptureState state, long serverTick) {
-        return state.movementIsAuthoritative(
-                ClientboundTeleportEntityPacket.class.cast(decodedPacket).id());
-    }
-
-    @Override
     protected Value read(ClientboundTeleportEntityPacket packet) {
         return new Value(packet.id(), packet.change(), packet.relatives(), packet.onGround());
     }
