@@ -70,7 +70,7 @@ final class Id134UpdateTagsPacketDefinitionTest {
     }
 
     @Test
-    void classifiesAndRegistersRegistryTagsAsSafeCheckpointGlobalState() {
+    void keepsRegistryTagsWithTheirRecipient() {
         var definition = new Id134UpdateTagsPacketDefinition();
 
         assertEquals(PACKET_ID, definition.packetId());
@@ -80,11 +80,9 @@ final class Id134UpdateTagsPacketDefinitionTest {
         assertEquals(PacketDisposition.STATEFUL, definition.classification().disposition());
         assertTrue(definition.classification().captureByDefault());
         assertTrue(definition.classification().replayable());
-        assertTrue(definition.classification().checkpointRelevant());
-        assertEquals(PacketDescriptor.PlaybackScope.SAFE, definition.classification().playbackScope());
-        assertEquals(
-                Paper26_2CheckpointEncoder.CheckpointPacketFamily.GLOBAL_STATE,
-                Paper26_2CheckpointEncoder.familyFor(TYPE_NAME));
+        assertFalse(definition.classification().checkpointRelevant());
+        assertEquals(PacketDescriptor.PlaybackScope.VIEWER_LOCAL, definition.classification().playbackScope());
+        assertTrue(definition.checkpointFamily().isEmpty());
 
         assertEquals(1, WorldPacketDefinitions.definitions().stream()
                 .filter(candidate -> TYPE_NAME.equals(candidate.typeName()))
@@ -100,8 +98,8 @@ final class Id134UpdateTagsPacketDefinitionTest {
         assertEquals(PacketDisposition.STATEFUL, descriptor.disposition());
         assertTrue(descriptor.captureByDefault());
         assertTrue(descriptor.replayable());
-        assertTrue(descriptor.checkpointRelevant());
-        assertEquals(PacketDescriptor.PlaybackScope.SAFE, descriptor.playbackScope());
+        assertFalse(descriptor.checkpointRelevant());
+        assertEquals(PacketDescriptor.PlaybackScope.VIEWER_LOCAL, descriptor.playbackScope());
         assertTrue(Paper26_2ClientboundPacketCatalog.explicitlyClassifies(TYPE_NAME));
     }
 
@@ -161,29 +159,16 @@ final class Id134UpdateTagsPacketDefinitionTest {
     }
 
     @Test
-    void playbackSendsNativeTagPacketWithoutChangingRegistryOrMemberIds() {
+    void playbackKeepsTheViewersLiveTags() {
         ProtocolInfo<?> protocol = protocol();
         var definition = new Id134UpdateTagsPacketDefinition();
         var codec = packetCodec(protocol);
-        ClientboundUpdateTagsPacket expected = new ClientboundUpdateTagsPacket(populatedRegistryTags());
-        byte[] payload = packetBody(protocol, expected);
+        byte[] payload = packetBody(protocol, new ClientboundUpdateTagsPacket(populatedRegistryTags()));
 
         PacketRewriteResult result = definition.handlePlayback(
                 frame(payload), descriptor(), codec, rewriter());
 
-        assertEquals(PacketRewriteResult.Decision.SEND, result.decision());
-        ClientboundUpdateTagsPacket rewritten = assertInstanceOf(
-                ClientboundUpdateTagsPacket.class, result.packet().orElseThrow());
-        PacketCodec.EncodedPacket encoded = definition.encode(
-                rewritten, descriptor(), codec);
-        assertEquals(PacketPhase.PLAY, encoded.phase());
-        assertEquals(PacketDescriptor.Direction.CLIENTBOUND, encoded.direction());
-        assertEquals(PACKET_ID, encoded.packetId());
-
-        ClientboundUpdateTagsPacket actual = assertInstanceOf(
-                ClientboundUpdateTagsPacket.class,
-                decodePacket(protocol, packetWire(encoded.payload())));
-        assertPacketTagsEqual(expected, actual);
+        assertEquals(PacketRewriteResult.Decision.DROP_LOCAL, result.decision());
     }
 
     @Test
@@ -407,9 +392,9 @@ final class Id134UpdateTagsPacketDefinitionTest {
                 PacketDisposition.STATEFUL,
                 true,
                 true,
-                true,
+                false,
                 "paper-26.2/" + TYPE_NAME,
-                PacketDescriptor.PlaybackScope.SAFE);
+                PacketDescriptor.PlaybackScope.VIEWER_LOCAL);
     }
 
     private static RawPacketFrame frame(byte[] payload) {

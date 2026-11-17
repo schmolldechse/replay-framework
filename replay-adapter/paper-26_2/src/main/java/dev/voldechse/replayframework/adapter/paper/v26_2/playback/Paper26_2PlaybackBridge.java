@@ -240,6 +240,7 @@ public final class Paper26_2PlaybackBridge implements PlaybackBridge {
         }
 
         clearOutboundOperations();
+        detachView();
         gate.close();
         Paper26_2ReplayPacketRewriter currentRewriter = rewriter.getAndSet(null);
         if (currentRewriter != null) {
@@ -251,6 +252,32 @@ public final class Paper26_2PlaybackBridge implements PlaybackBridge {
             // Channel teardown is best effort during quit and server shutdown.
         }
         state.set(State.CLOSED);
+    }
+
+    /**
+     * Removes what the replay added to the viewer's client. The removal runs
+     * on the connection's event loop, after the frame batch that may still
+     * be running there and before anything the integration sends after
+     * closing, such as moving the viewer back. Best effort: the viewer may
+     * already be gone.
+     */
+    private void detachView() {
+        io.netty.channel.Channel channel = connection.channel();
+        if (!channel.isActive()) {
+            return;
+        }
+        try {
+            channel.eventLoop().execute(() -> {
+                try {
+                    resetter.detach();
+                    replayWriter.flush();
+                } catch (Throwable ignored) {
+                    // The viewer disconnected while the playback closed.
+                }
+            });
+        } catch (Throwable ignored) {
+            // A closed event loop is an expected disconnect/shutdown path.
+        }
     }
 
     @Override

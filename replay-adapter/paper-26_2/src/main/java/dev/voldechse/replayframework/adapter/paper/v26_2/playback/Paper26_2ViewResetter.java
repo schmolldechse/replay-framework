@@ -149,24 +149,15 @@ final class Paper26_2ViewResetter {
      */
     void reset() {
         List<Object> packets = new ArrayList<>();
-        blockCracks.forEach((id, pos) -> packets.add(
-                new net.minecraft.network.protocol.game.ClientboundBlockDestructionPacket(id, pos, -1)));
-
-
-        if (!state.entityIds.isEmpty()) {
-            packets.add(new ClientboundRemoveEntitiesPacket(state.entityIds.stream()
-                    .mapToInt(Integer::intValue)
-                    .toArray()));
-        }
+        addBlockCrackRemovals(packets);
+        addEntityRemoval(packets);
         for (ChunkKey chunk : state.chunkPositions) {
             packets.add(new ClientboundForgetLevelChunkPacket(new ChunkPos(chunk.x(), chunk.z())));
         }
         if (state.containerId != null) {
             packets.add(new ClientboundContainerClosePacket(state.containerId));
         }
-        for (UUID id : state.bossBarIds) {
-            packets.add(ClientboundBossEventPacket.createRemovePacket(id));
-        }
+        addBossBarRemovals(packets);
         for (String teamName : state.teamNames) {
             packets.add(teamRemoval(teamName));
         }
@@ -179,19 +170,66 @@ final class Paper26_2ViewResetter {
         for (ScoreKey score : state.scores.keySet()) {
             packets.add(new ClientboundResetScorePacket(score.owner(), score.objectiveName()));
         }
-        if (!state.tabListProfileIds.isEmpty()) {
-            packets.add(new ClientboundPlayerInfoRemovePacket(new ArrayList<>(state.tabListProfileIds)));
-        }
+        addTabListRemoval(packets);
 
         try {
-            for (Object packet : packets) {
-                writer.accept(packet);
-            }
-            state.clear();
-            blockCracks.clear();
+            write(packets);
         } catch (Throwable failure) {
             reportFailure(failure);
             throw failure;
+        }
+    }
+
+    /**
+     * Removes what the replay added to the client when the playback ends.
+     *
+     * <p>Only state whose identity belongs to the replay is removed: boss
+     * bars and tab-list entries carry replay UUIDs, entities and block cracks
+     * replay entity IDs. They survive a world change of the viewer and would
+     * otherwise stay after leaving. Chunks are left alone: their positions
+     * are not replay-owned, and an integration that moves the viewer back
+     * before closing would lose the live chunks at the same positions. The
+     * world change the integration performs replaces them anyway.</p>
+     */
+    void detach() {
+        List<Object> packets = new ArrayList<>();
+        addBlockCrackRemovals(packets);
+        addEntityRemoval(packets);
+        addBossBarRemovals(packets);
+        addTabListRemoval(packets);
+        write(packets);
+    }
+
+    private void write(List<Object> packets) {
+        for (Object packet : packets) {
+            writer.accept(packet);
+        }
+        state.clear();
+        blockCracks.clear();
+    }
+
+    private void addBlockCrackRemovals(List<Object> packets) {
+        blockCracks.forEach((id, pos) -> packets.add(
+                new net.minecraft.network.protocol.game.ClientboundBlockDestructionPacket(id, pos, -1)));
+    }
+
+    private void addEntityRemoval(List<Object> packets) {
+        if (!state.entityIds.isEmpty()) {
+            packets.add(new ClientboundRemoveEntitiesPacket(state.entityIds.stream()
+                    .mapToInt(Integer::intValue)
+                    .toArray()));
+        }
+    }
+
+    private void addBossBarRemovals(List<Object> packets) {
+        for (UUID id : state.bossBarIds) {
+            packets.add(ClientboundBossEventPacket.createRemovePacket(id));
+        }
+    }
+
+    private void addTabListRemoval(List<Object> packets) {
+        if (!state.tabListProfileIds.isEmpty()) {
+            packets.add(new ClientboundPlayerInfoRemovePacket(new ArrayList<>(state.tabListProfileIds)));
         }
     }
 

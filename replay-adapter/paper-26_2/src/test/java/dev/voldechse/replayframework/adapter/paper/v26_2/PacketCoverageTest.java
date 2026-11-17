@@ -152,7 +152,7 @@ class PacketCoverageTest {
             stateful(0x83, "update_attributes", PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES),
             stateful(0x84, "update_mob_effect", PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES),
             stateful(0x85, "update_recipes", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
-            stateful(0x86, "update_tags", PacketDescriptor.PlaybackScope.SAFE),
+            stateful(0x86, "update_tags", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),
             stateful(0x87, "projectile_power", PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES),
             control(0x88, "custom_report_details"),
             stateful(0x89, "server_links", PacketDescriptor.PlaybackScope.VIEWER_LOCAL),

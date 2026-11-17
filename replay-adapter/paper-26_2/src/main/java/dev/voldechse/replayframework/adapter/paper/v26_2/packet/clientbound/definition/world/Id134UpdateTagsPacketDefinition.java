@@ -1,7 +1,6 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.definition.world;
 
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
-import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RecipientCopies;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketClassification;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
@@ -9,10 +8,10 @@ import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2Repla
 /**
  * Complete native-codec pass-through for {@code minecraft:update_tags}.
  *
- * <p>Registry entry IDs in tag payloads are meaningful only for the matching
- * registry contents and ordering. The packet has no entity references to
- * rewrite, so the safe policy preserves the complete version-bound packet and
- * relies on the replay environment's documented registry compatibility.</p>
+ * <p>Tags are server configuration, sent at login and after a reload, not
+ * part of the scene. Replaying them would replace the viewer's live tags
+ * with those of the recording time, and nothing restores them after the
+ * playback. The packet therefore stays with its recipient.</p>
  */
 final class Id134UpdateTagsPacketDefinition
         extends ClientboundPacketDefinition<Paper26_2ReplayPacketRewriter> {
@@ -24,18 +23,6 @@ final class Id134UpdateTagsPacketDefinition
         super(
                 PACKET_ID,
                 IDENTIFIER,
-                PacketClassification.stateful(PacketDescriptor.PlaybackScope.SAFE));
-    }
-    @Override
-    public java.util.Optional<
-            dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketCheckpointFamily> checkpointFamily() {
-        return java.util.Optional.of(
-                dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketCheckpointFamily.GLOBAL_STATE);
-    }
-
-    /** Built per recipient with equal content. */
-    @Override
-    public RecipientCopies recipientCopies() {
-        return RecipientCopies.identicalPayload();
+                PacketClassification.stateful(PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
     }
 }

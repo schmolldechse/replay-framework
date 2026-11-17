@@ -86,6 +86,27 @@ class PacketRegistryTest {
     }
 
     @Test
+    void fingerprintIgnoresCaptureAndPlaybackPolicy() {
+        PacketDescriptor original = descriptor(
+                PacketDescriptor.Direction.CLIENTBOUND, 9, PacketDisposition.STATEFUL);
+        PacketDescriptor changedPolicy = new PacketDescriptor(
+                original.typeName(),
+                original.phase(),
+                original.direction(),
+                original.packetId(),
+                PacketDisposition.EPHEMERAL,
+                !original.captureByDefault(),
+                original.replayable(),
+                false,
+                original.codecKey(),
+                PacketDescriptor.PlaybackScope.VIEWER_LOCAL);
+
+        assertEquals(
+                PacketRegistry.of(List.of(original)).fingerprint(),
+                PacketRegistry.of(List.of(changedPolicy)).fingerprint());
+    }
+
+    @Test
     void unknownPacketLookupIsRejectedWithoutGuessing() {
         PacketRegistry registry = PacketRegistry.of(List.of(
                 descriptor(PacketDescriptor.Direction.CLIENTBOUND, 10, PacketDisposition.STATEFUL)));

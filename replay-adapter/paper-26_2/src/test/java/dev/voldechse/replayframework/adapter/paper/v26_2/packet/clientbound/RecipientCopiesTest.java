@@ -58,7 +58,7 @@ class RecipientCopiesTest {
                 "set_border_center", "set_border_lerp_size", "set_border_size",
                 "set_border_warning_delay", "set_border_warning_distance",
                 "set_default_spawn_position", "sound", "sound_entity", "stop_sound",
-                "system_chat", "update_tags"}) {
+                "system_chat"}) {
             expected.put(identical, "identical payload");
         }
         expected.put("explode", "keyed by ClientboundExplodePacket");

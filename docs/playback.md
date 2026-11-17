@@ -139,6 +139,11 @@ session.close();
   replay duration.
 - `restart()` preserves the current play intent.
 - Repeated `close()` calls are idempotent.
+- `close()` removes what the replay added to the viewer's client and what
+  would survive a world change: boss bars, tab-list entries, entities and
+  block cracks, all of which carry replay-owned identities. Chunks are left
+  to the integration, which moves the viewer to another world. The viewer's
+  live state, such as live boss bars, is the integration's concern.
 
 ## Worlds and recorded players
 

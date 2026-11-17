@@ -48,6 +48,41 @@ class Paper26_2ViewResetterTest {
     }
 
     @Test
+    void detachRemovesTheReplayOwnedStateOnce() {
+        List<Object> writes = new ArrayList<>();
+        Paper26_2ViewResetter resetter = resetter(writes);
+        UUID bar = UUID.fromString("00000000-0000-0000-0000-000000000021");
+        UUID profile = UUID.fromString("00000000-0000-0000-0000-000000000022");
+        BlockPos crack = new BlockPos(1, 64, 1);
+
+        resetter.observe(ClientboundBossEventPacket.createAddPacket(bossEvent(bar)));
+        resetter.observe(new net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket(
+                java.util.EnumSet.of(
+                        net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket.Action.ADD_PLAYER),
+                new net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket.Entry(
+                        profile, new com.mojang.authlib.GameProfile(profile, "Alex"), true, 0,
+                        net.minecraft.world.level.GameType.SURVIVAL, null, true, 0, null)));
+        resetter.observe(new net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket(-5, List.of()));
+        resetter.observe(new ClientboundBlockDestructionPacket(-7, crack, 3));
+        resetter.observe(new net.minecraft.network.protocol.game.ClientboundForgetLevelChunkPacket(
+                new net.minecraft.world.level.ChunkPos(0, 0)));
+        resetter.detach();
+
+        assertEquals(4, writes.size());
+        assertClearPacket(writes.get(0), -7, crack);
+        assertEquals(List.of(-5),
+                ((net.minecraft.network.protocol.game.ClientboundRemoveEntitiesPacket) writes.get(1))
+                        .getEntityIds());
+        assertBossBarRemoval(writes.get(2), bar);
+        assertEquals(List.of(profile),
+                ((net.minecraft.network.protocol.game.ClientboundPlayerInfoRemovePacket) writes.get(3))
+                        .profileIds());
+
+        resetter.detach();
+        assertEquals(4, writes.size());
+    }
+
+    @Test
     void clearsEveryActiveCrackInStableIdOrderAtItsLatestPosition() {
         List<Object> writes = new ArrayList<>();
         Paper26_2ViewResetter resetter = resetter(writes);
