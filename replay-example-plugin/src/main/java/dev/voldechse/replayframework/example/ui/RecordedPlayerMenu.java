@@ -27,9 +27,8 @@ import org.bukkit.plugin.java.JavaPlugin;
  * of the scene right now, for example after logging out, are listed greyed
  * out.</p>
  *
- * <p>The menu is the entry point for further per-player views; a player's
- * item is identified by its profile ID only, so later actions such as an
- * inventory view can hang off the same item.</p>
+ * <p>A left click moves the viewer to the player, a right click opens the
+ * player's inventory in the {@link SubjectMenu}.</p>
  */
 public final class RecordedPlayerMenu {
     private static final int SIZE = 54;
@@ -37,9 +36,14 @@ public final class RecordedPlayerMenu {
     private final JavaPlugin plugin;
     private final ExampleViewerEnvironment environment;
     private final ExampleItemModels models;
+    private final SubjectMenu subjectMenu;
 
     public RecordedPlayerMenu(
-            JavaPlugin plugin, ExampleViewerEnvironment environment, ExampleItemModels models) {
+            JavaPlugin plugin,
+            ExampleViewerEnvironment environment,
+            ExampleItemModels models,
+            SubjectMenu subjectMenu) {
+        this.subjectMenu = Objects.requireNonNull(subjectMenu, "subjectMenu");
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.environment = Objects.requireNonNull(environment, "environment");
         this.models = Objects.requireNonNull(models, "models");
@@ -64,8 +68,11 @@ public final class RecordedPlayerMenu {
                 && holder.viewerId.equals(viewerId);
     }
 
-    /** Moves the viewer to the player of a clicked item. */
-    void click(Player viewer, ItemStack item) {
+    /**
+     * Handles a click on a player: a left click moves the viewer to the
+     * player, a right click opens the player's inventory.
+     */
+    void click(Player viewer, ItemStack item, boolean rightClick) {
         UUID playerId = models.recordedPlayerId(item).orElse(null);
         PlaybackSession session = environment.playback(viewer.getUniqueId()).orElse(null);
         if (playerId == null || session == null) {
@@ -77,6 +84,10 @@ public final class RecordedPlayerMenu {
                 .filter(player -> player.id().equals(playerId))
                 .findFirst()
                 .orElse(null);
+        if (rightClick && target != null) {
+            subjectMenu.open(viewer, session, target.id(), target.name());
+            return;
+        }
         viewer.closeInventory();
         if (target == null || !target.inScene()) {
             viewer.sendMessage(Component.text(

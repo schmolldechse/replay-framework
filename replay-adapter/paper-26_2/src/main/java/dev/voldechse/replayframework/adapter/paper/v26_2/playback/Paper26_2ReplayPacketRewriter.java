@@ -71,6 +71,11 @@ public final class Paper26_2ReplayPacketRewriter {
     }
 
     /** Records the Paper entity type needed to interpret type-dependent metadata values. */
+    /** Returns the recorded runtime ID behind a replay entity ID, when the replay uses it. */
+    public java.util.OptionalInt recordedEntityId(int replayId) {
+        return identities.recordedEntityId(replayId);
+    }
+
     public void trackEntityType(int recordedId, EntityType<?> entityType) {
         recordedEntityTypes.put(recordedId, Objects.requireNonNull(entityType, "entityType"));
     }

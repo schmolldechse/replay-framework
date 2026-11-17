@@ -32,6 +32,7 @@ public final class ReplayBrowserListener implements Listener, AutoCloseable {
     private final ExampleViewerEnvironment environment;
     private final ExampleItemModels models;
     private final RecordedPlayerMenu playerMenu;
+    private final SubjectMenu subjectMenu;
     private final AtomicBoolean registered = new AtomicBoolean();
     private final AtomicBoolean closing = new AtomicBoolean();
 
@@ -42,7 +43,9 @@ public final class ReplayBrowserListener implements Listener, AutoCloseable {
             PlaybackStatusRenderer renderer,
             ExampleViewerEnvironment environment,
             ExampleItemModels models,
-            RecordedPlayerMenu playerMenu) {
+            RecordedPlayerMenu playerMenu,
+            SubjectMenu subjectMenu) {
+        this.subjectMenu = Objects.requireNonNull(subjectMenu, "subjectMenu");
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.browser = Objects.requireNonNull(browser, "browser");
         this.hotbar = Objects.requireNonNull(hotbar, "hotbar");
@@ -77,11 +80,15 @@ public final class ReplayBrowserListener implements Listener, AutoCloseable {
             return;
         }
         Inventory top = event.getView().getTopInventory();
+        if (subjectMenu.owns(top, player.getUniqueId())) {
+            event.setCancelled(true);
+            return;
+        }
         if (playerMenu.owns(top, player.getUniqueId())) {
             event.setCancelled(true);
             int slot = event.getRawSlot();
             if (slot >= 0 && slot < top.getSize()) {
-                playerMenu.click(player, top.getItem(slot));
+                playerMenu.click(player, top.getItem(slot), event.isRightClick());
             }
             return;
         }
@@ -111,7 +118,8 @@ public final class ReplayBrowserListener implements Listener, AutoCloseable {
             return;
         }
         Inventory top = event.getView().getTopInventory();
-        if (browser.owns(top, player.getUniqueId()) || playerMenu.owns(top, player.getUniqueId())) {
+        if (browser.owns(top, player.getUniqueId()) || playerMenu.owns(top, player.getUniqueId())
+                || subjectMenu.owns(top, player.getUniqueId())) {
             event.setCancelled(true);
         }
     }
@@ -159,6 +167,7 @@ public final class ReplayBrowserListener implements Listener, AutoCloseable {
         if (browser.owns(event.getInventory(), player.getUniqueId())) {
             browser.closeFor(player.getUniqueId());
         }
+        subjectMenu.closed(event.getInventory());
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)

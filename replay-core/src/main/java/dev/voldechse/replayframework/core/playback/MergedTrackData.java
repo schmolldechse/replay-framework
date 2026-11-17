@@ -152,7 +152,7 @@ final class MergedTrackData implements PlaybackTimeline.PlaybackData {
             return new Track(data, anchors);
         }
 
-        private SeekPoint anchor(SeekPoint reference) {
+        SeekPoint anchor(SeekPoint reference) {
             SeekPoint anchor = anchors.get(reference.checkpointOrdinal());
             if (anchor == null) {
                 throw new IllegalStateException(

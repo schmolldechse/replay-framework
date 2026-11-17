@@ -28,13 +28,13 @@ import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-class Paper26_2PlaybackPlayerTrackerTest {
+class Paper26_2SceneEntityTrackerTest {
     private static final String PREFIX = "play.clientbound.minecraft:";
     private static final UUID ALEX = UUID.fromString("00000000-0000-0000-0000-00000000000a");
     private static final UUID STEVE = UUID.fromString("00000000-0000-0000-0000-00000000000b");
 
     private final Map<RawPacketFrame, Object> packets = new IdentityHashMap<>();
-    private final Paper26_2PlaybackPlayerTracker tracker = new Paper26_2PlaybackPlayerTracker();
+    private final Paper26_2SceneEntityTracker tracker = new Paper26_2SceneEntityTracker();
 
     @BeforeAll
     static void bootstrapMinecraftRegistries() {
@@ -82,6 +82,45 @@ class Paper26_2PlaybackPlayerTrackerTest {
         List<RecordedPlayer> players = tracker.players();
         assertEquals(List.of("Alex", "steve"), players.stream().map(RecordedPlayer::name).toList());
         assertTrue(players.stream().noneMatch(RecordedPlayer::inScene));
+    }
+
+    @Test
+    void showsHealthFlagsAndTheEntitiesOfAWorld() {
+        observe("add_entity", 7, spawn(7, ALEX, 0, 64, 0), Optional.of("minecraft:overworld"));
+        observe("add_entity", 3, new ClientboundAddEntityPacket(
+                3, UUID.randomUUID(), 0, 0, 0, 0, 0, EntityTypes.ZOMBIE, 0, Vec3.ZERO, 0),
+                Optional.of("minecraft:the_nether"));
+        observe("set_entity_data", 7, new net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket(7, List.of(
+                new net.minecraft.network.syncher.SynchedEntityData.DataValue<>(
+                        Paper26_2SceneEntityTracker.SHARED_FLAGS,
+                        net.minecraft.network.syncher.EntityDataSerializers.BYTE, (byte) ((1 << 1) | (1 << 6))),
+                new net.minecraft.network.syncher.SynchedEntityData.DataValue<>(
+                        net.minecraft.world.entity.LivingEntity.DATA_HEALTH_ID.id(),
+                        net.minecraft.network.syncher.EntityDataSerializers.FLOAT, 12.5F))),
+                Optional.empty());
+
+        var alex = tracker.entity(7).orElseThrow();
+        assertEquals(ALEX, alex.id());
+        assertEquals(net.kyori.adventure.key.Key.key("minecraft:player"), alex.type());
+        assertEquals(java.util.OptionalDouble.of(12.5), alex.health());
+        assertEquals(java.util.Set.of(
+                dev.voldechse.replayframework.api.playback.RecordedEntity.Flag.SNEAKING,
+                dev.voldechse.replayframework.api.playback.RecordedEntity.Flag.GLOWING), alex.flags());
+        assertEquals(List.of(ALEX), tracker.entities("minecraft:overworld").stream()
+                .map(dev.voldechse.replayframework.api.playback.RecordedEntity::id).toList());
+        assertEquals(1, tracker.entities("minecraft:the_nether").size());
+    }
+
+    @Test
+    void readsTheDataIdsOfTheEntityClass() throws Exception {
+        assertEquals(Paper26_2SceneEntityTracker.SHARED_FLAGS, accessorId("DATA_SHARED_FLAGS_ID"));
+        assertEquals(Paper26_2SceneEntityTracker.CUSTOM_NAME, accessorId("DATA_CUSTOM_NAME"));
+    }
+
+    private static int accessorId(String field) throws Exception {
+        var declared = net.minecraft.world.entity.Entity.class.getDeclaredField(field);
+        declared.setAccessible(true);
+        return ((net.minecraft.network.syncher.EntityDataAccessor<?>) declared.get(null)).id();
     }
 
     @Test

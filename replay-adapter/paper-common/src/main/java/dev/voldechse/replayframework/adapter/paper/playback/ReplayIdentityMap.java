@@ -31,18 +31,31 @@ public final class ReplayIdentityMap {
     }
 
     /** Returns the stable replay UUID for one recorded identity. */
-    public UUID mapUuid(UUID recordedId) {
+    public synchronized UUID mapUuid(UUID recordedId) {
         Objects.requireNonNull(recordedId, "recordedId");
         return uuids.computeIfAbsent(recordedId, this::createUuid);
     }
 
     /** Returns the stable replay entity ID for one recorded runtime ID. */
-    public int mapEntityId(int recordedId) {
+    public synchronized int mapEntityId(int recordedId) {
         return entityIds.computeIfAbsent(recordedId, this::createEntityId);
     }
 
+    /**
+     * Returns the recorded runtime ID behind a replay entity ID, for an
+     * entity the viewer's client knows; empty for any other ID.
+     */
+    public synchronized java.util.OptionalInt recordedEntityId(int replayId) {
+        for (Map.Entry<Integer, Integer> entry : entityIds.entrySet()) {
+            if (entry.getValue() == replayId) {
+                return java.util.OptionalInt.of(entry.getKey());
+            }
+        }
+        return java.util.OptionalInt.empty();
+    }
+
     /** Removes all generated mappings while retaining collision reservations. */
-    public void clear() {
+    public synchronized void clear() {
         uuids.clear();
         entityIds.clear();
         resetUsedIdentities();

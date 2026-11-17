@@ -109,5 +109,25 @@ public interface PlaybackSession {
      */
     CompletionStage<PlaybackSnapshot> viewWorld(net.kyori.adventure.key.Key world);
 
+    /**
+     * Returns the state of a subject at the current position, such as a
+     * player's inventory or the content of a chested llama. Empty when the
+     * subject is not part of the replay at this position.
+     *
+     * @param subject a player or an entity of the replay
+     */
+    CompletionStage<java.util.Optional<SubjectState>> state(RecordedSubject subject);
+
+    /**
+     * Returns what the scene shows of an entity the viewer's client knows by
+     * the given ID, for example the entity a viewer clicked.
+     *
+     * @param clientEntityId the entity ID on the viewer's client
+     */
+    java.util.Optional<RecordedEntity> entity(int clientEntityId);
+
+    /** Returns every entity of the viewed world at the current position. */
+    java.util.List<RecordedEntity> entities();
+
     CompletionStage<PlaybackSnapshot> close();
 }

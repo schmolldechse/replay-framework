@@ -353,6 +353,14 @@ final class PlaybackTimeline implements AutoCloseable {
         return seek(Duration.ZERO);
     }
 
+    java.util.Optional<dev.voldechse.replayframework.api.playback.RecordedEntity> entity(int clientEntityId) {
+        return bridge.entity(clientEntityId);
+    }
+
+    java.util.List<dev.voldechse.replayframework.api.playback.RecordedEntity> entities() {
+        return bridge.entities();
+    }
+
     java.util.List<dev.voldechse.replayframework.api.playback.RecordedPlayer> recordedPlayers() {
         return bridge.recordedPlayers();
     }

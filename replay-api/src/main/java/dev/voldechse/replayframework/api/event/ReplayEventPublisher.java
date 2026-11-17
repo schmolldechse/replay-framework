@@ -42,7 +42,8 @@ public interface ReplayEventPublisher {
                     PlaybackSeeked,
                     PlaybackBufferChanged,
                     RecordingCompleted,
-                    PlaybackCompleted {
+                    PlaybackCompleted,
+                    PlaybackEntityInteracted {
         /**
          * Returns the event creation instant.
          *
@@ -300,6 +301,36 @@ public interface ReplayEventPublisher {
                 throw new IllegalArgumentException(
                         "only FAILED playback may carry a failure code");
             }
+        }
+    }
+
+    /**
+     * Event for a viewer clicking an entity of the replay.
+     *
+     * @param sessionId playback session identifier
+     * @param replayId replay identifier
+     * @param viewerId viewer UUID
+     * @param entity what the scene shows of the clicked entity
+     * @param attack whether the viewer attacked instead of using it
+     * @param hand the hand the viewer used
+     * @param occurredAt event timestamp
+     */
+    record PlaybackEntityInteracted(
+            PlaybackSessionId sessionId,
+            ReplayId replayId,
+            UUID viewerId,
+            dev.voldechse.replayframework.api.playback.RecordedEntity entity,
+            boolean attack,
+            org.bukkit.inventory.EquipmentSlot hand,
+            Instant occurredAt) implements ReplayEvent {
+        /** Validates the event values. */
+        public PlaybackEntityInteracted {
+            Objects.requireNonNull(sessionId, "sessionId");
+            Objects.requireNonNull(replayId, "replayId");
+            Objects.requireNonNull(viewerId, "viewerId");
+            Objects.requireNonNull(entity, "entity");
+            Objects.requireNonNull(hand, "hand");
+            Objects.requireNonNull(occurredAt, "occurredAt");
         }
     }
 

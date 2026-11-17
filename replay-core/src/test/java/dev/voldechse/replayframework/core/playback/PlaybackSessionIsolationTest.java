@@ -411,6 +411,23 @@ final class PlaybackSessionIsolationTest {
             }
 
             @Override
+            public CompletionStage<java.util.Optional<dev.voldechse.replayframework.api.playback.SubjectState>> state(
+                    dev.voldechse.replayframework.api.playback.RecordedSubject subject) {
+                return CompletableFuture.completedFuture(java.util.Optional.empty());
+            }
+
+            @Override
+            public java.util.Optional<dev.voldechse.replayframework.api.playback.RecordedEntity> entity(
+                    int clientEntityId) {
+                return java.util.Optional.empty();
+            }
+
+            @Override
+            public List<dev.voldechse.replayframework.api.playback.RecordedEntity> entities() {
+                return List.of();
+            }
+
+            @Override
             public net.kyori.adventure.key.Key viewedWorld() {
                 return net.kyori.adventure.key.Key.key("minecraft:overworld");
             }

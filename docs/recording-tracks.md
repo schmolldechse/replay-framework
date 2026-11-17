@@ -1,9 +1,10 @@
 # Recording tracks
 
-Status: parts A and B are implemented. A recording is written as a global
-track, one track per world and one state track per subject in format v5;
-playback merges the global and world tracks into one timeline. On-demand
-tracks (C) and the state and entity API (D) follow.
+Status: parts A, B and D are implemented. A recording is written as a
+global track, one track per world and one state track per subject in format
+v5; playback merges the global and world tracks into one timeline and opens
+a state track when its subject's state is asked for. Loading the other world
+tracks on demand (C) follows.
 
 A recording is a set of **tracks**, like a media container holds video,
 audio and subtitle tracks. Each track is a time-ordered stream of packet
@@ -157,16 +158,26 @@ for all open tracks at every checkpoint barrier.
 
 ## API
 
-- `PlaybackSession.state(Subject)` returns the state of a subject at the
-  current position: an inventory made of named sections (armor, off hand,
-  hotbar, main, container, ...) with the selected slot where it applies,
-  and vitals where they apply.
-- `PlaybackSession.entity(...)` returns what the scene shows of an entity:
-  type, UUID, position, name, equipment, health, effects, passengers,
-  flags and type-specific details. It names the entity's subject, so its
-  state can be queried as well.
-- Interactions of a viewer with a replay entity are published as an event
-  carrying the session, the viewer and the entity.
+- `PlaybackSession.state(RecordedSubject)` returns the `SubjectState` of a
+  player or an entity at the current position: its equipment by
+  `EquipmentSlot`, like every entity of the scene, and a list of sections
+  named by keys. Which sections exist depends on the subject; a player has
+  `minecraft:hotbar` with its selected slot and `minecraft:inventory`, a
+  container entity `minecraft:container`. Players also have vitals and
+  experience. The state is the checkpoint of the subject's track at the
+  barrier before the position plus the track's frames up to it; the adapter
+  decodes them (`PlaybackBridge.decodeState`). Empty when the subject is not
+  in the recording at that position.
+- `PlaybackSession.entity(int)` and `entities()` return what the scene shows
+  of an entity: type, UUID, position, name, health and maximum health,
+  equipment, effects and visible flags. `subject()` names its state track,
+  when the recording has one. The 26.2 adapter keeps this from the scene
+  packets of every world (`Paper26_2SceneEntityTracker`); the ID the viewer's
+  client knows is mapped back to the recorded one.
+- `ReplayEventPublisher.PlaybackEntityInteracted` reports a viewer using or
+  attacking a replay entity. The 26.2 bridge reads the viewer's serverbound
+  `interact` and `attack` packets before the server's packet handler;
+  packets aimed at replay entities are consumed, all others pass.
 
 ## Implementation parts
 

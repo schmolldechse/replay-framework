@@ -57,7 +57,7 @@ public final class Paper26_2PlaybackBridge implements PlaybackBridge {
     private boolean outboundDrainScheduled;
     /** The recorded world the viewer watches; only its frames are sent. */
     private final AtomicReference<String> viewedWorld = new AtomicReference<>();
-    private final Paper26_2PlaybackPlayerTracker players = new Paper26_2PlaybackPlayerTracker();
+    private final Paper26_2SceneEntityTracker scene = new Paper26_2SceneEntityTracker();
 
     /**
      * Opens one channel-local playback boundary and schedules gate
@@ -203,7 +203,7 @@ public final class Paper26_2PlaybackBridge implements PlaybackBridge {
             // received after a world change.
             gate.resumeIsolation();
             resetter.reset();
-            players.clear();
+            scene.clear();
             Paper26_2ReplayPacketRewriter currentRewriter = rewriter.get();
             if (currentRewriter != null) {
                 currentRewriter.resetView();
@@ -251,6 +251,7 @@ public final class Paper26_2PlaybackBridge implements PlaybackBridge {
         }
         try {
             accessor.uninstallHandlerAndWait(connection, ReplayViewerOutboundGate.HANDLER_NAME);
+            accessor.uninstallHandlerAndWait(connection, ReplayEntityInteractions.HANDLER_NAME);
         } catch (Throwable ignored) {
             // Channel teardown is best effort during quit and server shutdown.
         }
@@ -295,7 +296,53 @@ public final class Paper26_2PlaybackBridge implements PlaybackBridge {
 
     @Override
     public List<dev.voldechse.replayframework.api.playback.RecordedPlayer> recordedPlayers() {
-        return players.players();
+        return scene.players();
+    }
+
+    @Override
+    public java.util.Optional<dev.voldechse.replayframework.api.playback.RecordedEntity> entity(int clientEntityId) {
+        Paper26_2ReplayPacketRewriter current = rewriter.get();
+        if (current == null) {
+            return java.util.Optional.empty();
+        }
+        java.util.OptionalInt recorded = current.recordedEntityId(clientEntityId);
+        return recorded.isPresent() ? scene.entity(recorded.getAsInt()) : java.util.Optional.empty();
+    }
+
+    @Override
+    public List<dev.voldechse.replayframework.api.playback.RecordedEntity> entities() {
+        String world = viewedWorld.get();
+        return world == null ? List.of() : scene.entities(world);
+    }
+
+    @Override
+    public java.util.Optional<dev.voldechse.replayframework.api.playback.SubjectState> decodeState(
+            dev.voldechse.replayframework.api.playback.RecordedSubject subject, List<RawPacketFrame> frames) {
+        List<Object> packets = new java.util.ArrayList<>(frames.size());
+        for (RawPacketFrame frame : frames) {
+            packets.add(codec.decode(frame));
+        }
+        return Paper26_2SubjectStateDecoder.decode(subject, packets);
+    }
+
+    /**
+     * Reads the viewer's use and attack packets aimed at replay entities and
+     * hands them to the playback; the server never sees them.
+     */
+    @Override
+    public void setInteractionHandler(java.util.function.Consumer<EntityInteraction> handler) {
+        java.util.Objects.requireNonNull(handler, "handler");
+        io.netty.channel.Channel channel = connection.channel();
+        channel.eventLoop().execute(() -> {
+            io.netty.channel.ChannelPipeline pipeline = channel.pipeline();
+            if (pipeline.get(ReplayEntityInteractions.HANDLER_NAME) == null
+                    && pipeline.get(ReplayEntityInteractions.SERVER_HANDLER_NAME) != null) {
+                pipeline.addBefore(
+                        ReplayEntityInteractions.SERVER_HANDLER_NAME,
+                        ReplayEntityInteractions.HANDLER_NAME,
+                        new ReplayEntityInteractions(this::entity, handler, this::fail));
+            }
+        });
     }
 
     private void gateReady() {
@@ -430,7 +477,7 @@ public final class Paper26_2PlaybackBridge implements PlaybackBridge {
                 .orElseThrow(() -> incompatible(
                         "replay packet descriptor disappeared from the verified registry", null));
         // Players are followed in every world, before the world filter.
-        players.observe(frame, descriptor.typeName(), codec::decode);
+        scene.observe(frame, descriptor.typeName(), codec::decode);
         // A client can only apply packets of the world it is in; a chunk of
         // another dimension has a different height and breaks the connection.
         String world = viewedWorld.get();

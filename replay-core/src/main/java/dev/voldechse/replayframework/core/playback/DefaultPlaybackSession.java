@@ -19,6 +19,7 @@ final class DefaultPlaybackSession implements PlaybackSession {
     private final UUID viewerId;
     private final PlaybackTimeline timeline;
     private final PlaybackCoordinator coordinator;
+    private final StateTracks stateTracks;
     private final AtomicBoolean released = new AtomicBoolean();
 
     DefaultPlaybackSession(
@@ -27,11 +28,46 @@ final class DefaultPlaybackSession implements PlaybackSession {
             UUID viewerId,
             PlaybackTimeline timeline,
             PlaybackCoordinator coordinator) {
+        this(id, replayId, viewerId, timeline, coordinator, null);
+    }
+
+    DefaultPlaybackSession(
+            PlaybackSessionId id,
+            ReplayId replayId,
+            UUID viewerId,
+            PlaybackTimeline timeline,
+            PlaybackCoordinator coordinator,
+            StateTracks stateTracks) {
         this.id = Objects.requireNonNull(id, "id");
         this.replayId = Objects.requireNonNull(replayId, "replayId");
         this.viewerId = Objects.requireNonNull(viewerId, "viewerId");
         this.timeline = Objects.requireNonNull(timeline, "timeline");
         this.coordinator = Objects.requireNonNull(coordinator, "coordinator");
+        this.stateTracks = stateTracks;
+    }
+
+    @Override
+    public CompletionStage<java.util.Optional<dev.voldechse.replayframework.api.playback.SubjectState>> state(
+            dev.voldechse.replayframework.api.playback.RecordedSubject subject) {
+        if (stateTracks == null) {
+            return java.util.concurrent.CompletableFuture.completedFuture(java.util.Optional.empty());
+        }
+        return stateTracks.state(subject, timeline.snapshot().position());
+    }
+
+    @Override
+    public java.util.Optional<dev.voldechse.replayframework.api.playback.RecordedEntity> entity(int clientEntityId) {
+        return timeline.entity(clientEntityId).map(this::withSubject);
+    }
+
+    private dev.voldechse.replayframework.api.playback.RecordedEntity withSubject(
+            dev.voldechse.replayframework.api.playback.RecordedEntity entity) {
+        return stateTracks == null ? entity : stateTracks.withSubject(entity);
+    }
+
+    @Override
+    public java.util.List<dev.voldechse.replayframework.api.playback.RecordedEntity> entities() {
+        return timeline.entities().stream().map(this::withSubject).toList();
     }
 
     @Override
@@ -102,7 +138,12 @@ final class DefaultPlaybackSession implements PlaybackSession {
     @Override
     public CompletionStage<PlaybackSnapshot> close() {
         CompletionStage<PlaybackSnapshot> closeStage = timeline.closeAsync();
-        closeStage.whenComplete((ignored, failure) -> release());
+        closeStage.whenComplete((ignored, failure) -> {
+            if (stateTracks != null) {
+                stateTracks.close();
+            }
+            release();
+        });
         return closeStage;
     }
 

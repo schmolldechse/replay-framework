@@ -88,6 +88,53 @@ public interface PlaybackBridge {
      * Returns the players of the replay at the current playback position,
      * across all recorded worlds. The default bridge knows none.
      */
+    /**
+     * Builds the state of a subject from the frames of its state track: the
+     * checkpoint at the playback position's barrier, then the frames up to
+     * the position. The default bridge knows no state.
+     */
+    default java.util.Optional<dev.voldechse.replayframework.api.playback.SubjectState> decodeState(
+            dev.voldechse.replayframework.api.playback.RecordedSubject subject,
+            List<RawPacketFrame> frames) {
+        return java.util.Optional.empty();
+    }
+
+    /** What the scene shows of the entity the viewer's client knows by this ID. */
+    default java.util.Optional<dev.voldechse.replayframework.api.playback.RecordedEntity> entity(
+            int clientEntityId) {
+        return java.util.Optional.empty();
+    }
+
+    /** Every entity of the viewed world at the current position. */
+    default java.util.List<dev.voldechse.replayframework.api.playback.RecordedEntity> entities() {
+        return java.util.List.of();
+    }
+
+    /**
+     * Receives the viewer's interactions with replay entities. The bridge
+     * reads them from the viewer's serverbound packets and keeps them from
+     * the server, which knows no such entity.
+     */
+    default void setInteractionHandler(Consumer<EntityInteraction> handler) {
+    }
+
+    /**
+     * A viewer's interaction with a replay entity.
+     *
+     * @param entity what the scene shows of the entity
+     * @param attack whether the viewer attacked instead of using it
+     * @param hand the hand the viewer used
+     */
+    record EntityInteraction(
+            dev.voldechse.replayframework.api.playback.RecordedEntity entity,
+            boolean attack,
+            org.bukkit.inventory.EquipmentSlot hand) {
+        public EntityInteraction {
+            java.util.Objects.requireNonNull(entity, "entity");
+            java.util.Objects.requireNonNull(hand, "hand");
+        }
+    }
+
     default java.util.List<dev.voldechse.replayframework.api.playback.RecordedPlayer> recordedPlayers() {
         return java.util.List.of();
     }

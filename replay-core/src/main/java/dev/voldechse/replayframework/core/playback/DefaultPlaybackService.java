@@ -304,6 +304,19 @@ final class DefaultPlaybackService implements PlaybackService {
                             listener);
                     bridge.setFailureHandler(timeline::failFromBridge);
                     resources.timeline.set(timeline);
+                    resources.stateTracks.set(new StateTracks(
+                            manifest.tracks(),
+                            reference.index(),
+                            manifest.durationNanos(),
+                            bridge,
+                            track -> openTrack(verified, request, track)));
+                    StateTracks states = resources.stateTracks.get();
+                    bridge.setInteractionHandler(interaction -> eventDispatcher.entityInteracted(
+                            sessionId, request.replayId(), viewerId,
+                            new PlaybackBridge.EntityInteraction(
+                                    states.withSubject(interaction.entity()),
+                                    interaction.attack(),
+                                    interaction.hand())));
                     SeekPoint initialPoint = reference.index()
                             .seekCheckpointFloor(Duration.ZERO)
                             .orElseThrow(() -> corrupt("replay has no initial checkpoint"));
@@ -319,11 +332,40 @@ final class DefaultPlaybackService implements PlaybackService {
                             request.replayId(),
                             viewerId,
                             resources.timeline.get(),
-                            coordinator);
+                            coordinator,
+                            resources.stateTracks.get());
                     coordinator.register(session);
                     diagnostics.playbackStarted(session);
                     return (PlaybackSession) session;
                 });
+    }
+
+    /** Opens a track that the scene does not read, such as a state track, on demand. */
+    private CompletionStage<MergedTrackData.Track> openTrack(
+            ReplayArtifactReader.VerifiedReplay verified,
+            PlaybackRequest request,
+            TrackDescriptor track) {
+        ReplayManifest manifest = verified.manifest();
+        return fetchAndReadIndex(verified, track).thenApply(index -> {
+            PreparedArtifacts prepared = new PreparedArtifacts(
+                    track,
+                    index,
+                    buildSegmentRefs(manifest, track, index),
+                    buildCheckpointFiles(manifest, track, index));
+            PlaybackBuffer buffer = new PlaybackBuffer(
+                    verified,
+                    prepared.segments(),
+                    track,
+                    artifactReader,
+                    sharedSegmentCache,
+                    segmentReader,
+                    request.bufferOptions(),
+                    ioExecutor);
+            Map<SeekPoint, CompletionStage<List<RawPacketFrame>>> cache = new ConcurrentHashMap<>();
+            return MergedTrackData.Track.of(
+                    PlaybackTimeline.adapt(buffer, point -> cachedCheckpoint(cache, verified, prepared, point)),
+                    index);
+        });
     }
 
     private CompletionStage<Void> placeObserver(
@@ -732,6 +774,7 @@ final class DefaultPlaybackService implements PlaybackService {
         private final AtomicReference<List<PlaybackBuffer>> buffers =
                 new AtomicReference<>(List.of());
         private final AtomicReference<PlaybackBridge> bridge = new AtomicReference<>();
+        private final AtomicReference<StateTracks> stateTracks = new AtomicReference<>();
         private final AtomicReference<PlaybackTimeline> timeline = new AtomicReference<>();
 
         private void closeAfterFailure() {
@@ -741,6 +784,10 @@ final class DefaultPlaybackService implements PlaybackService {
                 return;
             }
             buffers.get().forEach(PlaybackBuffer::close);
+            StateTracks currentStates = stateTracks.get();
+            if (currentStates != null) {
+                currentStates.close();
+            }
             PlaybackBridge currentBridge = bridge.get();
             if (currentBridge != null) {
                 currentBridge.close();
