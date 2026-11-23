@@ -52,9 +52,8 @@ cross-version format. Further Minecraft versions are supported by adding an
 adapter that implements the
 [version contract](docs/virtual-observer.md#version-contract).
 
-The runtime requires [PacketEvents](https://github.com/retrooper/packetevents)
-as a server plugin and a PostgreSQL database, even when artifacts use Local
-storage.
+The runtime needs no other server plugin. It requires a PostgreSQL database,
+even when artifacts use Local storage.
 
 ## Documentation
 

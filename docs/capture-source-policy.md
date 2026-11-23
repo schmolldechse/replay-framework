@@ -68,17 +68,17 @@ effects of its packet that are not derived yet.
 
 ## Thread boundary
 
-PacketEvents callbacks and the serverbound receiver execute on a Netty
+The clientbound tap and the serverbound receiver execute on a Netty
 event-loop thread. They must not read mutable Bukkit, Paper, CraftBukkit, or
 NMS world state. Serverbound packets are seen as decoded objects by a channel
 handler directly before the server's packet handler; it never changes, drops
 or delays a packet. A serverbound definition may only read fields of its
 packet.
 
-Clientbound packet bytes are copied by a PacketEvents post-task before leaving
-the callback. The post-task runs after all listeners and any wrapper
-re-encoding, so capture parses the final VarInt packet ID and copies the final
-uncompressed body without changing the live buffer's reader index.
+Clientbound packets are seen as objects by a channel handler at the tail of
+each player connection's pipeline, before the server encodes them. The tap
+never changes, drops or delays a packet. A definition reads the object
+directly, and the packet is encoded once, for the frame.
 
 Eyes, sampled time and weather, and actor effects run on the server thread.
 Cross-thread publication uses the adapter's capture-order allocator so
@@ -157,8 +157,8 @@ chest of a llama, has no packet to capture either and is sampled too; see
 
 Packet-driven capture is divided into small version-bound responsibilities:
 
-- the capture bridge owns PacketEvents registration, packet byte copying,
-  capture ordering, and failure propagation;
+- the capture bridge owns the connection handlers, capture ordering, and
+  failure propagation;
 - the clientbound definitions own context, distribution and playback policy
   of their packet;
 - the serverbound receiver hands every received packet to its serverbound
@@ -169,13 +169,14 @@ Packet-driven capture is divided into small version-bound responsibilities:
 
 Replay injection is not an event fallback. The version bridge first encodes a
 rebuilt native packet with the live Paper codec, then writes the packet ID and
-body from the current PacketEvents encoder context. PacketEvents therefore
-cannot observe or recapture replay traffic. The live outbound gate remains a
+body from an anchor handler behind the connection's compression. Replay
+traffic therefore never reaches the clientbound tap and is not recaptured. The
+live outbound gate remains a
 channel handler whose sole responsibility is suppressing conflicting live
 scene packets for that viewer.
 
 The version-neutral core does not depend on Paper, CraftBukkit, NMS, or
-PacketEvents types. A new adapter may use different native packet classes, but
+Netty types. A new adapter may use different native packet classes, but
 it must preserve these responsibility and thread boundaries.
 
 ## Validation requirements

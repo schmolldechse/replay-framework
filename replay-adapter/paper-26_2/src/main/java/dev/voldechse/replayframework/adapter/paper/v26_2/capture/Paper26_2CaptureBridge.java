@@ -1,11 +1,5 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.capture;
 
-import com.github.retrooper.packetevents.PacketEvents;
-import com.github.retrooper.packetevents.event.PacketListener;
-import com.github.retrooper.packetevents.event.PacketListenerCommon;
-import com.github.retrooper.packetevents.event.PacketListenerPriority;
-import com.github.retrooper.packetevents.event.PacketSendEvent;
-import com.github.retrooper.packetevents.event.UserDisconnectEvent;
 import dev.voldechse.replayframework.adapter.CaptureBridge;
 import dev.voldechse.replayframework.adapter.CaptureContext;
 import dev.voldechse.replayframework.adapter.CaptureOrigin;
@@ -16,6 +10,8 @@ import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.PacketRegistry;
 import dev.voldechse.replayframework.adapter.SceneObservation;
 import dev.voldechse.replayframework.adapter.paper.argus.Argus;
+import dev.voldechse.replayframework.adapter.paper.channel.ClientboundTap;
+import dev.voldechse.replayframework.adapter.paper.channel.PipelineNames;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RecipientCopies;
 import dev.voldechse.replayframework.adapter.RecipientCopy;
@@ -27,7 +23,6 @@ import dev.voldechse.replayframework.adapter.paper.v26_2.checkpoint.Paper26_2Nat
 import dev.voldechse.replayframework.format.PacketPhase;
 import dev.voldechse.replayframework.format.RawPacketFrame;
 import dev.voldechse.replayframework.format.TrackSubject;
-import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import java.util.Objects;
 import java.util.UUID;
@@ -43,6 +38,11 @@ import org.bukkit.scheduler.BukkitTask;
 /**
  * Global Paper 26.2 capture installation shared by all active recording
  * sessions. Session filtering remains in the core router.
+ *
+ * <p>Every player connection gets two handlers: a {@link ClientboundTap} that
+ * sees each packet object the player is sent, before it is encoded, and the
+ * serverbound receiver that hands received packets to their definitions.
+ * Argus delivers the scene of its eyes on the server thread.</p>
  */
 public final class Paper26_2CaptureBridge implements CaptureBridge {
 
@@ -61,25 +61,8 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
     private final Argus argus;
     private final Paper26_2ActorEffects actorEffects;
     private volatile BukkitTask argusTask;
-    private final PacketListener packetListener = new PacketListener() {
-        @Override
-        public void onPacketSend(PacketSendEvent event) {
-            scheduleCapture(event);
-        }
-
-        @Override
-        public void onUserDisconnect(UserDisconnectEvent event) {
-            UUID connectionId = event.getUser().getUUID();
-            if (connectionId == null) {
-                return;
-            }
-            captureState.removeConnection(connectionId);
-        }
-    };
-
     private volatile CaptureBridge.PacketSink sink;
     private volatile CaptureBridge.FailureHandler failureHandler;
-    private volatile PacketListenerCommon installedListener;
 
     /** Creates a bridge and discovers the live Paper 26.2 registry. */
     public Paper26_2CaptureBridge(PaperConnectionAccessor accessor) {
@@ -175,12 +158,10 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
 
         try {
             seedOnlineConnections();
-            installServerboundReceivers();
+            installChannelHandlers();
             if (argus != null) {
                 argusTask = Bukkit.getScheduler().runTaskTimer(owner, argus::tick, 1L, 1L);
             }
-            installedListener = PacketEvents.getAPI().getEventManager().registerListener(
-                    packetListener, PacketListenerPriority.MONITOR);
         } catch (Throwable failure) {
             fail(failure);
         }
@@ -197,8 +178,7 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
         }
 
         // UNINSTALLED is an expected lifecycle end, not an integrity failure.
-        unregisterPacketListener();
-        uninstallServerboundReceivers();
+        uninstallChannelHandlers();
         closeArgus();
         captureState.clear();
     }
@@ -208,94 +188,76 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
         return state.get() == State.INSTALLED;
     }
 
-    private void scheduleCapture(PacketSendEvent event) {
-        if (state.get() != State.INSTALLED || event.isCancelled()) {
-            return;
-        }
-        event.getPostTasks().add(() -> captureAfterPacketEvents(event));
-    }
-
-    /** Captures the buffer after every PacketEvents listener and wrapper rewrite completed. */
-    private void captureAfterPacketEvents(PacketSendEvent event) {
-        if (state.get() != State.INSTALLED || event.isCancelled()) {
+    /**
+     * Captures one packet object a player is sent, on the connection's event
+     * loop. Only PLAY packets of a player in the game are recorded. The
+     * packet is encoded once, for the frame; its definition reads the object
+     * itself.
+     */
+    private void capture(Channel channel, net.minecraft.network.Connection connection, Object message) {
+        if (state.get() != State.INSTALLED
+                || !(message instanceof net.minecraft.network.protocol.Packet<?>)
+                || !(connection.getPacketListener()
+                        instanceof net.minecraft.server.network.ServerGamePacketListenerImpl game)) {
             return;
         }
         try {
-            PacketPhase phase = phaseOf(event);
-            ObservedWirePacket wirePacket = copyWirePacket(event.getByteBuf());
+            UUID connectionId = game.player.getUUID();
+            String connectionName = game.player.getGameProfile().name();
+            PaperConnectionAccessor.WirePacket wirePacket = accessor.inspectAndEncode(
+                    new PaperConnectionAccessor.ConnectionHandle(connectionId, channel), message, registry);
+            if (wirePacket.phase() != PacketPhase.PLAY) {
+                return;
+            }
+            PacketPhase phase = wirePacket.phase();
             int packetId = wirePacket.packetId();
             PacketDescriptor descriptor = registry.find(
                             phase, PacketDescriptor.Direction.CLIENTBOUND, packetId)
                     .orElseThrow(() -> incompatible(
-                            "PacketEvents clientbound packet is not in the verified registry: "
-                                    + phase + ':' + packetId,
+                            "clientbound packet is not in the verified registry: " + phase + ':' + packetId,
                             null));
             if (!registry.captureAllowed(phase, PacketDescriptor.Direction.CLIENTBOUND, packetId)) {
                 return;
             }
 
             byte[] payload = wirePacket.payload();
-            UUID connectionId = event.getUser().getUUID();
-            String connectionName = event.getUser().getProfile() == null
-                    || event.getUser().getProfile().getName() == null
-                    ? ""
-                    : event.getUser().getProfile().getName();
             captureOrder.publish(point -> {
                 CaptureContext context;
                 boolean publishObserved = true;
-                if (phase == PacketPhase.PLAY) {
-                    Object rawChannel = event.getChannel();
-                    if (!(rawChannel instanceof Channel channel) || connectionId == null) {
-                        throw incompatible("PLAY capture did not expose its Paper connection", null);
-                    }
-                    ClientboundPacketDefinition<?> definition = Paper26_2ClientboundPacketCatalog.catalog()
-                            .find(packetId)
-                            .orElseThrow(() -> incompatible(
-                                    "PLAY packet has no definition for ID " + packetId, null));
-                    PaperConnectionAccessor.ConnectionHandle connection =
-                            new PaperConnectionAccessor.ConnectionHandle(connectionId, channel);
-                    RawPacketFrame frame = new RawPacketFrame(
-                            point.captureTimeNanos(), point.serverTick(), point.sequence(),
-                            phase, packetId, payload);
-                    Object decoded = accessor.decodeCapturedFrame(connection, frame, registry);
-                    context = definition.captureContext(
-                            decoded, descriptor, connectionId, captureState, point.serverTick());
-                    if (definition.worldWide()) {
-                        context = context.asWorldWide();
-                    }
-                    if (!definition.distribution().observable()) {
-                        context = context.withOrigin(CaptureOrigin.PLAYER_ONLY);
-                    }
-                    if (definition.recipientState().describesRecipient(decoded)) {
-                        // The recipient's own state: its inventory, health or
-                        // experience. It belongs to the recipient's state track.
-                        context = context.withSubject(new CaptureSubject(
-                                TrackSubject.player(connectionId), connectionName));
-                    }
-                    if (definition.suppressesRecipientState(
-                            decoded, captureState, point.serverTick())) {
+                ClientboundPacketDefinition<?> definition = Paper26_2ClientboundPacketCatalog.catalog()
+                        .find(packetId)
+                        .orElseThrow(() -> incompatible(
+                                "PLAY packet has no definition for ID " + packetId, null));
+                context = definition.captureContext(
+                        message, descriptor, connectionId, captureState, point.serverTick());
+                if (definition.worldWide()) {
+                    context = context.asWorldWide();
+                }
+                if (!definition.distribution().observable()) {
+                    context = context.withOrigin(CaptureOrigin.PLAYER_ONLY);
+                }
+                if (definition.recipientState().describesRecipient(message)) {
+                    // The recipient's own state: its inventory, health or
+                    // experience. It belongs to the recipient's state track.
+                    context = context.withSubject(new CaptureSubject(
+                            TrackSubject.player(connectionId), connectionName));
+                }
+                if (definition.suppressesRecipientState(
+                        message, captureState, point.serverTick())) {
+                    publishObserved = false;
+                } else if (definition.recordedFromPlayers()) {
+                    // Each recording merges the copies other recipients
+                    // received; see RecipientCopy.
+                    RecipientCopies copies = definition.recipientCopies();
+                    if (copies.fromSceneOnly()) {
                         publishObserved = false;
-                    } else if (definition.recordedFromPlayers()) {
-                        // Each recording merges the copies other recipients
-                        // received; see RecipientCopy.
-                        RecipientCopies copies = definition.recipientCopies();
-                        if (copies.fromSceneOnly()) {
-                            publishObserved = false;
-                        } else {
-                            Optional<Object> identity = copies.identity(decoded, payload);
-                            if (identity.isPresent()) {
-                                context = context.asRecipientCopy(
-                                        new RecipientCopy(connectionId, identity.get()));
-                            }
+                    } else {
+                        Optional<Object> identity = copies.identity(message, payload);
+                        if (identity.isPresent()) {
+                            context = context.asRecipientCopy(
+                                    new RecipientCopy(connectionId, identity.get()));
                         }
                     }
-                } else {
-                    context = new CaptureContext(
-                            descriptor.disposition(),
-                            captureState.world(connectionId).map(Key::key),
-                            Optional.empty(),
-                            Optional.empty(),
-                            Optional.empty());
                 }
                 CaptureBridge.PacketSink currentSink = sink;
                 if (publishObserved && currentSink != null) {
@@ -374,52 +336,66 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
     }
 
     /**
-     * Installs the serverbound receiver on every connection, present and
-     * future. Serverbound packets are seen as decoded objects directly before
-     * the server queues them; nothing else in the pipeline changes.
+     * Installs the clientbound tap and the serverbound receiver on every
+     * player connection, present and future. Neither changes, drops or
+     * delays a packet.
      */
-    private void installServerboundReceivers() {
-        if (owner == null || actorEffects == null) {
+    private void installChannelHandlers() {
+        if (owner == null) {
             return;
         }
         io.papermc.paper.network.ChannelInitializeListenerHolder.addListener(
-                SERVERBOUND_RECEIVER_KEY, this::installServerboundReceiver);
+                SERVERBOUND_RECEIVER_KEY, this::installChannelHandlers);
         for (Player player : Bukkit.getOnlinePlayers()) {
             Channel channel = accessor.connectionFor(player).channel();
-            channel.eventLoop().execute(() -> installServerboundReceiver(channel));
+            channel.eventLoop().execute(() -> installChannelHandlers(channel));
         }
     }
 
-    private void installServerboundReceiver(Channel channel) {
+    private void installChannelHandlers(Channel channel) {
         try {
             var pipeline = channel.pipeline();
-            if (pipeline.get(Paper26_2ServerboundReceiver.HANDLER_NAME) != null
-                    || !(pipeline.get(Paper26_2ServerboundReceiver.SERVER_HANDLER_NAME)
-                            instanceof net.minecraft.network.Connection connection)) {
+            if (!(pipeline.get(PipelineNames.PACKET_HANDLER) instanceof net.minecraft.network.Connection connection)) {
                 return;
             }
-            pipeline.addBefore(
-                    Paper26_2ServerboundReceiver.SERVER_HANDLER_NAME,
-                    Paper26_2ServerboundReceiver.HANDLER_NAME,
-                    new Paper26_2ServerboundReceiver(
-                            connection, this::installed, actorEffects, this::fail));
+            ClientboundTap.install(pipeline, new ClientboundTap(
+                    Paper26_2ArgusPlatform::unbundlePacket,
+                    message -> capture(channel, connection, message),
+                    () -> forget(connection),
+                    this::fail));
+            if (actorEffects != null && pipeline.get(Paper26_2ServerboundReceiver.HANDLER_NAME) == null) {
+                pipeline.addBefore(
+                        PipelineNames.PACKET_HANDLER,
+                        Paper26_2ServerboundReceiver.HANDLER_NAME,
+                        new Paper26_2ServerboundReceiver(
+                                connection, this::installed, actorEffects, this::fail));
+            }
         } catch (Throwable failure) {
             fail(failure);
         }
     }
 
-    private void uninstallServerboundReceivers() {
+    /** Drops the capture state of a connection that closed. */
+    private void forget(net.minecraft.network.Connection connection) {
+        if (connection.getPacketListener()
+                instanceof net.minecraft.server.network.ServerGamePacketListenerImpl game) {
+            captureState.removeConnection(game.player.getUUID());
+        }
+    }
+
+    private void uninstallChannelHandlers() {
         if (owner == null) {
             return;
         }
         io.papermc.paper.network.ChannelInitializeListenerHolder.removeListener(SERVERBOUND_RECEIVER_KEY);
         try {
             for (Player player : Bukkit.getOnlinePlayers()) {
-                accessor.uninstallHandler(
-                        accessor.connectionFor(player), Paper26_2ServerboundReceiver.HANDLER_NAME);
+                PaperConnectionAccessor.ConnectionHandle connection = accessor.connectionFor(player);
+                accessor.uninstallHandler(connection, PipelineNames.CLIENTBOUND_TAP);
+                accessor.uninstallHandler(connection, Paper26_2ServerboundReceiver.HANDLER_NAME);
             }
         } catch (Throwable ignored) {
-            // Receivers left on closing connections pass every packet through.
+            // Handlers left on closing connections pass every packet through.
         }
     }
 
@@ -502,60 +478,6 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
                         .withOrigin(CaptureOrigin.PLAYER_ONLY))));
     }
 
-    private static PacketPhase phaseOf(PacketSendEvent event) {
-        return switch (event.getConnectionState().name()) {
-            case "STATUS" -> PacketPhase.STATUS;
-            case "LOGIN" -> PacketPhase.LOGIN;
-            case "CONFIGURATION" -> PacketPhase.CONFIGURATION;
-            case "PLAY" -> PacketPhase.PLAY;
-            default -> throw incompatible(
-                    "PacketEvents exposed an unsupported clientbound connection state "
-                            + event.getConnectionState(),
-                    null);
-        };
-    }
-
-    static ObservedWirePacket copyWirePacket(Object raw) {
-        if (!(raw instanceof ByteBuf buffer)) {
-            throw incompatible("PacketEvents did not expose a Netty byte buffer", null);
-        }
-        int index = buffer.readerIndex();
-        int packetId = 0;
-        int shift = 0;
-        while (true) {
-            if (index >= buffer.writerIndex() || shift >= 35) {
-                throw incompatible("PacketEvents exposed an invalid packet VarInt", null);
-            }
-            int value = buffer.getUnsignedByte(index++);
-            packetId |= (value & 0x7F) << shift;
-            if ((value & 0x80) == 0) {
-                break;
-            }
-            shift += 7;
-        }
-        if (packetId < 0) {
-            throw incompatible("PacketEvents exposed a negative packet ID", null);
-        }
-        byte[] payload = new byte[buffer.writerIndex() - index];
-        buffer.getBytes(index, payload);
-        return new ObservedWirePacket(packetId, payload);
-    }
-
-    record ObservedWirePacket(int packetId, byte[] payload) {
-        ObservedWirePacket {
-            if (packetId < 0) {
-                throw new IllegalArgumentException("packetId must not be negative");
-            }
-            Objects.requireNonNull(payload, "payload");
-            payload = payload.clone();
-        }
-
-        @Override
-        public byte[] payload() {
-            return payload.clone();
-        }
-    }
-
     private void fail(Throwable failure) {
         Objects.requireNonNull(failure, "failure");
         synchronized (handlerStateLock) {
@@ -568,8 +490,7 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
             state.set(State.FAILED);
         }
 
-        unregisterPacketListener();
-        uninstallServerboundReceivers();
+        uninstallChannelHandlers();
         closeArgus();
         captureState.clear();
 
@@ -582,19 +503,6 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
                     // A diagnostic failure handler must not escape a callback.
                 }
             }
-        }
-    }
-
-    private void unregisterPacketListener() {
-        PacketListenerCommon listener = installedListener;
-        installedListener = null;
-        if (listener == null) {
-            return;
-        }
-        try {
-            PacketEvents.getAPI().getEventManager().unregisterListener(listener);
-        } catch (Throwable ignored) {
-            // PacketEvents may already have stopped while Paper disables plugins.
         }
     }
 
@@ -657,9 +565,9 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
 
     /** Status values document whether capture is trusted, failed or shut down. */
     private enum State {
-        /** No PacketEvents callback is installed. */
+        /** No connection handler is installed. */
         NEW,
-        /** The single PacketEvents callback is active. */
+        /** The connection handlers and Argus are active. */
         INSTALLED,
         /** Capture integrity failed; active recording must fail. */
         FAILED,

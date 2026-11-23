@@ -159,7 +159,7 @@ packet/serverbound/definition/world/
 | `packet` | protocol identifiers, native packet types, classification, distribution, recipient copies and state, decode/encode and packet-specific read/rewrite/rebuild logic |
 | `argus` | the eye and the state Argus samples from the server |
 | `actor` | before and after reads around serverbound triggers and the effect families |
-| `capture` | PacketEvents observation, the serverbound receiver, source tagging, ordering and frame emission |
+| `capture` | the connection handlers, the serverbound receiver, source tagging, ordering and frame emission |
 | `checkpoint` | authoritative snapshots and checkpoint ordering |
 | `playback` | viewer session state, identity-map lifetime, reset, queueing, outbound channel injection, scene queries and interactions |
 

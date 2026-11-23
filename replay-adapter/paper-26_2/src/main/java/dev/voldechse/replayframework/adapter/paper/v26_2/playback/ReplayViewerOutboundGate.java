@@ -20,8 +20,9 @@ import net.minecraft.network.protocol.Packet;
 
 /**
  * Channel-local outbound gate for one replay viewer. Live packets are
- * classified before they reach the capture observer. Encoded replay packets
- * use {@link PacketEventsReplayWriter} and never traverse this handler.
+ * classified before they are encoded. Encoded replay packets are written
+ * through the {@code ReplayChannelWriter} closer to the pipeline's head and
+ * never traverse this handler.
  */
 final class ReplayViewerOutboundGate extends ChannelOutboundHandlerAdapter {
 

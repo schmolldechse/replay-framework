@@ -12,7 +12,7 @@ packet.
 |---|---|
 | Server | Paper `26.2.build.135-stable` |
 | Java | 26 |
-| PacketEvents | 2.14.0 |
+| Netty | 4.2.15, as shipped with Paper |
 | Protocol version | 776 |
 | Adapter ID | `paper-26.2` |
 | Adapter format revision | 5 |
@@ -36,7 +36,7 @@ exposes it to adapter discovery.
 | `packet` | protocol discovery, the native codec and every packet definition, split into `packet.clientbound` and `packet.serverbound` |
 | `argus` | the eye (`Paper26_2ArgusEye`), sampled time and weather (`Paper26_2AmbientSource`), sampled entity state (`Paper26_2SubjectStates`) and the platform queries Argus needs |
 | `actor` | effects the server sends to everyone except the acting player, derived from serverbound packets |
-| `capture` | the PacketEvents bridge, the serverbound receiver, capture context, source tagging and capture ordering |
+| `capture` | the capture bridge, the serverbound receiver, capture context, source tagging and capture ordering |
 | `checkpoint` | snapshots of a coverage and the capture barrier that separates them from later frames |
 | `playback` | rewriting, the viewer gate, injection, view reset, scene queries and interactions |
 
@@ -54,7 +54,7 @@ flowchart LR
         actor["Actor effects<br/>before and after reads"]
     end
     subgraph netty["Netty event loop, per player"]
-        pe["PacketEvents post-task<br/>final clientbound bytes"]
+        pe["ClientboundTap<br/>packet objects before encoding"]
         sb["Paper26_2ServerboundReceiver<br/>before packet_handler"]
     end
     eye --> defs["Clientbound definitions<br/>context, distribution, copies, state"]
@@ -70,10 +70,11 @@ flowchart LR
 - **Eyes** hand packet objects to Argus on the server thread before any
   encoding. Argus merges them and passes them through their clientbound
   definition to obtain their capture context.
-- **Player connections** are observed through a PacketEvents post-task. It
-  runs after all listeners and any wrapper re-encoding, parses the final
-  VarInt packet ID and copies the final uncompressed body without changing
-  the live buffer. Packets whose definition is not observable by eyes are
+- **Player connections** are observed by a `ClientboundTap` (shared, in
+  `paper-common`) directly before the server's `packet_handler`, the tail of
+  the pipeline. It sees every packet object before it is encoded and hands
+  the packets of a bundle over one by one; the packet is encoded once, for
+  the frame. Packets whose definition is not observable by eyes are
   tagged `PLAYER_ONLY`; packets that describe their recipient get the player
   as subject.
 - **Serverbound packets** are seen as decoded objects directly before the
@@ -107,7 +108,7 @@ flowchart TB
         live["Live server packets"] --> gate["ReplayViewerOutboundGate<br/>drops conflicting scene packets"]
         gate --> enc["Paper encoder"]
         frame["Replay frame"] --> rw["Paper26_2ReplayPacketRewriter<br/>definition policy, ID rewrite"]
-        rw --> writer["PacketEventsReplayWriter<br/>written from the PacketEvents<br/>encoder context"]
+        rw --> writer["ReplayChannelWriter<br/>written behind<br/>compression"]
         enc --> net["Compression, encryption, socket"]
         writer --> net
     end
@@ -123,7 +124,7 @@ flowchart TB
 |---|---|
 | `Paper26_2PlaybackBridge` | the session's bridge: batching, bounded outbound processing, world filter, scene and state queries |
 | `Paper26_2ReplayPacketRewriter` | applies each definition's playback policy and rewrites entity IDs and UUIDs into a session-local identity space |
-| `PacketEventsReplayWriter` | encodes a rebuilt packet with the live codec and writes it from the PacketEvents encoder context, skipping the gate, PacketEvents listeners and the Paper encoder, but keeping compression and encryption |
+| `ReplayChannelWriter` (shared) | writes encoded replay packets from an anchor behind `compress` (or `prepender`), skipping the gate, the clientbound tap and the server's encoder, but keeping compression, framing and encryption |
 | `ReplayViewerOutboundGate` | suppresses live scene packets that would conflict with the replay; passes the viewer's own chunk cache center and radius |
 | `Paper26_2ViewResetter` | removes replay-owned boss bars, tab entries, entities and block cracks on reset and close |
 | `Paper26_2SceneEntityTracker` | keeps type, position, name, health, equipment, effects and flags of every replay entity from the frames played |
@@ -132,8 +133,8 @@ flowchart TB
 | `Paper26_2BlockStateDecoder` | builds a container's contents from the block state track |
 | `ReplayEntityInteractions` | consumes `interact` and `attack` packets aimed at replay entities and `use_item_on` packets aimed at recorded containers |
 
-Replay packets are never observed or recaptured by PacketEvents, because
-they bypass its listeners.
+Replay packets are never recaptured, because they enter the pipeline head-side
+of the clientbound tap.
 
 A live `respawn` lifts the gate's isolation, so the viewer's client receives
 the new world's live chunks after a world change. Isolation resumes with the

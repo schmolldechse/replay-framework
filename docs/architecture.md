@@ -62,9 +62,9 @@ flowchart TD
 The scene of a recording comes from its own [virtual observers](virtual-observer.md):
 eyes the server serves like neutral players, merged into one scene per world.
 Packets only real players receive, such as sounds and chat, are captured from
-their connections through a PacketEvents post-task, after all listeners and
-optional wrapper re-encoding, so the stored packet ID and body are the final
-uncompressed bytes. The core routes every captured packet to each matching
+their connections by a channel handler at the tail of each connection's
+pipeline, which sees every packet object before the server encodes it. The
+core routes every captured packet to each matching
 recording session, so overlapping scopes remain isolated, and within a session
 to one of its [tracks](recording-tracks.md). A bounded queue prevents capture pressure from becoming
 unbounded memory use. Segment rotation, checkpoints, and finalization are
@@ -129,10 +129,11 @@ session's own clock and speed.
 The Paper adapter owns packet-level viewer isolation. A version catalog binds
 every supported PLAY packet to exactly one definition. The definition applies
 DROP/BLOCK policy before decode and otherwise owns the validated
-decode/read/rewrite/rebuild/encode flow. Rebuilt bytes are written from the
-PacketEvents encoder context, which deliberately skips the replay gate, Paper
-encoder, and PacketEvents listener path while retaining earlier transport
-handlers such as compression and encryption. Application UX remains
+decode/read/rewrite/rebuild/encode flow. Rebuilt bytes are written from an
+anchor handler directly behind the connection's compression, which skips the
+replay gate, the server's encoder and every handler other plugins placed
+around it while keeping compression, length framing and encryption.
+Application UX remains
 outside the framework: integrations decide where a viewer stands, what controls
 exist, and when normal player state is restored.
 

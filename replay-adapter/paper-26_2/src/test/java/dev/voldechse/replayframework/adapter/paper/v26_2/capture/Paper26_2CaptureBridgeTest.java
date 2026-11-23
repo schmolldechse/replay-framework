@@ -1,6 +1,5 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.capture;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -11,8 +10,6 @@ import dev.voldechse.replayframework.adapter.paper.packet.clientbound.Clientboun
 import dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.Paper26_2ClientboundPacketCatalog;
 import dev.voldechse.replayframework.api.recording.BlockPosition;
 import dev.voldechse.replayframework.format.PacketPhase;
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
 import java.util.Optional;
 import java.util.UUID;
 import net.kyori.adventure.key.Key;
@@ -144,26 +141,4 @@ class Paper26_2CaptureBridgeTest {
                 .require(descriptor.typeName());
         return definition.captureContext(packet, descriptor, connectionId, state, 0L);
     }
-
-    @Test
-    void copiesTheFinalPacketEventsBufferIncludingARewrittenPacketId() {
-        ByteBuf buffer = Unpooled.buffer();
-        try {
-            buffer.writeByte(99);
-            buffer.writeByte(0xAC);
-            buffer.writeByte(0x02);
-            buffer.writeBytes(new byte[] {4, 5, 6});
-            buffer.readerIndex(1);
-
-            Paper26_2CaptureBridge.ObservedWirePacket packet =
-                    Paper26_2CaptureBridge.copyWirePacket(buffer);
-
-            assertEquals(300, packet.packetId());
-            assertArrayEquals(new byte[] {4, 5, 6}, packet.payload());
-            assertEquals(1, buffer.readerIndex());
-        } finally {
-            buffer.release();
-        }
-    }
 }
-

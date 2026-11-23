@@ -45,6 +45,11 @@ public final class Paper26_2ArgusPlatform implements ArgusPlatform {
 
     @Override
     public List<Object> unbundle(Object packet) {
+        return unbundlePacket(packet);
+    }
+
+    /** The packets of a bundle, or the packet itself. */
+    public static List<Object> unbundlePacket(Object packet) {
         if (packet instanceof ClientboundBundlePacket bundle) {
             List<Object> parts = new ArrayList<>();
             bundle.subPackets().forEach(parts::add);

@@ -47,7 +47,7 @@ public final class Paper26_2PlaybackBridge implements PlaybackBridge {
     private final AtomicReference<State> state = new AtomicReference<>(State.NEW);
     private final AtomicBoolean failureReported = new AtomicBoolean();
     private final ReplayViewerOutboundGate gate;
-    private final PacketEventsReplayWriter replayWriter;
+    private final dev.voldechse.replayframework.adapter.paper.channel.ReplayChannelWriter replayWriter;
     private final Paper26_2ViewResetter resetter;
     private final AtomicReference<Paper26_2ReplayPacketRewriter> rewriter =
             new AtomicReference<>();
@@ -85,7 +85,8 @@ public final class Paper26_2PlaybackBridge implements PlaybackBridge {
         }
         this.connection = resolved;
         this.codec = new Paper26_2PacketCodec(accessor, connection, registry);
-        this.replayWriter = new PacketEventsReplayWriter(connection, this::fail);
+        this.replayWriter = new dev.voldechse.replayframework.adapter.paper.channel.ReplayChannelWriter(
+                connection.channel(), this::fail);
         this.resetter = new Paper26_2ViewResetter(registry, this::writeResetPacket, this::fail);
         this.gate = new ReplayViewerOutboundGate(
                 accessor,
@@ -100,6 +101,7 @@ public final class Paper26_2PlaybackBridge implements PlaybackBridge {
                     ReplayViewerOutboundGate.HANDLER_NAME,
                     gate,
                     this::fail);
+            replayWriter.install();
         } catch (Throwable failure) {
             fail(failure);
             throw failureAsRuntime(failure);
@@ -255,6 +257,7 @@ public final class Paper26_2PlaybackBridge implements PlaybackBridge {
         try {
             accessor.uninstallHandlerAndWait(connection, ReplayViewerOutboundGate.HANDLER_NAME);
             accessor.uninstallHandlerAndWait(connection, ReplayEntityInteractions.HANDLER_NAME);
+            replayWriter.uninstall();
         } catch (Throwable ignored) {
             // Channel teardown is best effort during quit and server shutdown.
         }
@@ -668,6 +671,7 @@ public final class Paper26_2PlaybackBridge implements PlaybackBridge {
         gate.close();
         try {
             accessor.uninstallHandlerAndWait(connection, ReplayViewerOutboundGate.HANDLER_NAME);
+            replayWriter.uninstall();
         } catch (Throwable ignored) {
             // Failure cleanup is best effort and must not escape Netty.
         }

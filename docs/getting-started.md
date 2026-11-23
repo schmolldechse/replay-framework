@@ -10,8 +10,6 @@ Prepare a Paper server with the following components:
 
 - Paper **26.2** running on **Java 26**. The pinned build is Paper 26.2
   build 135.
-- PacketEvents installed as a server plugin. The runtime declares it as a
-  required dependency.
 - A reachable PostgreSQL database. The framework uses it for the replay
   catalog, lifecycle state, leases, and metadata revisions.
 - One artifact storage choice: Local filesystem, Amazon S3, or SFTP.
@@ -26,10 +24,9 @@ schema.
    its corresponding runtime JAR.
 2. Copy the bundled JAR from `replay-runtime-paper/build/libs/` into the
    server's `plugins/` directory.
-3. Install PacketEvents in the same directory.
-4. Start the server once. The runtime creates
+3. Start the server once. The runtime creates
    `plugins/ReplayFramework/config.json` when it is missing.
-5. Stop the server, configure PostgreSQL and the desired storage backend, then
+4. Stop the server, configure PostgreSQL and the desired storage backend, then
    start it again.
 
 The generated configuration intentionally contains development-safe Local
