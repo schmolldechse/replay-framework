@@ -33,54 +33,70 @@ class SubjectStatesTest {
     private List<SubjectSample> current = List.of();
 
     @Test
-    void publishesAPlayerOnceAndAnEntityWheneverItChanges() {
+    void publishesTheCompleteStateFirstAndThenOnlyTheChanges() {
         SubjectStates states = new SubjectStates(services(), OBSERVATION, 1L);
 
-        current = List.of(player(), llama(1L));
+        current = List.of(player("a"));
         states.tick(COVERAGE);
-        current = List.of(player(), llama(1L));
+        current = List.of(player("a"));
         states.tick(COVERAGE);
-        current = List.of(player(), llama(2L));
+        current = List.of(player("b"));
         states.tick(COVERAGE);
 
-        assertEquals(List.of("Alex", "minecraft:llama:1", "minecraft:llama:2"), published);
+        assertEquals(List.of("Alex:a", "Alex:a->b"), published);
     }
 
     @Test
-    void publishesASubjectAgainWhenItReturns() {
+    void publishesASubjectCompletelyAgainWhenItReturns() {
         SubjectStates states = new SubjectStates(services(), OBSERVATION, 1L);
 
-        current = List.of(player());
+        current = List.of(player("a"));
         states.tick(COVERAGE);
         current = List.of();
         states.tick(COVERAGE);
-        current = List.of(player());
+        current = List.of(player("a"));
         states.tick(COVERAGE);
 
-        assertEquals(List.of("Alex", "Alex"), published);
+        assertEquals(List.of("Alex:a", "Alex:a"), published);
     }
 
     @Test
-    void samplesOnlyEveryInterval() {
+    void looksAtPlayersEveryTickAndAtEntitiesEveryInterval() {
         SubjectStates states = new SubjectStates(services(), OBSERVATION, 3L);
 
-        current = List.of(llama(1L));
+        current = List.of(player("a"), llama("1"));
         states.tick(COVERAGE);
-        current = List.of(llama(2L));
+        current = List.of(player("b"), llama("2"));
         states.tick(COVERAGE);
         states.tick(COVERAGE);
         states.tick(COVERAGE);
 
-        assertEquals(List.of("minecraft:llama:1", "minecraft:llama:2"), published);
+        assertEquals(List.of("Alex:a", "minecraft:llama:1", "Alex:a->b", "minecraft:llama:1->2"), published);
     }
 
-    private static SubjectSample player() {
-        return new SubjectSample(PLAYER, SubjectSample.Source.OBSERVED, 0L, () -> List.of("Alex"));
+    private static SubjectSample player(String state) {
+        return sample(PLAYER, SubjectSample.Cadence.EVERY_TICK, state);
     }
 
-    private static SubjectSample llama(long signature) {
-        return new SubjectSample(LLAMA, SubjectSample.Source.SAMPLED, signature,
-                () -> List.of("minecraft:llama:" + signature));
+    private static SubjectSample llama(String state) {
+        return sample(LLAMA, SubjectSample.Cadence.INTERVAL, state);
+    }
+
+    private static SubjectSample sample(CaptureSubject subject, SubjectSample.Cadence cadence, String state) {
+        return new SubjectSample(subject, cadence, state.hashCode(), () -> new Reading(subject.label(), state));
+    }
+
+    /** A reading that names its changes after the states it connects. */
+    private record Reading(String label, String state) implements SubjectSample.Reading {
+        @Override
+        public List<Object> packets() {
+            return List.of(label + ":" + state);
+        }
+
+        @Override
+        public List<Object> changesSince(SubjectSample.Reading previous) {
+            return List.of(label + ":" + ((Reading) previous).state() + "->" + state);
+        }
     }
 
     private ArgusServices services() {
@@ -146,9 +162,10 @@ class SubjectStatesTest {
             }
 
             @Override
-            public List<SubjectSample> subjects(String world, Collection<CuboidRegion> areas) {
+            public List<SubjectSample> subjects(
+                    String world, Collection<CuboidRegion> areas, SubjectSample.Cadence cadence) {
                 assertEquals("minecraft:overworld", world);
-                return current;
+                return current.stream().filter(sample -> sample.cadence() == cadence).toList();
             }
         };
         return new ArgusServices(platform, publisher, () -> 0L, failure -> {

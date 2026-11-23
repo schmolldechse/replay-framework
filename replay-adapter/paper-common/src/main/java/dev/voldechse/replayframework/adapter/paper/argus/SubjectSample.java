@@ -6,39 +6,56 @@ import java.util.Objects;
 import java.util.function.Supplier;
 
 /**
- * One reading of a subject's state on the server thread.
+ * One look at a subject's state on the server thread.
+ *
+ * <p>The signature is cheap to compute and changes whenever the state does.
+ * Only when it changed, or when the subject is new to a recording, Argus
+ * takes a {@link Reading} and publishes it.</p>
  *
  * @param subject the subject and its display label
- * @param source how changes of this subject reach the recording
- * @param signature a value that changes whenever the state changes; compared
- *                  only for {@link Source#SAMPLED} subjects
- * @param packets builds the native packets that carry the complete state; only
- *                called when the state is published
+ * @param cadence how often the subject is looked at
+ * @param signature a value that changes whenever the recorded state changes
+ * @param reading takes a reading of the complete state; only called when it
+ *                is published
  */
 public record SubjectSample(
         CaptureSubject subject,
-        Source source,
+        Cadence cadence,
         long signature,
-        Supplier<List<Object>> packets) {
+        Supplier<Reading> reading) {
 
     public SubjectSample {
         Objects.requireNonNull(subject, "subject");
-        Objects.requireNonNull(source, "source");
-        Objects.requireNonNull(packets, "packets");
+        Objects.requireNonNull(cadence, "cadence");
+        Objects.requireNonNull(reading, "reading");
     }
 
-    /** How the changes of a subject's state are recorded. */
-    public enum Source {
+    /** How often a subject is looked at. */
+    public enum Cadence {
         /**
-         * The subject receives its changes itself, like a player's own
-         * connection. Argus publishes its complete state only when it comes
-         * into a recording.
+         * Every server tick, for subjects whose state changes often and is
+         * watched closely, such as a player's inventory.
          */
-        OBSERVED,
+        EVERY_TICK,
+        /** Every sampling interval of the recording, such as an entity's inventory. */
+        INTERVAL
+    }
+
+    /** A snapshot of a subject's state, as native packets. */
+    public interface Reading {
+
+        /** The native packets that carry the complete state. */
+        List<Object> packets();
+
         /**
-         * Nobody receives the changes. Argus publishes the complete state when
-         * the subject comes into a recording and whenever its signature changes.
+         * The native packets that turn the previous reading into this one,
+         * such as only the slots that changed. The default is the complete
+         * state.
+         *
+         * @param previous the reading published before
          */
-        SAMPLED
+        default List<Object> changesSince(Reading previous) {
+            return packets();
+        }
     }
 }

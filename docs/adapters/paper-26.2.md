@@ -212,9 +212,9 @@ generated from the definitions' declarations.
 | 15 | `minecraft:command_suggestions` | ui | ephemeral | viewer-local | no | - |  |
 | 16 | `minecraft:commands` | ui | stateful | viewer-local | no | - |  |
 | 17 | `minecraft:container_close` | ui | stateful | viewer-local | no | - |  |
-| 18 | `minecraft:container_set_content` | ui | stateful | viewer-local | no | own state, window 0 | window 0 is the recipient's own inventory |
+| 18 | `minecraft:container_set_content` | ui | stateful | viewer-local | no | - | the inventory is read every tick by Argus |
 | 19 | `minecraft:container_set_data` | ui | stateful | viewer-local | no | - |  |
-| 20 | `minecraft:container_set_slot` | ui | stateful | viewer-local | no | own state, window 0 | window 0 is the recipient's own inventory |
+| 20 | `minecraft:container_set_slot` | ui | stateful | viewer-local | no | - | the inventory is read every tick by Argus |
 | 21 | `minecraft:cookie_request` | connection | control | blocked | no | - |  |
 | 22 | `minecraft:cooldown` | ui | stateful | viewer-local | no | - |  |
 | 23 | `minecraft:custom_chat_completions` | chat | stateful | viewer-local | no | - |  |
@@ -299,10 +299,10 @@ generated from the definitions' declarations.
 | 102 | `minecraft:set_equipment` | entity | stateful | replayed, IDs rewritten | yes | eye, broadcast |  |
 | 103 | `minecraft:set_experience` | player | stateful | viewer-local | no | own state |  |
 | 104 | `minecraft:set_health` | player | stateful | viewer-local | no | own state |  |
-| 105 | `minecraft:set_held_slot` | player | stateful | viewer-local | no | own state |  |
+| 105 | `minecraft:set_held_slot` | player | stateful | viewer-local | no | - | the selected slot is read every tick by Argus |
 | 106 | `minecraft:set_objective` | scoreboard | stateful | viewer-local | no | - |  |
 | 107 | `minecraft:set_passengers` | entity | stateful | replayed, IDs rewritten | yes | eye, broadcast |  |
-| 108 | `minecraft:set_player_inventory` | ui | stateful | viewer-local | no | own state |  |
+| 108 | `minecraft:set_player_inventory` | ui | stateful | viewer-local | no | - | the inventory is read every tick by Argus |
 | 109 | `minecraft:set_player_team` | scoreboard | stateful | viewer-local | no | - |  |
 | 110 | `minecraft:set_score` | scoreboard | stateful | viewer-local | no | - |  |
 | 111 | `minecraft:set_simulation_distance` | world | stateful | replayed | yes | view-local |  |

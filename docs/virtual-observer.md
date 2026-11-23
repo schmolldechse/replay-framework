@@ -72,9 +72,9 @@ one source, so no scene change is recorded twice.
 |---|---|---|
 | eyes | `OBSERVER` | everything the chunk system and the entity tracker send: chunks, light, blocks, block entities, entity spawn, movement, metadata, equipment, attributes, effects, removal |
 | sampled world state | `OBSERVER` | time and weather |
-| sampled subject state | `OBSERVER` | the inventories of entities, see [subject state](#subject-state) |
+| sampled subject state | `OBSERVER` | the inventories of players every tick and of entities, see [subject state](#subject-state) |
 | ears | `PLAYER_ONLY` | packets the server sends to listed players only: sounds, particles, level events, explosions, boss bars, world border, chat, player profiles, the tab list |
-| own state | `PLAYER_ONLY` | the recipient's own inventory, held slot, health and experience, kept in its state track |
+| own state | `PLAYER_ONLY` | the recipient's own health and experience, kept in its state track |
 | actor effects | `PLAYER_ONLY` | effects the server sends to everyone except the acting player, derived where no other player received them |
 
 Packets that describe one player's own view, such as its chunk cache center
@@ -333,9 +333,13 @@ only to the entity itself or to whoever opens it: a player's inventory, its
 health and experience, the chest of a llama. Argus records it per subject,
 in a state track of its own:
 
-- A player's own connection receives its inventory, held slot, health and
-  experience. Those packets are captured from the player's connection and
-  routed to the player's state track.
+- Argus reads a player's inventory and selected slot every tick and
+  publishes the slots that changed. The player's own connection is not
+  enough: in creative mode and while a chest is open the server does not
+  send the player every change of its inventory.
+- A player's health, food and experience are always sent to the player.
+  Those packets are captured from its connection and routed to its state
+  track.
 - Nobody receives an entity's inventory unless they open it. Argus reads it
   every `stateSampleInterval` and publishes the native packets when it
   changed.

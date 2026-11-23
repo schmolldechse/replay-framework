@@ -33,8 +33,9 @@ import org.bukkit.scheduler.BukkitTask;
  * sections of its inventory and its vitals, at the current playback position.
  *
  * <p>It opens when a viewer right-clicks an entity of the replay, or a player
- * in the players menu. While it is open it follows the playback once per
- * second.</p>
+ * in the players menu. While it is open it follows the playback every other
+ * tick and changes only the slots whose item changed, so the view does not
+ * flicker.</p>
  *
  * <p>Row 1 holds the equipment and an info item. A state with a hotbar and an
  * inventory is laid out like a player inventory: the inventory in rows 2 to
@@ -43,7 +44,7 @@ import org.bukkit.scheduler.BukkitTask;
  */
 public final class SubjectMenu implements AutoCloseable {
     private static final int SIZE = 54;
-    private static final long REFRESH_TICKS = 20L;
+    private static final long REFRESH_TICKS = 2L;
     private static final List<EquipmentSlot> EQUIPMENT_ROW = List.of(
             EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET,
             EquipmentSlot.BODY, EquipmentSlot.OFF_HAND, EquipmentSlot.HAND);
@@ -124,6 +125,10 @@ public final class SubjectMenu implements AutoCloseable {
     }
 
     private void refresh(MenuHolder holder) {
+        if (holder.querying) {
+            // The previous query has not answered yet; it shows the newer state anyway.
+            return;
+        }
         Optional<RecordedEntity> entity = holder.session.entities().stream()
                 .filter(candidate -> candidate.id().equals(holder.entityId))
                 .findFirst();
@@ -131,51 +136,61 @@ public final class SubjectMenu implements AutoCloseable {
             render(holder, entity, Optional.empty());
             return;
         }
+        holder.querying = true;
         holder.session.state(holder.subject.get()).whenComplete((state, failure) ->
-                Bukkit.getScheduler().runTask(plugin, () -> render(
-                        holder, entity, failure == null ? state : Optional.empty())));
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    holder.querying = false;
+                    render(holder, entity, failure == null ? state : Optional.empty());
+                }));
     }
 
     private void render(MenuHolder holder, Optional<RecordedEntity> entity, Optional<SubjectState> state) {
+        ItemStack[] wanted = layout(entity, state);
         Inventory inventory = holder.inventory;
-        inventory.clear();
+        for (int slot = 0; slot < SIZE; slot++) {
+            ItemStack shown = inventory.getItem(slot);
+            boolean empty = wanted[slot] == null || wanted[slot].getType().isAir();
+            boolean shownEmpty = shown == null || shown.getType().isAir();
+            if (empty ? !shownEmpty : !wanted[slot].equals(shown)) {
+                inventory.setItem(slot, empty ? null : wanted[slot]);
+            }
+        }
+    }
+
+    /** What the menu shows for a state: equipment and info in row 1, the sections below. */
+    private static ItemStack[] layout(Optional<RecordedEntity> entity, Optional<SubjectState> state) {
+        ItemStack[] slots = new ItemStack[SIZE];
         Map<EquipmentSlot, ItemStack> equipment = state.map(SubjectState::equipment)
                 .filter(worn -> !worn.isEmpty())
                 .or(() -> entity.map(RecordedEntity::equipment))
                 .orElse(Map.of());
         for (int slot = 0; slot < EQUIPMENT_ROW.size(); slot++) {
-            ItemStack item = equipment.get(EQUIPMENT_ROW.get(slot));
-            if (item != null) {
-                inventory.setItem(slot, item);
-            }
+            slots[slot] = equipment.get(EQUIPMENT_ROW.get(slot));
         }
-        inventory.setItem(INFO_SLOT, info(entity, state));
+        slots[INFO_SLOT] = info(entity, state);
 
         if (state.isEmpty()) {
-            return;
+            return slots;
         }
         Optional<SubjectState.Section> hotbar = state.get().section(SubjectState.HOTBAR);
         Optional<SubjectState.Section> main = state.get().section(SubjectState.INVENTORY);
         if (hotbar.isPresent() && main.isPresent()) {
-            place(inventory, 9, main.get().items(), 27);
-            place(inventory, 36, hotbar.get().items(), 9);
-            hotbar.get().selected().ifPresent(selected ->
-                    inventory.setItem(45 + selected, marker("Selected slot")));
-            return;
+            place(slots, 9, main.get().items(), 27);
+            place(slots, 36, hotbar.get().items(), 9);
+            hotbar.get().selected().ifPresent(selected -> slots[45 + selected] = marker("Selected slot"));
+            return slots;
         }
         int next = 9;
         for (SubjectState.Section section : state.get().sections()) {
-            next = place(inventory, next, section.items(), SIZE - next);
+            next = place(slots, next, section.items(), SIZE - next);
         }
+        return slots;
     }
 
-    private static int place(Inventory inventory, int start, List<ItemStack> items, int room) {
+    private static int place(ItemStack[] slots, int start, List<ItemStack> items, int room) {
         int count = Math.min(items.size(), room);
         for (int index = 0; index < count; index++) {
-            ItemStack item = items.get(index);
-            if (item != null && !item.getType().isAir()) {
-                inventory.setItem(start + index, item);
-            }
+            slots[start + index] = items.get(index);
         }
         return start + count;
     }
@@ -259,6 +274,7 @@ public final class SubjectMenu implements AutoCloseable {
         private final Optional<RecordedSubject> subject;
         private Inventory inventory;
         private BukkitTask refresh;
+        private boolean querying;
 
         private MenuHolder(
                 UUID viewerId, PlaybackSession session, UUID entityId, Optional<RecordedSubject> subject) {

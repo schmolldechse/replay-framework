@@ -110,14 +110,14 @@ public final class Paper26_2ArgusPlatform implements ArgusPlatform {
     }
 
     @Override
-    public List<SubjectSample> subjects(String world, Collection<CuboidRegion> areas) {
+    public List<SubjectSample> subjects(String world, Collection<CuboidRegion> areas, SubjectSample.Cadence cadence) {
         List<AABB> boxes = new ArrayList<>(areas.size());
         for (CuboidRegion area : areas) {
             boxes.add(new AABB(
                     area.min().x(), area.min().y(), area.min().z(),
                     area.max().x() + 1.0D, area.max().y() + 1.0D, area.max().z() + 1.0D));
         }
-        return Paper26_2SubjectStates.samples(level(world), boxes);
+        return Paper26_2SubjectStates.samples(level(world), boxes, cadence);
     }
 
     private static ServerLevel level(String worldKey) {

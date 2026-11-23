@@ -27,6 +27,11 @@ import java.util.function.Function;
  * <p>A state is the checkpoint of the subject's track at the barrier the
  * playback position lies after, followed by the track's frames up to the
  * position. The bridge turns these frames into the version-neutral state.</p>
+ *
+ * <p>Integrations ask for a state often, for example to follow it in a menu.
+ * Each track therefore keeps the checkpoint of its last barrier and its last
+ * decoded state; a query whose barrier and frames are unchanged returns that
+ * state without reading the checkpoint or decoding again.</p>
  */
 final class StateTracks implements AutoCloseable {
 
@@ -36,6 +41,8 @@ final class StateTracks implements AutoCloseable {
     private final PlaybackBridge bridge;
     private final Function<TrackDescriptor, CompletionStage<MergedTrackData.Track>> opener;
     private final Map<Integer, CompletableFuture<MergedTrackData.Track>> open = new ConcurrentHashMap<>();
+    private final Map<Integer, CachedCheckpoint> checkpoints = new ConcurrentHashMap<>();
+    private final Map<Integer, CachedState> states = new ConcurrentHashMap<>();
     private volatile boolean closed;
 
     /**
@@ -86,21 +93,60 @@ final class StateTracks implements AutoCloseable {
         SeekPoint barrier = reference.seekCheckpointFloor(position)
                 .orElseThrow(() -> new IllegalStateException("replay has no checkpoint before " + position));
         long end = Math.min(position.toNanos() + 1L, durationNanos + 1L);
+        int trackId = track.get().id();
+        int ordinal = barrier.checkpointOrdinal();
         return open(track.get()).thenCompose(data -> {
-            CompletionStage<List<RawPacketFrame>> checkpoint = data.data().checkpointFrames(data.anchor(barrier));
-            CompletionStage<List<RawPacketFrame>> deltas =
-                    data.data().framesAfter(data.anchor(barrier), Duration.ofNanos(end));
-            return checkpoint.thenCombine(deltas, (base, after) -> {
-                if (base.isEmpty() && after.isEmpty()) {
-                    // Outside the recording's scope at this position.
-                    return Optional.<SubjectState>empty();
-                }
-                List<RawPacketFrame> frames = new ArrayList<>(base.size() + after.size());
-                frames.addAll(base);
-                frames.addAll(after);
-                return bridge.decodeState(subject, frames);
-            });
+            SeekPoint anchor = data.anchor(barrier);
+            CompletionStage<List<RawPacketFrame>> checkpoint = checkpoint(trackId, ordinal, data, anchor);
+            CompletionStage<List<RawPacketFrame>> deltas = data.data().framesAfter(anchor, Duration.ofNanos(end));
+            return checkpoint.thenCombine(deltas, (base, after) -> decode(trackId, ordinal, subject, base, after));
         });
+    }
+
+    /** The checkpoint frames of a track at a barrier, read once per barrier. */
+    private CompletionStage<List<RawPacketFrame>> checkpoint(
+            int trackId, int ordinal, MergedTrackData.Track data, SeekPoint anchor) {
+        CachedCheckpoint cached = checkpoints.get(trackId);
+        if (cached != null && cached.ordinal() == ordinal && !cached.frames().isCompletedExceptionally()) {
+            return cached.frames();
+        }
+        CompletableFuture<List<RawPacketFrame>> frames =
+                data.data().checkpointFrames(anchor).toCompletableFuture();
+        checkpoints.put(trackId, new CachedCheckpoint(ordinal, frames));
+        return frames;
+    }
+
+    /**
+     * Decodes the state, unless the frames since the barrier are the same as
+     * at the last query. Frames after a barrier only grow with the position,
+     * so the same barrier and the same number of frames mean the same state.
+     */
+    private Optional<SubjectState> decode(
+            int trackId, int ordinal, RecordedSubject subject, List<RawPacketFrame> base, List<RawPacketFrame> after) {
+        CachedState cached = states.get(trackId);
+        if (cached != null && cached.ordinal() == ordinal && cached.frames() == after.size()) {
+            return cached.state();
+        }
+        Optional<SubjectState> state;
+        if (base.isEmpty() && after.isEmpty()) {
+            // Outside the recording's scope at this position.
+            state = Optional.empty();
+        } else {
+            List<RawPacketFrame> frames = new ArrayList<>(base.size() + after.size());
+            frames.addAll(base);
+            frames.addAll(after);
+            state = bridge.decodeState(subject, frames);
+        }
+        states.put(trackId, new CachedState(ordinal, after.size(), state));
+        return state;
+    }
+
+    /** The checkpoint of a track at the barrier with this ordinal. */
+    private record CachedCheckpoint(int ordinal, CompletableFuture<List<RawPacketFrame>> frames) {
+    }
+
+    /** The state decoded from a barrier's checkpoint and this many frames after it. */
+    private record CachedState(int ordinal, int frames, Optional<SubjectState> state) {
     }
 
     /** Adds the state track subject to an entity, when the recording has one for it. */
@@ -124,6 +170,8 @@ final class StateTracks implements AutoCloseable {
         closed = true;
         open.values().forEach(track -> track.thenAccept(opened -> opened.data().close()));
         open.clear();
+        checkpoints.clear();
+        states.clear();
     }
 
     private CompletableFuture<MergedTrackData.Track> open(TrackDescriptor track) {

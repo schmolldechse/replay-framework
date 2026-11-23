@@ -85,14 +85,22 @@ A state track is filled by one of two sources. Both produce the native
 packets the server sends a client that views the subject, so a state track
 is packet-based like every other track.
 
-- **Observed.** A player's own connection receives its state. In 26.2 the
-  player's own `container_set_content` and `container_set_slot` for window
-  0, `set_player_inventory`, `set_held_slot`, `set_health` and
-  `set_experience` describe their recipient and go to its state track.
-- **Sampled.** Nobody receives an entity's inventory unless they open it.
-  `Paper26_2SubjectStates` reads it on the server thread every
-  `ObserverOptions.stateSampleInterval` and emits the packets when the
-  state's signature changed.
+- **Observed.** The server always sends a player its health, food and
+  experience. In 26.2 the player's own `set_health` and `set_experience`
+  describe their recipient and go to its state track.
+- **Sampled.** `Paper26_2SubjectStates` reads the state on the server thread
+  and emits packets when its signature changed:
+  - a player's inventory and selected slot **every tick**, as
+    `container_set_slot` for each changed slot of window 0 and
+    `set_held_slot`; more than 12 changed slots become one
+    `container_set_content`. The server does not tell a player about every
+    change of its own inventory: in creative mode the client sets its slots
+    itself, and while a chest is open the inventory is updated through the
+    chest's window. Reading the inventory records every change within one
+    tick.
+  - an entity's inventory every `ObserverOptions.stateSampleInterval`, as
+    one `container_set_content`, because nobody receives it unless they open
+    the entity.
 
 When a subject comes into a watch's coverage, its complete state is
 published. A subject that leaves the coverage keeps its track, which

@@ -1,7 +1,6 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.definition.ui;
 
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
-import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RecipientState;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketClassification;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
@@ -16,6 +15,10 @@ import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2Repla
  * updates. Its stack may carry arbitrary registered data components. Recorded
  * slot updates are consequently dropped before decode so they cannot corrupt
  * the observer's live menu or cursor/inventory synchronization.</p>
+ *
+ * <p>Not part of the recipient's state track: the server does not send every
+ * change of a player's own inventory or selected slot, so Argus reads both
+ * every tick instead (see {@code Paper26_2SubjectStates}).</p>
  */
 final class Id020ContainerSetSlotPacketDefinition
         extends ClientboundPacketDefinition<Paper26_2ReplayPacketRewriter> {
@@ -29,13 +32,5 @@ final class Id020ContainerSetSlotPacketDefinition
                 IDENTIFIER,
                 PacketClassification.stateful(
                         PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
-    }
-
-    /** A slot of the recipient's own inventory, window 0, is part of its state. */
-    @Override
-    public RecipientState recipientState() {
-        return RecipientState.when(
-                net.minecraft.network.protocol.game.ClientboundContainerSetSlotPacket.class,
-                packet -> packet.getContainerId() == 0);
     }
 }

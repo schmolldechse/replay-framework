@@ -1,7 +1,6 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.definition.ui;
 
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
-import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RecipientState;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketClassification;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
@@ -17,6 +16,10 @@ import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2Repla
  * packets, but both forms still target the recorded client's menu. Replaying
  * either form could overwrite the observer's unrelated inventory, so recorded
  * content is dropped before registry-dependent decoding.</p>
+ *
+ * <p>Not part of the recipient's state track: the server does not send every
+ * change of a player's own inventory or selected slot, so Argus reads both
+ * every tick instead (see {@code Paper26_2SubjectStates}).</p>
  */
 final class Id018ContainerSetContentPacketDefinition
         extends ClientboundPacketDefinition<Paper26_2ReplayPacketRewriter> {
@@ -30,13 +33,5 @@ final class Id018ContainerSetContentPacketDefinition
                 IDENTIFIER,
                 PacketClassification.stateful(
                         PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
-    }
-
-    /** The content of the recipient's own inventory, window 0, is part of its state; other windows are containers it opened. */
-    @Override
-    public RecipientState recipientState() {
-        return RecipientState.when(
-                net.minecraft.network.protocol.game.ClientboundContainerSetContentPacket.class,
-                packet -> packet.containerId() == 0);
     }
 }

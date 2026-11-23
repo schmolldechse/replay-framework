@@ -125,10 +125,10 @@ disguised chat to recipients that hide the sender is recorded once per form.
 
 ## Recipient state
 
-Some packets a player receives describe that player rather than the scene:
-its inventory, held slot, health and experience. They are not part of the
-scene and are never replayed into the viewer's own inventory or HUD, but
-they are the only source of that player's state.
+Some packets a player receives describe that player rather than the scene,
+such as its health and experience. They are not part of the scene and are
+never replayed into the viewer's own HUD, but they are a source of that
+player's state.
 
 Every definition declares whether its packet describes its recipient
 (`RecipientState`):
@@ -136,8 +136,8 @@ Every definition declares whether its packet describes its recipient
 | Declaration | Meaning | 26.2 examples |
 |---|---|---|
 | `none` | the packet does not describe its recipient | default |
-| `always` | every copy describes the recipient | `set_health`, `set_experience`, `set_held_slot`, `set_player_inventory` |
-| `when(...)` | only copies that match a condition do | `container_set_content` and `container_set_slot` for window 0, the player's own inventory |
+| `always` | every copy describes the recipient | `set_health`, `set_experience` |
+| `when(...)` | only copies that match a condition do | none in 26.2 |
 
 A packet that describes its recipient names the recipient as its subject.
 The core then writes it to that player's state track instead of the scene;
@@ -145,9 +145,13 @@ see [recording tracks](recording-tracks.md#subjects). Copies of other
 players are irrelevant here, because each player receives only its own
 state.
 
+A player's inventory and selected slot are not declared. The server does
+not send a player every change of them: in creative mode the client sets
+its slots itself, and while a container is open the inventory is updated
+through that container's window. Argus therefore reads both every tick.
 The state of entities nobody receives without opening them, such as the
-chest of a llama, has no packet to capture. Argus samples it on the server
-thread instead; see [subject state](virtual-observer.md#subject-state).
+chest of a llama, has no packet to capture either and is sampled too; see
+[subject state](virtual-observer.md#subject-state).
 
 ## Adapter responsibilities
 

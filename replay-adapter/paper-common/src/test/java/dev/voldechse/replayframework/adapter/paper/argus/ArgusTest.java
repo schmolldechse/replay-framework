@@ -545,7 +545,8 @@ class ArgusTest {
         @Override
         public List<SubjectSample> subjects(
                 String world,
-                java.util.Collection<dev.voldechse.replayframework.api.recording.CuboidRegion> areas) {
+                java.util.Collection<dev.voldechse.replayframework.api.recording.CuboidRegion> areas,
+                SubjectSample.Cadence cadence) {
             return List.of();
         }
 

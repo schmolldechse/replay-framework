@@ -10,6 +10,7 @@ import java.util.function.Predicate;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientboundContainerSetContentPacket;
+import net.minecraft.network.protocol.game.ClientboundContainerSetSlotPacket;
 import net.minecraft.network.protocol.game.ClientboundSetExperiencePacket;
 import net.minecraft.network.protocol.game.ClientboundSetHealthPacket;
 import net.minecraft.network.protocol.game.ClientboundSetHeldSlotPacket;
@@ -34,33 +35,111 @@ import net.minecraft.world.phys.AABB;
  * and donkeys, mules and llamas have one once a chest is attached. It is
  * carried by the packet the server sends when the inventory is opened.</p>
  *
+ * <p>A player's inventory and selected slot are looked at every tick. The
+ * server does not tell a player about every change of its own inventory: in
+ * creative mode the client sets its slots itself, and while a container is
+ * open the inventory is updated through that container's window. Reading the
+ * inventory itself records every change. Health, food and experience are
+ * always sent to the player and are recorded from its connection.</p>
+ *
  * <p>Called on the server thread. The packets hold copies of the items, so
  * they can be encoded later on another thread.</p>
  */
 public final class Paper26_2SubjectStates {
 
+    /** Above this many changed slots, one packet with all slots is smaller than one per slot. */
+    static final int MAX_SLOT_CHANGES = 12;
+
     private Paper26_2SubjectStates() {
     }
 
-    /** Samples every subject of a level inside the areas, for Argus. */
-    public static List<SubjectSample> samples(ServerLevel level, List<AABB> areas) {
+    /** Looks at the subjects of a level inside the areas that are due at a cadence, for Argus. */
+    public static List<SubjectSample> samples(ServerLevel level, List<AABB> areas, SubjectSample.Cadence cadence) {
         List<SubjectSample> samples = new ArrayList<>();
-        for (ServerPlayer player : level.players()) {
-            if (inside(areas, player)) {
-                samples.add(new SubjectSample(
-                        subject(player), SubjectSample.Source.OBSERVED, 0L,
-                        () -> List.copyOf(playerState(player))));
+        if (cadence == SubjectSample.Cadence.EVERY_TICK) {
+            for (ServerPlayer player : level.players()) {
+                if (inside(areas, player)) {
+                    List<ItemStack> items = player.inventoryMenu.getItems();
+                    int selected = player.getInventory().getSelectedSlot();
+                    samples.add(new SubjectSample(
+                            subject(player), cadence, 31L * signature(items) + selected,
+                            () -> PlayerReading.of(player)));
+                }
             }
+            return samples;
         }
         for (AABB area : areas) {
             for (Entity entity : level.getEntities((Entity) null, area, entity -> container(entity).isPresent())) {
                 List<ItemStack> items = container(entity).orElseThrow();
                 samples.add(new SubjectSample(
-                        subject(entity), SubjectSample.Source.SAMPLED, signature(items),
-                        () -> List.copyOf(entityState(items))));
+                        subject(entity), cadence, signature(items),
+                        () -> {
+                            List<Object> packets = List.copyOf(entityState(items));
+                            return () -> packets;
+                        }));
             }
         }
         return samples;
+    }
+
+    /**
+     * A player's inventory window, selected slot, health and experience at one
+     * moment. Its changes are the slots that differ and the selected slot.
+     */
+    record PlayerReading(
+            int stateId,
+            List<ItemStack> items,
+            int selected,
+            float health,
+            int food,
+            float saturation,
+            float experienceProgress,
+            int totalExperience,
+            int experienceLevel) implements SubjectSample.Reading {
+
+        static PlayerReading of(ServerPlayer player) {
+            var menu = player.inventoryMenu;
+            return new PlayerReading(
+                    menu.getStateId(),
+                    copies(menu.getItems()),
+                    player.getInventory().getSelectedSlot(),
+                    player.getHealth(),
+                    player.getFoodData().getFoodLevel(),
+                    player.getFoodData().getSaturationLevel(),
+                    player.experienceProgress,
+                    player.totalExperience,
+                    player.experienceLevel);
+        }
+
+        @Override
+        public List<Object> packets() {
+            return List.of(
+                    new ClientboundContainerSetContentPacket(0, stateId, copies(items), ItemStack.EMPTY),
+                    new ClientboundSetHeldSlotPacket(selected),
+                    new ClientboundSetHealthPacket(health, food, saturation),
+                    new ClientboundSetExperiencePacket(experienceProgress, totalExperience, experienceLevel));
+        }
+
+        @Override
+        public List<Object> changesSince(SubjectSample.Reading previous) {
+            if (!(previous instanceof PlayerReading before) || before.items.size() != items.size()) {
+                return packets();
+            }
+            List<Object> changes = new ArrayList<>();
+            for (int slot = 0; slot < items.size(); slot++) {
+                if (!ItemStack.matches(items.get(slot), before.items.get(slot))) {
+                    changes.add(new ClientboundContainerSetSlotPacket(0, stateId, slot, items.get(slot).copy()));
+                }
+            }
+            if (changes.size() > MAX_SLOT_CHANGES) {
+                changes.clear();
+                changes.add(new ClientboundContainerSetContentPacket(0, stateId, copies(items), ItemStack.EMPTY));
+            }
+            if (selected != before.selected) {
+                changes.add(new ClientboundSetHeldSlotPacket(selected));
+            }
+            return changes;
+        }
     }
 
     /** The complete state of every subject of a level that the scope contains, for a checkpoint. */
@@ -82,17 +161,11 @@ public final class Paper26_2SubjectStates {
 
     /** The packets the server sends a joining player about itself. */
     static List<Packet<?>> playerState(ServerPlayer player) {
-        var menu = player.inventoryMenu;
-        return List.of(
-                new ClientboundContainerSetContentPacket(
-                        menu.containerId, menu.getStateId(), copies(menu.getItems()), ItemStack.EMPTY),
-                new ClientboundSetHeldSlotPacket(player.getInventory().getSelectedSlot()),
-                new ClientboundSetHealthPacket(
-                        player.getHealth(),
-                        player.getFoodData().getFoodLevel(),
-                        player.getFoodData().getSaturationLevel()),
-                new ClientboundSetExperiencePacket(
-                        player.experienceProgress, player.totalExperience, player.experienceLevel));
+        List<Packet<?>> packets = new ArrayList<>();
+        for (Object packet : PlayerReading.of(player).packets()) {
+            packets.add((Packet<?>) packet);
+        }
+        return packets;
     }
 
     /** The packet the server sends when the entity's inventory is opened. */

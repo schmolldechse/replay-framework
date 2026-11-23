@@ -53,9 +53,10 @@ public interface ArgusPlatform {
     Object removePlayerInfo(List<UUID> players);
 
     /**
-     * Reads the subjects with state of their own inside the areas of one
-     * world: its players, and entities whose state no client receives
-     * without opening them, such as the inventory of a llama.
+     * Looks at the subjects with state of their own inside the areas of one
+     * world that are due at a cadence: its players every tick, and at the
+     * sampling interval the entities whose state no client receives without
+     * opening them, such as the inventory of a llama.
      */
-    List<SubjectSample> subjects(String world, Collection<CuboidRegion> areas);
+    List<SubjectSample> subjects(String world, Collection<CuboidRegion> areas, SubjectSample.Cadence cadence);
 }

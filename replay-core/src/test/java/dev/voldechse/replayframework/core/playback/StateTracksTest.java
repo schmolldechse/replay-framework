@@ -32,6 +32,8 @@ class StateTracksTest {
             new SeekPoint(0L, 0, 0, 0L), new SeekPoint(10_000_000_000L, 1, 0, 0L)));
 
     private final AtomicInteger opened = new AtomicInteger();
+    private final AtomicInteger checkpointReads = new AtomicInteger();
+    private final AtomicInteger decodes = new AtomicInteger();
 
     @Test
     void readsTheCheckpointOfTheBarrierAndTheFramesUpToThePosition() {
@@ -43,6 +45,23 @@ class StateTracksTest {
         assertEquals(Optional.of(2), frameCount(states, Duration.ofSeconds(5)));
         assertEquals(Optional.of(3), frameCount(states, Duration.ofMillis(11_500)));
         assertEquals(1, opened.get());
+    }
+
+    @Test
+    void repeatedQueriesReuseTheCheckpointAndTheDecodedState() {
+        FakeTrack track = new FakeTrack(
+                Map.of(0, List.of(frame(0L)), 1, List.of(frame(10_000_000_000L))),
+                List.of(frame(2_000_000_000L), frame(3_000_000_000L)));
+        StateTracks states = states(track);
+
+        assertEquals(Optional.of(2), frameCount(states, Duration.ofMillis(2_500)));
+        assertEquals(Optional.of(2), frameCount(states, Duration.ofMillis(2_600)));
+        assertEquals(Optional.of(3), frameCount(states, Duration.ofMillis(3_500)));
+        assertEquals(1, checkpointReads.get());
+        assertEquals(2, decodes.get());
+
+        assertEquals(Optional.of(1), frameCount(states, Duration.ofSeconds(11)));
+        assertEquals(2, checkpointReads.get());
     }
 
     @Test
@@ -79,7 +98,7 @@ class StateTracksTest {
     }
 
     /** Reports the number of frames it was given as the experience level. */
-    private static final class CountingBridge implements PlaybackBridge {
+    private final class CountingBridge implements PlaybackBridge {
         @Override
         public void setIdentityContext(PlaybackIdentityContext context) {
         }
@@ -98,13 +117,20 @@ class StateTracksTest {
 
         @Override
         public Optional<SubjectState> decodeState(RecordedSubject subject, List<RawPacketFrame> frames) {
+            decodes.incrementAndGet();
             return Optional.of(new SubjectState(Map.of(), List.of(), Optional.empty(),
                     Optional.of(new SubjectState.Experience(frames.size(), 0.0F, 0))));
         }
     }
 
-    private record FakeTrack(Map<Integer, List<RawPacketFrame>> checkpoints, List<RawPacketFrame> frames)
-            implements PlaybackTimeline.PlaybackData {
+    private final class FakeTrack implements PlaybackTimeline.PlaybackData {
+        private final Map<Integer, List<RawPacketFrame>> checkpoints;
+        private final List<RawPacketFrame> frames;
+
+        private FakeTrack(Map<Integer, List<RawPacketFrame>> checkpoints, List<RawPacketFrame> frames) {
+            this.checkpoints = checkpoints;
+            this.frames = frames;
+        }
 
         @Override
         public CompletionStage<PlaybackTimeline.BufferProgress> ensureAvailable(
@@ -115,6 +141,7 @@ class StateTracksTest {
 
         @Override
         public CompletionStage<List<RawPacketFrame>> checkpointFrames(SeekPoint point) {
+            checkpointReads.incrementAndGet();
             return CompletableFuture.completedFuture(checkpoints.get(point.checkpointOrdinal()));
         }
 
