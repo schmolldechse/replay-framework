@@ -9,6 +9,6 @@ public final class Paper26_2CaptureTestState {
     }
 
     public static PacketCaptureState create() {
-        return new Paper26_2AuthoritativeStateIndex();
+        return new dev.voldechse.replayframework.adapter.paper.capture.CaptureStateIndex();
     }
 }

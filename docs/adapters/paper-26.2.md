@@ -36,7 +36,7 @@ exposes it to adapter discovery.
 | `packet` | protocol discovery, the native codec and every packet definition, split into `packet.clientbound` and `packet.serverbound` |
 | `argus` | the eye (`Paper26_2ArgusEye`), sampled time and weather (`Paper26_2AmbientSource`), sampled entity state (`Paper26_2SubjectStates`) and the platform queries Argus needs |
 | `actor` | effects the server sends to everyone except the acting player, derived from serverbound packets |
-| `capture` | the capture bridge, the serverbound receiver, capture context, source tagging and capture ordering |
+| `capture` | `Paper26_2CaptureHooks`, the version half of the shared `PaperCaptureBridge`: live codec, definitions, connection identity, Paper's connection hook; the serverbound receiver |
 | `checkpoint` | snapshots of a coverage and the capture barrier that separates them from later frames |
 | `playback` | rewriting, the viewer gate, injection, view reset, scene queries and interactions |
 

@@ -1,4 +1,4 @@
-package dev.voldechse.replayframework.adapter.paper.v26_2.capture;
+package dev.voldechse.replayframework.adapter.paper.capture;
 
 import dev.voldechse.replayframework.adapter.CheckpointEncoder;
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
@@ -6,21 +6,21 @@ import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.LongSupplier;
 
-/** Serializes Paper 26.2 capture coordinates together with their publication. */
-final class Paper26_2CaptureOrder {
+/** Serializes capture coordinates together with their publication. */
+public final class CaptureOrder {
     private final LongSupplier nanoTime;
     private final LongSupplier serverTick;
     private final Object publicationLock = new Object();
     private long sequenceTick = -1L;
     private int nextSequence;
 
-    Paper26_2CaptureOrder(LongSupplier nanoTime, LongSupplier serverTick) {
+    public CaptureOrder(LongSupplier nanoTime, LongSupplier serverTick) {
         this.nanoTime = Objects.requireNonNull(nanoTime, "nanoTime");
         this.serverTick = Objects.requireNonNull(serverTick, "serverTick");
     }
 
     /** Allocates one point and keeps the publication inside the same lock. */
-    void publish(Consumer<CheckpointEncoder.CapturePoint> publication) {
+    public void publish(Consumer<CheckpointEncoder.CapturePoint> publication) {
         Objects.requireNonNull(publication, "publication");
         synchronized (publicationLock) {
             publication.accept(nextPoint());
@@ -28,7 +28,7 @@ final class Paper26_2CaptureOrder {
     }
 
     /** Allocates an exclusive checkpoint barrier in publication order. */
-    CheckpointEncoder.CapturePoint barrier() {
+    public CheckpointEncoder.CapturePoint barrier() {
         synchronized (publicationLock) {
             return nextPoint();
         }

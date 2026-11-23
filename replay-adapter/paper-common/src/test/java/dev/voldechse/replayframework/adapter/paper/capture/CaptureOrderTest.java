@@ -1,4 +1,4 @@
-package dev.voldechse.replayframework.adapter.paper.v26_2.capture;
+package dev.voldechse.replayframework.adapter.paper.capture;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -12,13 +12,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 
-class Paper26_2CaptureOrderTest {
+class CaptureOrderTest {
 
     @Test
     void allocatesTimeTickAndSequenceAsOnePublicationOrder() {
         AtomicLong nanoTime = new AtomicLong(100L);
         AtomicLong serverTick = new AtomicLong(20L);
-        Paper26_2CaptureOrder order = new Paper26_2CaptureOrder(
+        CaptureOrder order = new CaptureOrder(
                 nanoTime::getAndIncrement, serverTick::get);
         List<CheckpointEncoder.CapturePoint> points = new ArrayList<>();
 
@@ -36,7 +36,7 @@ class Paper26_2CaptureOrderTest {
     @Test
     void keepsPublicationInsideTheOrderingGate() throws Exception {
         AtomicLong nanoTime = new AtomicLong(100L);
-        Paper26_2CaptureOrder order = new Paper26_2CaptureOrder(
+        CaptureOrder order = new CaptureOrder(
                 nanoTime::getAndIncrement, () -> 20L);
         CountDownLatch firstEntered = new CountDownLatch(1);
         CountDownLatch releaseFirst = new CountDownLatch(1);

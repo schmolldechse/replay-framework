@@ -65,7 +65,7 @@ public final class Paper26_2ReplayAdapter extends AbstractReplayAdapter {
     @Override
     public dev.voldechse.replayframework.adapter.SceneObservation sceneObservation() {
         return captureBridge() instanceof
-                        dev.voldechse.replayframework.adapter.paper.v26_2.capture.Paper26_2CaptureBridge bridge
+                        dev.voldechse.replayframework.adapter.paper.capture.PaperCaptureBridge bridge
                 ? bridge.sceneObservation()
                 : dev.voldechse.replayframework.adapter.SceneObservation.none();
     }

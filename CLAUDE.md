@@ -159,8 +159,8 @@ Shared classes in `paper-common` (new package `adapter.paper.channel`,
 | `ServerboundTap` | `Paper26_2ServerboundReceiver` | per player channel, before `packet_handler` |
 | `ReplayChannelWriter` (done) | `PacketEventsReplayWriter` | writes encoded replay packets from an anchor behind `compress` |
 | `ViewerGate` | `ReplayViewerOutboundGate` | suppresses conflicting live scene packets by definition |
-| `PaperCaptureBridge` | `Paper26_2CaptureBridge` | taps, capture order, Argus publishing, definitions, failures |
-| `CaptureOrder`, `CaptureStateIndex` | `Paper26_2CaptureOrder`, `Paper26_2AuthoritativeStateIndex` | unchanged, moved |
+| `PaperCaptureBridge` (done) | `Paper26_2CaptureBridge` | taps, capture order, Argus publishing, definitions, failures |
+| `CaptureOrder`, `CaptureStateIndex` (done) | `Paper26_2CaptureOrder`, `Paper26_2AuthoritativeStateIndex` | unchanged, moved |
 | `PaperPlaybackBridge` | `Paper26_2PlaybackBridge` | lifecycle and wiring only |
 | `ViewerOutboundQueue` | part of `Paper26_2PlaybackBridge` | batching, per-turn limit, idle waiters, discard |
 | `ViewFilter` | part of `Paper26_2PlaybackBridge` | viewed world, which frames apply |
@@ -170,8 +170,9 @@ Hooks the version module implements:
 
 | Hook | Provides |
 |---|---|
-| `PaperProtocol` | native packet ↔ definition, encode to `EncodedPacket`, decode a frame, unbundle, write the packet ID |
-| `PaperConnections` | the channel and identity of a player, the server tick |
+| `CaptureHooks` (done, `Paper26_2CaptureHooks`) | capture: registry, definitions, Argus platform, server tick, connection identity, unbundling, encoding of sent, observed and state packets, Paper's connection hook, the version's own handlers |
+| `PaperProtocol` | playback: native packet ↔ definition, encode, decode a frame |
+| `PaperConnections` | playback: the channel and identity of the viewer |
 | `SnapshotSource` | the native packets of a checkpoint for a coverage |
 | `ViewerScene` | entity, player and container queries and state decoding, fed by played frames |
 
@@ -179,7 +180,11 @@ Order of work, each step compiling and tested: (1) hooks and channel
 handlers, PacketEvents removed; (2) shared capture bridge; (3) shared playback
 bridge; (4) checkpoint assembler; (5) docs, full build, in-game check.
 
-Status: step 1 is implemented (`ClientboundTap`, `ReplayChannelWriter`,
-`PipelineNames` in `adapter.paper.channel`; PacketEvents removed from build,
-plugin descriptor and docs); full build green, waiting for the in-game check.
-The hook interfaces come with step 2, where the capture bridge moves.
+Status:
+- Step 1 committed (`1a8492a`): `ClientboundTap`, `ReplayChannelWriter`,
+  `PipelineNames` in `adapter.paper.channel`; PacketEvents removed.
+- Step 2 implemented: `PaperCaptureBridge`, `CaptureHooks`, `CaptureOrder`,
+  `CaptureStateIndex` in `adapter.paper.capture`; the 26.2 module keeps only
+  `Paper26_2CaptureHooks` (180 lines instead of the 560-line bridge). The two
+  constructors without a plugin were dead and are gone. Full build green,
+  waiting for the in-game check.

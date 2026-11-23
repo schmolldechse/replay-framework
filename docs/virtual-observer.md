@@ -419,7 +419,8 @@ Everything except the eye itself is shared by all adapters.
 | `PlayerAnchor` | `paper-common` | where a companion stands and how far it sees |
 | `SubjectSample`, `SubjectStates` | `paper-common` | sampled subject state |
 | `ArgusPlatform`, `ArgusEye`, `AmbientSource` | `paper-common` | the interfaces one Minecraft version implements |
-| `Paper26_2ArgusPlatform`, `Paper26_2ArgusEye`, `Paper26_2AmbientSource`, `Paper26_2SubjectStates` | `paper-26_2` | the 26.2 implementation |
+| `PaperCaptureBridge`, `CaptureOrder`, `CaptureStateIndex`, `CaptureHooks` | `paper-common` | publishes the scene, player-only packets and state through the packet definitions, in one capture order |
+| `Paper26_2ArgusPlatform`, `Paper26_2ArgusEye`, `Paper26_2AmbientSource`, `Paper26_2SubjectStates`, `Paper26_2CaptureHooks` | `paper-26_2` | the 26.2 implementation |
 
 The core opens a watch when a recording becomes active and closes it when
 the recording leaves the capture route. Eyes open on the next server tick.

@@ -24,7 +24,7 @@ import net.minecraft.world.level.block.entity.BlockEntityTypes;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-class Paper26_2CaptureBridgeTest {
+class Paper26_2CapturePositionTest {
 
     @BeforeAll
     static void bootstrapPaperRegistries() {
@@ -135,7 +135,7 @@ class Paper26_2CaptureBridgeTest {
     private static dev.voldechse.replayframework.adapter.CaptureContext captureContext(
             Object packet, PacketDescriptor descriptor, Key world) {
         UUID connectionId = UUID.randomUUID();
-        var state = new Paper26_2AuthoritativeStateIndex();
+        var state = new dev.voldechse.replayframework.adapter.paper.capture.CaptureStateIndex();
         state.world(connectionId, world.toString());
         ClientboundPacketDefinition<?> definition = Paper26_2ClientboundPacketCatalog.catalog()
                 .require(descriptor.typeName());

@@ -1,4 +1,4 @@
-package dev.voldechse.replayframework.adapter.paper.v26_2.capture;
+package dev.voldechse.replayframework.adapter.paper.capture;
 
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketCaptureState;
 import dev.voldechse.replayframework.adapter.CaptureContext;
@@ -9,8 +9,8 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import net.kyori.adventure.key.Key;
 
-/** Packet-derived world, entity-position and player-authority state for Paper 26.2 capture. */
-final class Paper26_2AuthoritativeStateIndex implements PacketCaptureState {
+/** Packet-derived world, entity-position and player-authority state of capture, keyed by connection. */
+public final class CaptureStateIndex implements PacketCaptureState {
 
     private final Map<UUID, String> connectionWorlds = new ConcurrentHashMap<>();
     private final Map<UUID, Integer> connectionEntityIds = new ConcurrentHashMap<>();
@@ -116,7 +116,7 @@ final class Paper26_2AuthoritativeStateIndex implements PacketCaptureState {
         remove(entityId);
     }
 
-    void remove(int entityId) {
+    public void remove(int entityId) {
         checkpointEntityPositions.remove(entityId);
         connectionEntityPositions.keySet().removeIf(key -> key.entityId() == entityId);
         connectionEntityIds.values().removeIf(value -> value == entityId);
@@ -135,7 +135,7 @@ final class Paper26_2AuthoritativeStateIndex implements PacketCaptureState {
         }
     }
 
-    void clear() {
+    public void clear() {
         connectionWorlds.clear();
         connectionEntityIds.clear();
         connectionEntityPositions.clear();

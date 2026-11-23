@@ -1,5 +1,7 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.capture;
 
+import dev.voldechse.replayframework.adapter.paper.capture.CaptureStateIndex;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -14,7 +16,7 @@ import net.minecraft.world.item.Items;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-class Paper26_2AuthoritativeStateIndexTest {
+class CaptureStateIndexTest {
 
     @BeforeAll
     static void bootstrap() {
@@ -25,7 +27,7 @@ class Paper26_2AuthoritativeStateIndexTest {
 
     @Test
     void relativePositionsAreTrackedIndependentlyPerConnection() {
-        var index = new Paper26_2AuthoritativeStateIndex();
+        var index = new CaptureStateIndex();
         UUID firstConnection = UUID.randomUUID();
         UUID secondConnection = UUID.randomUUID();
         Key overworld = Key.key("minecraft:overworld");

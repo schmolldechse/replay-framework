@@ -3,7 +3,8 @@ package dev.voldechse.replayframework.adapter.paper.v26_2;
 import dev.voldechse.replayframework.adapter.PaperAdapterHandle;
 import dev.voldechse.replayframework.adapter.PaperAdapterProvider;
 import dev.voldechse.replayframework.adapter.ReplayAdapter;
-import dev.voldechse.replayframework.adapter.paper.v26_2.capture.Paper26_2CaptureBridge;
+import dev.voldechse.replayframework.adapter.paper.capture.PaperCaptureBridge;
+import dev.voldechse.replayframework.adapter.paper.v26_2.capture.Paper26_2CaptureHooks;
 import dev.voldechse.replayframework.adapter.paper.v26_2.capture.PaperConnectionAccessor;
 import dev.voldechse.replayframework.adapter.paper.v26_2.checkpoint.Paper26_2CheckpointEncoder;
 import dev.voldechse.replayframework.adapter.paper.v26_2.checkpoint.Paper26_2NativePacketCodec;
@@ -38,8 +39,8 @@ public final class Paper26_2AdapterProvider implements PaperAdapterProvider {
         ExecutorService checkpointExecutor = null;
         try {
             nativePacketCodec = Paper26_2NativePacketCodec.create(registry);
-            Paper26_2CaptureBridge captureBridge = new Paper26_2CaptureBridge(
-                    plugin, accessor, registry, nativePacketCodec);
+            PaperCaptureBridge captureBridge = new PaperCaptureBridge(
+                    plugin, new Paper26_2CaptureHooks(accessor, registry, nativePacketCodec));
             snapshotProvider = new Paper26_2SnapshotProvider(
                     plugin,
                     captureBridge::checkpointCapturePoint,
