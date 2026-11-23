@@ -59,4 +59,14 @@ public interface ArgusPlatform {
      * opening them, such as the inventory of a llama.
      */
     List<SubjectSample> subjects(String world, Collection<CuboidRegion> areas, SubjectSample.Cadence cadence);
+
+    /**
+     * Looks at the blocks of one chunk with state the scene does not show,
+     * such as chests and their contents. Empty when the chunk is not loaded;
+     * a chunk is never loaded for this.
+     */
+    Optional<List<BlockSample>> blockStates(String world, int chunkX, int chunkZ);
+
+    /** Builds the native packet that records that a block with state is gone. */
+    Object blockStateRemoved(dev.voldechse.replayframework.api.recording.BlockPosition position);
 }

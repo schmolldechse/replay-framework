@@ -116,6 +116,33 @@ class TrackRecordingTest {
         assertEquals(new SeekPoint(0L, 0, 0, 0L), stateTrack.seekPoints().getFirst());
     }
 
+    @Test
+    void keepsBlockStateInTheBlockStateTrackOfItsWorld(@TempDir Path workspace) throws Exception {
+        SessionPacketQueue queue = new SessionPacketQueue(1024);
+        queue.enqueue(packet(10L, 0, Optional.of(OVERWORLD), false));
+        CaptureContext chest = new CaptureContext(
+                Optional.empty(), Optional.of(Key.key(OVERWORLD)), Optional.empty(), Optional.empty(), Optional.empty())
+                .asBlockState();
+        queue.enqueue(new CapturedPacket(20L, 1L, 1, PacketPhase.PLAY, 6, new byte[] {9}, chest));
+        queue.closeForEnqueue();
+
+        RecordingSegmentAppender appender = appender(workspace, queue, new ReplayCheckpoint(0, 0L, List.of()));
+        appender.runWriterLoop();
+        List<TrackWriter.TrackArtifacts> tracks = appender.finishForFinalization().tracks();
+
+        TrackWriter.TrackArtifacts blockTrack = tracks.stream()
+                .filter(track -> track.descriptor().kind() == TrackKind.BLOCK_STATE)
+                .findFirst()
+                .orElseThrow();
+        assertEquals(Optional.of(OVERWORLD), blockTrack.descriptor().world());
+        assertEquals(List.of(1), sequences(blockTrack));
+        assertEquals(List.of(0), sequences(tracks.stream()
+                .filter(track -> track.descriptor().kind() == TrackKind.WORLD)
+                .findFirst()
+                .orElseThrow()));
+        assertEquals(new SeekPoint(0L, 0, 0, 0L), blockTrack.seekPoints().getFirst());
+    }
+
     private static List<Integer> sequences(TrackWriter.TrackArtifacts track) throws Exception {
         List<Integer> sequences = new ArrayList<>();
         for (Path segment : track.segmentFiles()) {

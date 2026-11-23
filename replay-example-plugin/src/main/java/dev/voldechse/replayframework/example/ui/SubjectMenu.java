@@ -14,6 +14,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import dev.voldechse.replayframework.api.recording.BlockPosition;
+import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
@@ -32,8 +34,8 @@ import org.bukkit.scheduler.BukkitTask;
  * Shows what a replay knows about a player or an entity: its equipment, the
  * sections of its inventory and its vitals, at the current playback position.
  *
- * <p>It opens when a viewer right-clicks an entity of the replay, or a player
- * in the players menu. While it is open it follows the playback every other
+ * <p>It opens when a viewer right-clicks an entity or a container block of
+ * the replay, such as a chest, or a player in the players menu. While it is open it follows the playback every other
  * tick and changes only the slots whose item changed, so the view does not
  * flicker.</p>
  *
@@ -109,9 +111,19 @@ public final class SubjectMenu implements AutoCloseable {
         }
     }
 
+    /** Opens the menu of a container block of the replay, such as a chest. */
+    void open(Player viewer, PlaybackSession session, Key world, BlockPosition position, Key block) {
+        MenuHolder holder = new MenuHolder(viewer.getUniqueId(), session, null, Optional.empty());
+        holder.block = new BlockTarget(world, position);
+        show(viewer, holder, typeName(block.value()));
+    }
+
     private void open(
             Player viewer, PlaybackSession session, UUID entityId, Optional<RecordedSubject> subject, String title) {
-        MenuHolder holder = new MenuHolder(viewer.getUniqueId(), session, entityId, subject);
+        show(viewer, new MenuHolder(viewer.getUniqueId(), session, entityId, subject), title);
+    }
+
+    private void show(Player viewer, MenuHolder holder, String title) {
         holder.inventory = Bukkit.createInventory(holder, SIZE, Component.text(title));
         viewer.openInventory(holder.inventory);
         refresh(holder);
@@ -129,15 +141,22 @@ public final class SubjectMenu implements AutoCloseable {
             // The previous query has not answered yet; it shows the newer state anyway.
             return;
         }
-        Optional<RecordedEntity> entity = holder.session.entities().stream()
-                .filter(candidate -> candidate.id().equals(holder.entityId))
-                .findFirst();
-        if (holder.subject.isEmpty()) {
+        Optional<RecordedEntity> entity = holder.entityId == null
+                ? Optional.empty()
+                : holder.session.entities().stream()
+                        .filter(candidate -> candidate.id().equals(holder.entityId))
+                        .findFirst();
+        java.util.concurrent.CompletionStage<Optional<SubjectState>> query;
+        if (holder.block != null) {
+            query = holder.session.container(holder.block.world(), holder.block.position());
+        } else if (holder.subject.isPresent()) {
+            query = holder.session.state(holder.subject.get());
+        } else {
             render(holder, entity, Optional.empty());
             return;
         }
         holder.querying = true;
-        holder.session.state(holder.subject.get()).whenComplete((state, failure) ->
+        query.whenComplete((state, failure) ->
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     holder.querying = false;
                     render(holder, entity, failure == null ? state : Optional.empty());
@@ -239,6 +258,18 @@ public final class SubjectMenu implements AutoCloseable {
     }
 
     private void handleEvent(ReplayEventPublisher.ReplayEvent event) {
+        if (event instanceof ReplayEventPublisher.PlaybackBlockInteracted clicked) {
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                Player viewer = Bukkit.getPlayer(clicked.viewerId());
+                if (viewer == null || !viewer.isOnline()) {
+                    return;
+                }
+                environment.playback(viewer.getUniqueId())
+                        .filter(session -> session.id().equals(clicked.sessionId()))
+                        .ifPresent(session -> open(viewer, session, clicked.world(), clicked.position(), clicked.block()));
+            });
+            return;
+        }
         if (!(event instanceof ReplayEventPublisher.PlaybackEntityInteracted interacted) || interacted.attack()) {
             return;
         }
@@ -266,6 +297,10 @@ public final class SubjectMenu implements AutoCloseable {
         return Component.text(text, color).decoration(TextDecoration.ITALIC, false);
     }
 
+    /** A container block of the replay. */
+    private record BlockTarget(Key world, BlockPosition position) {
+    }
+
     /** Holder marking an inventory as this menu of one viewer and one subject. */
     static final class MenuHolder implements ViewerMenuHolder {
         private final UUID viewerId;
@@ -273,6 +308,7 @@ public final class SubjectMenu implements AutoCloseable {
         private final UUID entityId;
         private final Optional<RecordedSubject> subject;
         private Inventory inventory;
+        private BlockTarget block;
         private BukkitTask refresh;
         private boolean querying;
 

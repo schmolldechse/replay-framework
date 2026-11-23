@@ -115,6 +115,19 @@ public interface PlaybackSession {
     CompletionStage<java.util.Optional<SubjectState>> state(RecordedSubject subject);
 
     /**
+     * Returns the state of a block at the current position, such as the
+     * contents of a chest, barrel, furnace or hopper, as a {@link SubjectState}
+     * with a {@link SubjectState#CONTAINER} section. Both halves of a double
+     * chest are returned as one container of 54 slots. Empty when the
+     * recording has no such block at this position.
+     *
+     * @param world the recorded world
+     * @param position the block's position
+     */
+    CompletionStage<java.util.Optional<SubjectState>> container(
+            net.kyori.adventure.key.Key world, dev.voldechse.replayframework.api.recording.BlockPosition position);
+
+    /**
      * Returns what the scene shows of an entity the viewer's client knows by
      * the given ID, for example the entity a viewer clicked.
      *

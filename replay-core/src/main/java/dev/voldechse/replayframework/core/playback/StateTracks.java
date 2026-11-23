@@ -3,6 +3,7 @@ package dev.voldechse.replayframework.core.playback;
 import dev.voldechse.replayframework.adapter.PlaybackBridge;
 import dev.voldechse.replayframework.api.playback.RecordedSubject;
 import dev.voldechse.replayframework.api.playback.SubjectState;
+import dev.voldechse.replayframework.api.recording.BlockPosition;
 import dev.voldechse.replayframework.format.RawPacketFrame;
 import dev.voldechse.replayframework.format.ReplayIndex;
 import dev.voldechse.replayframework.format.SeekPoint;
@@ -21,12 +22,14 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
 /**
- * The state tracks of one playback, opened when a subject's state is first
- * asked for and closed with the playback.
+ * The state tracks of one playback, opened when a subject's or a block's
+ * state is first asked for and closed with the playback.
  *
  * <p>A state is the checkpoint of the subject's track at the barrier the
  * playback position lies after, followed by the track's frames up to the
- * position. The bridge turns these frames into the version-neutral state.</p>
+ * position. The bridge turns these frames into the version-neutral state.
+ * A block's state is read the same way from the block state track of its
+ * world, which holds the blocks of that world.</p>
  *
  * <p>Integrations ask for a state often, for example to follow it in a menu.
  * Each track therefore keeps the checkpoint of its last barrier and its last
@@ -36,6 +39,7 @@ import java.util.function.Function;
 final class StateTracks implements AutoCloseable {
 
     private final List<TrackDescriptor> tracks;
+    private final List<TrackDescriptor> blockTracks;
     private final ReplayIndex reference;
     private final long durationNanos;
     private final PlaybackBridge bridge;
@@ -43,10 +47,11 @@ final class StateTracks implements AutoCloseable {
     private final Map<Integer, CompletableFuture<MergedTrackData.Track>> open = new ConcurrentHashMap<>();
     private final Map<Integer, CachedCheckpoint> checkpoints = new ConcurrentHashMap<>();
     private final Map<Integer, CachedState> states = new ConcurrentHashMap<>();
+    private final Map<Integer, CachedBlocks> blocks = new ConcurrentHashMap<>();
     private volatile boolean closed;
 
     /**
-     * @param tracks the replay's tracks; only state tracks are used
+     * @param tracks the replay's tracks; only state and block state tracks are used
      * @param reference the index the playback seeks on; its checkpoint
      *                  ordinals are those of every track
      * @param durationNanos the replay duration
@@ -60,6 +65,7 @@ final class StateTracks implements AutoCloseable {
             PlaybackBridge bridge,
             Function<TrackDescriptor, CompletionStage<MergedTrackData.Track>> opener) {
         this.tracks = tracks.stream().filter(track -> track.kind() == TrackKind.STATE).toList();
+        this.blockTracks = tracks.stream().filter(track -> track.kind() == TrackKind.BLOCK_STATE).toList();
         this.reference = Objects.requireNonNull(reference, "reference");
         this.durationNanos = durationNanos;
         this.bridge = Objects.requireNonNull(bridge, "bridge");
@@ -90,17 +96,60 @@ final class StateTracks implements AutoCloseable {
         if (track.isEmpty()) {
             return CompletableFuture.completedFuture(Optional.empty());
         }
+        int trackId = track.get().id();
+        return read(track.get(), position).thenApply(read ->
+                decode(trackId, read.ordinal(), subject, read.checkpoint(), read.after()));
+    }
+
+    /**
+     * The state of a block at a playback position, such as the contents of a
+     * chest. Empty when the recording has no such block there.
+     */
+    CompletionStage<Optional<SubjectState>> block(String world, BlockPosition block, Duration position) {
+        Objects.requireNonNull(world, "world");
+        Objects.requireNonNull(block, "block");
+        Objects.requireNonNull(position, "position");
+        if (closed) {
+            return CompletableFuture.failedFuture(new IllegalStateException("playback is closed"));
+        }
+        Optional<TrackDescriptor> track = blockTracks.stream()
+                .filter(candidate -> candidate.world().orElseThrow().equals(world))
+                .findFirst();
+        if (track.isEmpty()) {
+            return CompletableFuture.completedFuture(Optional.empty());
+        }
+        int trackId = track.get().id();
+        return read(track.get(), position).thenApply(read -> {
+            CachedBlocks cached = blocks.compute(trackId, (id, previous) ->
+                    previous != null && previous.ordinal() == read.ordinal() && previous.frames() == read.after().size()
+                            ? previous
+                            : new CachedBlocks(read.ordinal(), read.after().size(), new ConcurrentHashMap<>()));
+            return cached.states().computeIfAbsent(block, wanted -> bridge.decodeBlock(wanted, read.all()));
+        });
+    }
+
+    /** The checkpoint of a track at the barrier before a position and its frames up to the position. */
+    private CompletionStage<Read> read(TrackDescriptor track, Duration position) {
         SeekPoint barrier = reference.seekCheckpointFloor(position)
                 .orElseThrow(() -> new IllegalStateException("replay has no checkpoint before " + position));
         long end = Math.min(position.toNanos() + 1L, durationNanos + 1L);
-        int trackId = track.get().id();
         int ordinal = barrier.checkpointOrdinal();
-        return open(track.get()).thenCompose(data -> {
+        return open(track).thenCompose(data -> {
             SeekPoint anchor = data.anchor(barrier);
-            CompletionStage<List<RawPacketFrame>> checkpoint = checkpoint(trackId, ordinal, data, anchor);
+            CompletionStage<List<RawPacketFrame>> checkpoint = checkpoint(track.id(), ordinal, data, anchor);
             CompletionStage<List<RawPacketFrame>> deltas = data.data().framesAfter(anchor, Duration.ofNanos(end));
-            return checkpoint.thenCombine(deltas, (base, after) -> decode(trackId, ordinal, subject, base, after));
+            return checkpoint.thenCombine(deltas, (base, after) -> new Read(ordinal, base, after));
         });
+    }
+
+    /** A track read up to a position. */
+    private record Read(int ordinal, List<RawPacketFrame> checkpoint, List<RawPacketFrame> after) {
+        List<RawPacketFrame> all() {
+            List<RawPacketFrame> frames = new ArrayList<>(checkpoint.size() + after.size());
+            frames.addAll(checkpoint);
+            frames.addAll(after);
+            return frames;
+        }
     }
 
     /** The checkpoint frames of a track at a barrier, read once per barrier. */
@@ -149,6 +198,10 @@ final class StateTracks implements AutoCloseable {
     private record CachedState(int ordinal, int frames, Optional<SubjectState> state) {
     }
 
+    /** The block states decoded so far from a barrier's checkpoint and this many frames after it. */
+    private record CachedBlocks(int ordinal, int frames, Map<BlockPosition, Optional<SubjectState>> states) {
+    }
+
     /** Adds the state track subject to an entity, when the recording has one for it. */
     dev.voldechse.replayframework.api.playback.RecordedEntity withSubject(
             dev.voldechse.replayframework.api.playback.RecordedEntity entity) {
@@ -172,6 +225,7 @@ final class StateTracks implements AutoCloseable {
         open.clear();
         checkpoints.clear();
         states.clear();
+        blocks.clear();
     }
 
     private CompletableFuture<MergedTrackData.Track> open(TrackDescriptor track) {

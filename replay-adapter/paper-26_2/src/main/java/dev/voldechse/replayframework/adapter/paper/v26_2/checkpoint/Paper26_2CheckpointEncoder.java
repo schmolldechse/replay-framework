@@ -117,7 +117,8 @@ public final class Paper26_2CheckpointEncoder implements CheckpointEncoder {
                 return new CheckpointCapture(
                         point,
                         encodeFrames(detached, elapsedNanos, point.serverTick()),
-                        encodeSubjects(detached, elapsedNanos, point.serverTick()));
+                        encodeSubjects(detached, elapsedNanos, point.serverTick()),
+                        encodeBlockStates(detached, elapsedNanos, point.serverTick()));
             }, executor);
         } catch (Throwable failure) {
             return CompletableFuture.failedFuture(failure);
@@ -206,6 +207,26 @@ public final class Paper26_2CheckpointEncoder implements CheckpointEncoder {
             }
             states.add(new dev.voldechse.replayframework.adapter.CheckpointEncoder.SubjectState(
                     subject.subject(), frames));
+        }
+        return List.copyOf(states);
+    }
+
+    /**
+     * Encodes the state of the recorded blocks of every world. Its packets
+     * belong to their world and are numbered within it.
+     */
+    private List<dev.voldechse.replayframework.adapter.CheckpointEncoder.BlockStates> encodeBlockStates(
+            CheckpointSnapshot snapshot, long elapsedNanos, long serverTick) {
+        List<dev.voldechse.replayframework.adapter.CheckpointEncoder.BlockStates> states = new ArrayList<>();
+        for (var world : new java.util.TreeMap<>(snapshot.blockStates()).entrySet()) {
+            List<RawPacketFrame> frames = new ArrayList<>(world.getValue().size());
+            for (Packet<?> packet : world.getValue()) {
+                Paper26_2NativePacketCodec.EncodedStatePacket encoded = nativePacketCodec.encodeState(packet);
+                frames.add(new RawPacketFrame(
+                        elapsedNanos, serverTick, frames.size(), PacketPhase.PLAY,
+                        encoded.packetId(), encoded.payload(), java.util.Optional.of(world.getKey())));
+            }
+            states.add(new dev.voldechse.replayframework.adapter.CheckpointEncoder.BlockStates(world.getKey(), frames));
         }
         return List.copyOf(states);
     }
@@ -384,23 +405,26 @@ public final class Paper26_2CheckpointEncoder implements CheckpointEncoder {
      * @param capturePoint the barrier the state was detached at, when known
      * @param packets the scene
      * @param subjects the complete state of every subject in the scope
+     * @param blockStates the state of the recorded blocks in the scope, by world key
      */
     public record CheckpointSnapshot(
             java.util.Optional<CapturePoint> capturePoint,
             List<PacketBlueprint> packets,
-            List<dev.voldechse.replayframework.adapter.paper.v26_2.argus.Paper26_2SubjectStates.Subject> subjects) {
+            List<dev.voldechse.replayframework.adapter.paper.v26_2.argus.Paper26_2SubjectStates.Subject> subjects,
+            java.util.Map<String, List<Packet<?>>> blockStates) {
 
         public CheckpointSnapshot(List<PacketBlueprint> packets) {
-            this(java.util.Optional.empty(), packets, List.of());
+            this(java.util.Optional.empty(), packets, List.of(), java.util.Map.of());
         }
 
         public CheckpointSnapshot(CapturePoint capturePoint, List<PacketBlueprint> packets) {
             this(java.util.Optional.of(
-                    Objects.requireNonNull(capturePoint, "capturePoint")), packets, List.of());
+                    Objects.requireNonNull(capturePoint, "capturePoint")), packets, List.of(), java.util.Map.of());
         }
 
         public CheckpointSnapshot {
             subjects = List.copyOf(Objects.requireNonNull(subjects, "subjects"));
+            blockStates = java.util.Map.copyOf(Objects.requireNonNull(blockStates, "blockStates"));
             Objects.requireNonNull(capturePoint, "capturePoint");
             Objects.requireNonNull(packets, "packets");
             List<PacketBlueprint> copied = new ArrayList<>(packets.size());

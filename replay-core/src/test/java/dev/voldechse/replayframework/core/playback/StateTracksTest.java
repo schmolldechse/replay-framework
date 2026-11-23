@@ -73,6 +73,30 @@ class StateTracksTest {
                 .toCompletableFuture().join());
     }
 
+    @Test
+    void readsABlockFromTheBlockStateTrackOfItsWorldOncePerPositionAndFrames() {
+        FakeTrack track = new FakeTrack(
+                Map.of(0, List.of(frame(0L)), 1, List.of(frame(10_000_000_000L))),
+                List.of(frame(2_000_000_000L)));
+        StateTracks states = states(track);
+        var chest = new dev.voldechse.replayframework.api.recording.BlockPosition(1, 64, 1);
+        var barrel = new dev.voldechse.replayframework.api.recording.BlockPosition(2, 64, 1);
+
+        assertEquals(Optional.of(2), blockFrameCount(states, "minecraft:overworld", chest));
+        assertEquals(Optional.of(2), blockFrameCount(states, "minecraft:overworld", chest));
+        assertEquals(Optional.of(2), blockFrameCount(states, "minecraft:overworld", barrel));
+        assertEquals(Optional.empty(), blockFrameCount(states, "minecraft:the_nether", chest));
+
+        assertEquals(2, decodes.get());
+        assertEquals(1, checkpointReads.get());
+    }
+
+    private static Optional<Integer> blockFrameCount(
+            StateTracks states, String world, dev.voldechse.replayframework.api.recording.BlockPosition block) {
+        return states.block(world, block, Duration.ofMillis(2_500)).toCompletableFuture().join()
+                .map(state -> state.experience().orElseThrow().level());
+    }
+
     private Optional<Integer> frameCount(StateTracks states, Duration position) {
         return states.state(RecordedSubject.player(ALEX), position).toCompletableFuture().join()
                 .map(state -> state.experience().orElseThrow().level());
@@ -81,7 +105,7 @@ class StateTracksTest {
     private StateTracks states(FakeTrack track) {
         TrackDescriptor descriptor = TrackDescriptor.state(2, TrackSubject.player(ALEX), "Alex");
         return new StateTracks(
-                List.of(TrackDescriptor.global(0), descriptor),
+                List.of(TrackDescriptor.global(0), descriptor, TrackDescriptor.blockState(3, "minecraft:overworld")),
                 REFERENCE,
                 20_000_000_000L,
                 new CountingBridge(),
@@ -113,6 +137,12 @@ class StateTracksTest {
 
         @Override
         public void close() {
+        }
+
+        @Override
+        public Optional<SubjectState> decodeBlock(
+                dev.voldechse.replayframework.api.recording.BlockPosition position, List<RawPacketFrame> frames) {
+            return decodeState(null, frames);
         }
 
         @Override

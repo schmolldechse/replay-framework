@@ -12,7 +12,12 @@ public enum TrackKind {
     /** Scene packets of one world. */
     WORLD(2),
     /** The state of one subject that the scene does not show. */
-    STATE(3);
+    STATE(3),
+    /**
+     * The state of the blocks of one world that the scene does not show, such
+     * as the contents of chests. Each frame names its block.
+     */
+    BLOCK_STATE(4);
 
     private final int wireCode;
 

@@ -34,7 +34,15 @@ class ReplayEntityInteractionsTest {
             Optional.empty(), OptionalDouble.empty(), OptionalDouble.empty(),
             Map.of(), List.of(), Set.of(), Optional.empty());
 
+    private static final net.minecraft.core.BlockPos CHEST = new net.minecraft.core.BlockPos(4, 64, 9);
+    private static final PlaybackBridge.BlockInteraction CHEST_CLICK = new PlaybackBridge.BlockInteraction(
+            Key.key("minecraft:overworld"),
+            new dev.voldechse.replayframework.api.recording.BlockPosition(4, 64, 9),
+            Key.key("minecraft:chest"),
+            EquipmentSlot.HAND);
+
     private final List<PlaybackBridge.EntityInteraction> interactions = new ArrayList<>();
+    private final List<PlaybackBridge.BlockInteraction> blockInteractions = new ArrayList<>();
     private final List<Throwable> failures = new ArrayList<>();
 
     @BeforeAll
@@ -68,10 +76,45 @@ class ReplayEntityInteractionsTest {
         assertTrue(interactions.isEmpty());
     }
 
+    @Test
+    void consumesBothHandsOfARecordedBlockAndReportsTheMainHand() {
+        EmbeddedChannel channel = channel();
+
+        channel.writeInbound(use(CHEST, InteractionHand.MAIN_HAND));
+        channel.writeInbound(use(CHEST, InteractionHand.OFF_HAND));
+
+        assertNull(channel.readInbound());
+        assertEquals(List.of(CHEST_CLICK), blockInteractions);
+        assertTrue(failures.isEmpty());
+    }
+
+    @Test
+    void passesTheUseOfOtherBlocks() {
+        EmbeddedChannel channel = channel();
+        var live = use(CHEST.above(), InteractionHand.MAIN_HAND);
+
+        channel.writeInbound(live);
+
+        assertSame(live, channel.readInbound());
+        assertTrue(blockInteractions.isEmpty());
+    }
+
+    private static net.minecraft.network.protocol.game.ServerboundUseItemOnPacket use(
+            net.minecraft.core.BlockPos pos, InteractionHand hand) {
+        return new net.minecraft.network.protocol.game.ServerboundUseItemOnPacket(hand,
+                new net.minecraft.world.phys.BlockHitResult(
+                        Vec3.atCenterOf(pos), net.minecraft.core.Direction.UP, pos, false), 1);
+    }
+
     private EmbeddedChannel channel() {
         return new EmbeddedChannel(new ReplayEntityInteractions(
                 id -> id == REPLAY_ENTITY ? Optional.of(LLAMA) : Optional.empty(),
                 interactions::add,
+                (pos, hand) -> pos.equals(CHEST)
+                        ? Optional.of(new PlaybackBridge.BlockInteraction(
+                                CHEST_CLICK.world(), CHEST_CLICK.position(), CHEST_CLICK.block(), hand))
+                        : Optional.empty(),
+                blockInteractions::add,
                 failures::add));
     }
 }

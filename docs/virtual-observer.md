@@ -72,7 +72,7 @@ one source, so no scene change is recorded twice.
 |---|---|---|
 | eyes | `OBSERVER` | everything the chunk system and the entity tracker send: chunks, light, blocks, block entities, entity spawn, movement, metadata, equipment, attributes, effects, removal |
 | sampled world state | `OBSERVER` | time and weather |
-| sampled subject state | `OBSERVER` | the inventories of players every tick and of entities, see [subject state](#subject-state) |
+| sampled subject state | `OBSERVER` | the inventories of players every tick, of entities and of container blocks, see [subject state](#subject-state) |
 | ears | `PLAYER_ONLY` | packets the server sends to listed players only: sounds, particles, level events, explosions, boss bars, world border, chat, player profiles, the tab list |
 | own state | `PLAYER_ONLY` | the recipient's own health and experience, kept in its state track |
 | actor effects | `PLAYER_ONLY` | effects the server sends to everyone except the acting player, derived where no other player received them |
@@ -345,6 +345,9 @@ in a state track of its own:
   changed.
 - When a subject comes into a watch's coverage, its complete state is
   published, so a state track can be started at any checkpoint.
+- Containers such as chests are read chunk by chunk every
+  `stateSampleInterval`, spread over the ticks of the interval, and recorded
+  in one block state track per world.
 
 Which entities have such state, and how playback reads it, is described in
 [recording tracks](recording-tracks.md#subjects).

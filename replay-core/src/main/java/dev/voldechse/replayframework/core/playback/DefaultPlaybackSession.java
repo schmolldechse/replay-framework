@@ -59,6 +59,17 @@ final class DefaultPlaybackSession implements PlaybackSession {
     }
 
     @Override
+    public CompletionStage<java.util.Optional<dev.voldechse.replayframework.api.playback.SubjectState>> container(
+            net.kyori.adventure.key.Key world, dev.voldechse.replayframework.api.recording.BlockPosition position) {
+        java.util.Objects.requireNonNull(world, "world");
+        java.util.Objects.requireNonNull(position, "position");
+        if (stateTracks == null) {
+            return java.util.concurrent.CompletableFuture.completedFuture(java.util.Optional.empty());
+        }
+        return stateTracks.block(world.asString(), position, timeline.snapshot().position());
+    }
+
+    @Override
     public java.util.Optional<dev.voldechse.replayframework.api.playback.RecordedEntity> entity(int clientEntityId) {
         return timeline.entity(clientEntityId).map(this::withSubject);
     }

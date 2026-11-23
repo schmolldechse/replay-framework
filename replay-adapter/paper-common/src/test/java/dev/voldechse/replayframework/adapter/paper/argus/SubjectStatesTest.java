@@ -112,6 +112,10 @@ class SubjectStatesTest {
             }
 
             @Override
+            public void publishBlockState(UUID observationId, String world, Object packet) {
+            }
+
+            @Override
             public void sceneClosed(UUID sceneId) {
             }
         };
@@ -166,6 +170,16 @@ class SubjectStatesTest {
                     String world, Collection<CuboidRegion> areas, SubjectSample.Cadence cadence) {
                 assertEquals("minecraft:overworld", world);
                 return current.stream().filter(sample -> sample.cadence() == cadence).toList();
+            }
+
+            @Override
+            public Optional<List<BlockSample>> blockStates(String world, int chunkX, int chunkZ) {
+                return Optional.of(List.of());
+            }
+
+            @Override
+            public Object blockStateRemoved(BlockPosition position) {
+                return position;
             }
         };
         return new ArgusServices(platform, publisher, () -> 0L, failure -> {

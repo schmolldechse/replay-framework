@@ -134,6 +134,11 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
                     }
 
                     @Override
+                    public void publishBlockState(UUID observationId, String world, Object packet) {
+                        Paper26_2CaptureBridge.this.publishBlockState(observationId, world, packet);
+                    }
+
+                    @Override
                     public void sceneClosed(UUID sceneId) {
                         captureState.removeConnection(sceneId);
                     }
@@ -423,22 +428,39 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
      * thread. It belongs to the recording of the watch and to no world.
      */
     private void publishSubjectState(UUID observationId, CaptureSubject subject, Object packet) {
+        publishState(observationId, packet, context -> context.withSubject(subject), Optional.empty());
+    }
+
+    /**
+     * Publishes one packet with the state of a block that Argus read on the
+     * server thread. It belongs to the block state track of its world.
+     */
+    private void publishBlockState(UUID observationId, String world, Object packet) {
+        publishState(observationId, packet, CaptureContext::asBlockState,
+                Optional.of(net.kyori.adventure.key.Key.key(world)));
+    }
+
+    private void publishState(
+            UUID observationId,
+            Object packet,
+            java.util.function.UnaryOperator<CaptureContext> route,
+            Optional<net.kyori.adventure.key.Key> world) {
         CaptureBridge.PacketSink currentSink = sink;
         if (state.get() != State.INSTALLED || currentSink == null || !currentSink.hasActiveSinks()) {
             return;
         }
         if (!(packet instanceof net.minecraft.network.protocol.Packet<?> nativePacket)) {
-            throw incompatible("subject state is not a Paper 26.2 packet", null);
+            throw incompatible("state is not a Paper 26.2 packet", null);
         }
         Paper26_2NativePacketCodec.EncodedStatePacket encoded = stateCodec.encodeState(nativePacket);
         CaptureContext context = new CaptureContext(
                 encoded.descriptor().disposition(),
-                Optional.empty(),
+                world,
                 Optional.empty(),
                 Optional.empty(),
                 Optional.empty())
-                .observedBy(observationId)
-                .withSubject(subject);
+                .observedBy(observationId);
+        CaptureContext routed = route.apply(context);
         captureOrder.publish(point -> currentSink.accept(new CaptureBridge.CapturePacket(
                 point.captureTimeNanos(),
                 point.serverTick(),
@@ -446,7 +468,7 @@ public final class Paper26_2CaptureBridge implements CaptureBridge {
                 PacketPhase.PLAY,
                 encoded.packetId(),
                 encoded.payload(),
-                context)));
+                routed)));
     }
 
     /**

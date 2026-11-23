@@ -171,6 +171,17 @@ public final class ReplayEventDispatcher implements ReplayEventPublisher, AutoCl
                 sessionId, replayId, viewerId, entity, attack, hand, Instant.now()));
     }
 
+    /** Publishes a viewer's click on a block of the replay with recorded state. */
+    public void playbackBlockInteracted(
+            PlaybackSessionId sessionId,
+            ReplayId replayId,
+            UUID viewerId,
+            dev.voldechse.replayframework.adapter.PlaybackBridge.BlockInteraction interaction) {
+        publish(new ReplayEventPublisher.PlaybackBlockInteracted(
+                sessionId, replayId, viewerId, interaction.world(), interaction.position(),
+                interaction.block(), interaction.hand(), Instant.now()));
+    }
+
     @Override
     public void close() {
         if (closed.compareAndSet(false, true)) {

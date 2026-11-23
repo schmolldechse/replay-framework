@@ -217,7 +217,7 @@ public final class Paper26_2SnapshotProvider
         return point == null
                 ? snapshot
                 : new Paper26_2CheckpointEncoder.CheckpointSnapshot(
-                        java.util.Optional.of(point), snapshot.packets(), snapshot.subjects());
+                        java.util.Optional.of(point), snapshot.packets(), snapshot.subjects(), snapshot.blockStates());
     }
 
     private static CompletionStage<Void> allOf(List<CompletionStage<Void>> stages) {
@@ -425,6 +425,7 @@ public final class Paper26_2SnapshotProvider
             List<Paper26_2CheckpointEncoder.PacketBlueprint> packets = new ArrayList<>();
             List<dev.voldechse.replayframework.adapter.paper.v26_2.argus.Paper26_2SubjectStates.Subject> subjects =
                     new ArrayList<>();
+            Map<String, List<net.minecraft.network.protocol.Packet<?>>> blockStates = new HashMap<>();
             for (Map.Entry<String, Set<ChunkCoordinate>> entry : selectedByWorld.entrySet()) {
                 String worldKey = entry.getKey();
                 ServerLevel level = handle(worldKey);
@@ -438,6 +439,8 @@ public final class Paper26_2SnapshotProvider
                     if (chunk == null) {
                         continue;
                     }
+                    blockStates.computeIfAbsent(worldKey, ignored -> new ArrayList<>()).addAll(
+                            dev.voldechse.replayframework.adapter.paper.v26_2.argus.Paper26_2BlockStates.snapshot(chunk));
                     packets.add(blueprint(
                             new ClientboundLevelChunkWithLightPacket(
                                     chunk,
@@ -459,7 +462,7 @@ public final class Paper26_2SnapshotProvider
                 addEntityPackets(packets, level, worldKey, entry.getValue());
             }
             return new Paper26_2CheckpointEncoder.CheckpointSnapshot(
-                    java.util.Optional.empty(), packets, subjects);
+                    java.util.Optional.empty(), packets, subjects, blockStates);
         }
 
         private void addGlobalPackets(

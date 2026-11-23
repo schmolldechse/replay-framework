@@ -215,9 +215,11 @@ The session answers questions about the scene at the current position:
 | `entities()` | every entity of the viewed world with type, position, name, health, equipment, effects and flags | none |
 | `entity(int)` | the entity a viewer's client knows by this ID | none |
 | `state(RecordedSubject)` | the inventory, held slot, vitals and experience of a player, or the inventory of an entity | reads the subject's state track |
+| `container(Key, BlockPosition)` | the contents of a chest, barrel, furnace or other container block | reads the world's block state track |
 | `recordedPlayers()` | every player in every world | reads other world tracks |
 
-A viewer clicking a replay entity produces a `PlaybackEntityInteracted` event.
+A viewer clicking a replay entity produces a `PlaybackEntityInteracted`
+event, a click on a recorded container a `PlaybackBlockInteracted` event.
 [Recording tracks](recording-tracks.md#api) shows each of these with an
 example.
 

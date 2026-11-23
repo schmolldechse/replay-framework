@@ -27,6 +27,16 @@ public interface ArgusPublisher {
      */
     void publishState(UUID observationId, CaptureSubject subject, Object packet);
 
+    /**
+     * Publishes one native packet with the state of a block that the scene
+     * does not show, such as the contents of a chest, on the server thread.
+     *
+     * @param observationId identity of the watch the block belongs to
+     * @param world namespaced world key
+     * @param packet native packet object that names its block
+     */
+    void publishBlockState(UUID observationId, String world, Object packet);
+
     /** Reports that a scene ended, so state kept under its identity can be dropped. */
     void sceneClosed(UUID sceneId);
 }

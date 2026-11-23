@@ -128,7 +128,9 @@ flowchart TB
 | `Paper26_2ViewResetter` | removes replay-owned boss bars, tab entries, entities and block cracks on reset and close |
 | `Paper26_2SceneEntityTracker` | keeps type, position, name, health, equipment, effects and flags of every replay entity from the frames played |
 | `Paper26_2SubjectStateDecoder` | decodes a state track's packets into a `SubjectState` |
-| `ReplayEntityInteractions` | consumes `interact` and `attack` packets aimed at replay entities |
+| `Paper26_2SceneBlocks` | knows where the scene shows a container with recorded contents |
+| `Paper26_2BlockStateDecoder` | builds a container's contents from the block state track |
+| `ReplayEntityInteractions` | consumes `interact` and `attack` packets aimed at replay entities and `use_item_on` packets aimed at recorded containers |
 
 Replay packets are never observed or recaptured by PacketEvents, because
 they bypass its listeners.
@@ -200,7 +202,7 @@ generated from the definitions' declarations.
 | 3 | `minecraft:award_stats` | player | stateful | viewer-local | no | - |  |
 | 4 | `minecraft:block_changed_ack` | world | control | blocked | no | - |  |
 | 5 | `minecraft:block_destruction` | effect | ephemeral | replayed, IDs rewritten | no | ears, identical copies |  |
-| 6 | `minecraft:block_entity_data` | world | stateful | replayed | yes | eye, broadcast |  |
+| 6 | `minecraft:block_entity_data` | world | stateful | replayed | yes | eye, broadcast | with complete data also the contents of containers, read by Argus into the block state track |
 | 7 | `minecraft:block_event` | world | ephemeral | replayed | no | ears, identical copies |  |
 | 8 | `minecraft:block_update` | world | stateful | replayed | yes | eye, broadcast |  |
 | 9 | `minecraft:boss_event` | effect | stateful | replayed, IDs rewritten | yes | ears, identical copies |  |

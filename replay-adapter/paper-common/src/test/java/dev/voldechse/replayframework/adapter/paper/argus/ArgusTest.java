@@ -63,6 +63,10 @@ class ArgusTest {
                 }
 
                 @Override
+                public void publishBlockState(UUID observationId, String world, Object packet) {
+                }
+
+                @Override
                 public void sceneClosed(UUID sceneId) {
                     closedScenes.add(sceneId);
                 }
@@ -548,6 +552,16 @@ class ArgusTest {
                 java.util.Collection<dev.voldechse.replayframework.api.recording.CuboidRegion> areas,
                 SubjectSample.Cadence cadence) {
             return List.of();
+        }
+
+        @Override
+        public java.util.Optional<List<BlockSample>> blockStates(String world, int chunkX, int chunkZ) {
+            return java.util.Optional.of(List.of());
+        }
+
+        @Override
+        public Object blockStateRemoved(dev.voldechse.replayframework.api.recording.BlockPosition position) {
+            return position;
         }
 
         @Override

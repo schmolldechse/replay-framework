@@ -17,10 +17,12 @@ another world is read only when someone asks for it.
 | `GLOBAL` | none | world-wide packets: chat, tab list, player profiles | always |
 | `WORLD` | world key | the scene of one world: chunks, blocks, entities, effects, time, weather, border | the viewed world always; other worlds when players there are queried |
 | `STATE` | subject | the state of one subject that the scene does not show | when the subject's state is queried |
+| `BLOCK_STATE` | world key | the contents of the containers of one world: chests, barrels, furnaces and more | when a container's contents are queried |
 
 A recording has exactly one `GLOBAL` track, one `WORLD` track per recorded
-world and one `STATE` track per recorded subject. A track is created when
-its first packet arrives.
+world, one `STATE` track per recorded subject and one `BLOCK_STATE` track
+per world with containers. A track is created when its first packet
+arrives.
 
 For example, a four-minute recording of two players who travelled from the
 overworld into the nether, while a few chest minecarts and donkeys were in
@@ -46,7 +48,9 @@ The core routes every captured packet to exactly one track:
 flowchart TD
     packet["Captured packet"] --> subject{"Names a subject?"}
     subject -->|yes| state["STATE track of that subject"]
-    subject -->|no| wide{"World-wide?"}
+    subject -->|no| block{"Block state?"}
+    block -->|yes| blocks["BLOCK_STATE track of its world"]
+    block -->|no| wide{"World-wide?"}
     wide -->|yes| global["GLOBAL track"]
     wide -->|no| world["WORLD track of its world"]
 ```
@@ -54,6 +58,8 @@ flowchart TD
 - A packet names a subject when its definition declares it as the
   recipient's own state (`RecipientState`), or when Argus sampled it for an
   entity.
+- A packet is block state when Argus read it from a container block; see
+  [containers](#containers).
 - A packet is world-wide when its definition says so: public chat, system
   broadcasts and the tab list.
 - Every other packet belongs to the world it was observed in.
@@ -76,8 +82,9 @@ health where the client gets it, effects, flags and type-specific metadata.
 A `STATE` track holds only what no client sees without opening the subject
 or being it.
 
-Not recorded: the item a player holds on its cursor, its abilities, the
-containers it opens, and the contents of block entities such as chests.
+Not recorded: the item a player holds on its cursor, its abilities, and the
+contents of an ender chest. The contents of chests and other container
+blocks are recorded per world, see [containers](#containers).
 
 ### State sources
 
@@ -106,6 +113,34 @@ When a subject comes into a watch's coverage, its complete state is
 published. A subject that leaves the coverage keeps its track, which
 receives empty checkpoints until the subject returns.
 
+## Containers
+
+Blocks hold items too: chests, barrels, shulker boxes, hoppers. Nobody
+receives their contents without opening them, and a world can hold
+thousands of them. They are therefore not subjects with a track each, but
+share one `BLOCK_STATE` track per world, in which every frame names its
+block.
+
+| Recorded | Not recorded |
+|---|---|
+| chests, trapped and copper chests, barrels, shulker boxes, hoppers, dispensers, droppers, crafters, furnaces, blast furnaces, smokers, brewing stands, chiseled bookshelves, shelves, decorated pots, jukeboxes | ender chests, whose contents belong to the player who opens them |
+
+- **Packets.** A container's contents are one native `block_entity_data`
+  packet: position, block entity type and the block entity's complete data,
+  items included. The server sends the same packet to clients with less
+  data; the recording keeps all of it and never replays it to a viewer. A
+  container that is gone is recorded as a `block_update` to air at its
+  position.
+- **Double chests.** Each half is recorded on its own and names its other
+  half and its side in its data, so playback returns both as one container
+  of 54 slots, the right half first, as the game shows it.
+- **Reading.** `Paper26_2BlockStates` reads every chunk of the watch's
+  coverage once per `ObserverOptions.stateSampleInterval`. The chunks are
+  spread over the ticks of the interval, so a storage hall costs a little
+  every tick instead of a lot at once. A container is published when it is
+  new to the recording or its contents changed; a chunk that leaves the
+  coverage is forgotten and read completely when it returns.
+
 ## Checkpoints across tracks
 
 At every checkpoint barrier, every track writes a checkpoint: the packets a
@@ -116,6 +151,7 @@ client needs to start that track at that moment.
 | `WORLD` | the scene of that world within the watch's coverage |
 | `GLOBAL` | the tab list |
 | `STATE` | the complete state of its subject, built like the packets a client receives on join or when opening the subject |
+| `BLOCK_STATE` | the contents of every container of that world within the coverage |
 
 All tracks share the barrier's ordinal and time. A track created later
 writes empty checkpoints for the barriers before it, so every track has one
@@ -212,6 +248,17 @@ earlier format revisions are not read.
   the current position, and lets the adapter decode them
   (`PlaybackBridge.decodeState`).
 
+- **Containers.** `PlaybackSession.container(world, position)` opens the
+  world's block state track on first use and reads it like a state track.
+  The adapter finds the latest frame of the position by the position every
+  block state packet starts with, without decoding the others, and loads
+  its data into a fresh block entity of its type
+  (`PlaybackBridge.decodeBlock`).
+
+State tracks and block state tracks keep the checkpoint of their last
+barrier and the last decoded result; a query whose barrier and frames are
+unchanged costs no reading or decoding.
+
 Queries that may read a track outside the timeline return a
 `CompletionStage`.
 
@@ -275,3 +322,31 @@ framework.events().subscribe(event -> {
 
 Packets aimed at live entities pass unchanged. The example plugin opens an
 inventory view of the clicked subject this way.
+
+### Containers
+
+```java
+session.container(Key.key("minecraft:overworld"), new BlockPosition(12, 64, -30))
+        .thenAccept(state -> state
+                .flatMap(found -> found.section(SubjectState.CONTAINER))
+                .ifPresent(chest -> { /* chest.items(): 27 slots, or 54 for a double chest */ }));
+```
+
+The result is a `SubjectState` with one `SubjectState.CONTAINER` section in
+the container's own slot order: 3 slots for a furnace, 5 for a hopper or
+brewing stand, 27 for a chest. It is empty when the recording has no
+container at the position at the current playback position.
+
+A viewer's right-click on a recorded container of the scene produces a
+`PlaybackBlockInteracted` event with world, position and block entity type.
+The 26.2 bridge learns where containers are from the chunk and block update
+packets it plays, and consumes the viewer's `use_item_on` packet for such a
+block before the server's packet handler; clicks on other blocks pass.
+
+```java
+framework.events().subscribe(event -> {
+    if (event instanceof ReplayEventPublisher.PlaybackBlockInteracted clicked) {
+        // clicked.world(), clicked.position(), clicked.block(); query session.container(...)
+    }
+});
+```

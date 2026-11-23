@@ -99,6 +99,46 @@ public interface PlaybackBridge {
         return java.util.Optional.empty();
     }
 
+    /**
+     * Builds the state of a block, such as the contents of a chest, from the
+     * frames of its world's block state track: the checkpoint at the playback
+     * position's barrier, then the frames up to the position. The default
+     * bridge knows no block state.
+     */
+    default java.util.Optional<dev.voldechse.replayframework.api.playback.SubjectState> decodeBlock(
+            dev.voldechse.replayframework.api.recording.BlockPosition position,
+            List<RawPacketFrame> frames) {
+        return java.util.Optional.empty();
+    }
+
+    /**
+     * Receives the viewer's clicks on blocks with recorded state, such as a
+     * chest of the replay. The bridge keeps them from the server.
+     */
+    default void setBlockInteractionHandler(Consumer<BlockInteraction> handler) {
+    }
+
+    /**
+     * A viewer's click on a block of the replay with recorded state.
+     *
+     * @param world the recorded world of the block
+     * @param position the block's position
+     * @param block the block's type, such as {@code minecraft:chest}
+     * @param hand the hand the viewer used
+     */
+    record BlockInteraction(
+            net.kyori.adventure.key.Key world,
+            dev.voldechse.replayframework.api.recording.BlockPosition position,
+            net.kyori.adventure.key.Key block,
+            org.bukkit.inventory.EquipmentSlot hand) {
+        public BlockInteraction {
+            java.util.Objects.requireNonNull(world, "world");
+            java.util.Objects.requireNonNull(position, "position");
+            java.util.Objects.requireNonNull(block, "block");
+            java.util.Objects.requireNonNull(hand, "hand");
+        }
+    }
+
     /** What the scene shows of the entity the viewer's client knows by this ID. */
     default java.util.Optional<dev.voldechse.replayframework.api.playback.RecordedEntity> entity(
             int clientEntityId) {

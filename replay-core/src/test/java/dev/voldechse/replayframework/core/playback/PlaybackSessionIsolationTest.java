@@ -417,6 +417,13 @@ final class PlaybackSessionIsolationTest {
             }
 
             @Override
+            public CompletionStage<java.util.Optional<dev.voldechse.replayframework.api.playback.SubjectState>> container(
+                    net.kyori.adventure.key.Key world,
+                    dev.voldechse.replayframework.api.recording.BlockPosition position) {
+                return CompletableFuture.completedFuture(java.util.Optional.empty());
+            }
+
+            @Override
             public java.util.Optional<dev.voldechse.replayframework.api.playback.RecordedEntity> entity(
                     int clientEntityId) {
                 return java.util.Optional.empty();

@@ -113,15 +113,25 @@ public interface CheckpointEncoder {
      * @param initializationFrames the scene: what a client needs to join it
      * @param subjects the complete state of every subject in the scope at the
      *                 barrier; each becomes the checkpoint of its state track
+     * @param blockStates the state of every block in the scope with state the
+     *                    scene does not show, per world; each becomes the
+     *                    checkpoint of that world's block state track
      */
     record CheckpointCapture(
             CapturePoint point,
             List<RawPacketFrame> initializationFrames,
-            List<SubjectState> subjects) {
+            List<SubjectState> subjects,
+            List<BlockStates> blockStates) {
 
         /** A capture of the scene alone. */
         public CheckpointCapture(CapturePoint point, List<RawPacketFrame> initializationFrames) {
-            this(point, initializationFrames, List.of());
+            this(point, initializationFrames, List.of(), List.of());
+        }
+
+        /** A capture of the scene and the subjects. */
+        public CheckpointCapture(
+                CapturePoint point, List<RawPacketFrame> initializationFrames, List<SubjectState> subjects) {
+            this(point, initializationFrames, subjects, List.of());
         }
 
         public CheckpointCapture {
@@ -133,6 +143,20 @@ public interface CheckpointEncoder {
             }
             initializationFrames = List.copyOf(copied);
             subjects = List.copyOf(Objects.requireNonNull(subjects, "subjects"));
+            blockStates = List.copyOf(Objects.requireNonNull(blockStates, "blockStates"));
+        }
+    }
+
+    /**
+     * The state of the blocks of one world at a checkpoint barrier.
+     *
+     * @param world the world key
+     * @param frames one or more packets per block, stamped with the barrier
+     */
+    record BlockStates(String world, List<RawPacketFrame> frames) {
+        public BlockStates {
+            Objects.requireNonNull(world, "world");
+            frames = List.copyOf(Objects.requireNonNull(frames, "frames"));
         }
     }
 

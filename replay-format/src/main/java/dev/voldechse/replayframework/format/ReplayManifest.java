@@ -97,6 +97,7 @@ public record ReplayManifest(
         Set<Integer> ids = new HashSet<>();
         Set<String> worlds = new HashSet<>();
         Set<TrackSubject> subjects = new HashSet<>();
+        Set<String> blockStates = new HashSet<>();
         int globals = 0;
         for (TrackDescriptor track : tracks) {
             Objects.requireNonNull(track, "tracks contains null");
@@ -113,6 +114,11 @@ public record ReplayManifest(
                 case STATE -> {
                     if (!subjects.add(track.subject().orElseThrow())) {
                         throw new IllegalArgumentException("duplicate state track: " + track.subject().get());
+                    }
+                }
+                case BLOCK_STATE -> {
+                    if (!blockStates.add(track.world().orElseThrow())) {
+                        throw new IllegalArgumentException("duplicate block state track: " + track.world().get());
                     }
                 }
             }

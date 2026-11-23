@@ -120,6 +120,21 @@ public final class Paper26_2ArgusPlatform implements ArgusPlatform {
         return Paper26_2SubjectStates.samples(level(world), boxes, cadence);
     }
 
+    @Override
+    public java.util.Optional<List<dev.voldechse.replayframework.adapter.paper.argus.BlockSample>> blockStates(
+            String world, int chunkX, int chunkZ) {
+        NamespacedKey key = NamespacedKey.fromString(world);
+        World loaded = key == null ? null : Bukkit.getWorld(key);
+        return loaded == null
+                ? java.util.Optional.empty()
+                : Paper26_2BlockStates.samples(level(world), chunkX, chunkZ);
+    }
+
+    @Override
+    public Object blockStateRemoved(dev.voldechse.replayframework.api.recording.BlockPosition position) {
+        return Paper26_2BlockStates.removed(position);
+    }
+
     private static ServerLevel level(String worldKey) {
         NamespacedKey key = NamespacedKey.fromString(worldKey);
         World world = key == null ? null : Bukkit.getWorld(key);

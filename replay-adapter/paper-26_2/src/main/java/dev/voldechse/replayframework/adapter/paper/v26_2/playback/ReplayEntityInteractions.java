@@ -14,14 +14,16 @@ import net.minecraft.world.InteractionHand;
 import org.bukkit.craftbukkit.CraftEquipmentSlot;
 
 /**
- * Reads a replay viewer's interactions with replay entities from its
- * serverbound packets.
+ * Reads a replay viewer's interactions with replay entities and recorded
+ * blocks from its serverbound packets.
  *
  * <p>The handler sits directly before the server's {@code packet_handler}
  * of the viewer's connection and sees the decoded packets. A use or attack
- * packet aimed at an entity of the replay is handed to the playback and kept
- * from the server, which knows no such entity. Every other packet passes
- * unchanged.</p>
+ * packet aimed at an entity of the replay, and a use of a block of the
+ * replay whose contents are recorded, such as a chest, are handed to the
+ * playback and kept from the server, which knows neither. Every other packet
+ * passes unchanged. The client sends a block use once per hand; only the main
+ * hand's is reported.</p>
  */
 final class ReplayEntityInteractions extends ChannelInboundHandlerAdapter {
 
@@ -32,24 +34,38 @@ final class ReplayEntityInteractions extends ChannelInboundHandlerAdapter {
 
     private final IntFunction<Optional<RecordedEntity>> entities;
     private final Consumer<PlaybackBridge.EntityInteraction> interactions;
+    private final java.util.function.BiFunction<net.minecraft.core.BlockPos, org.bukkit.inventory.EquipmentSlot,
+            Optional<PlaybackBridge.BlockInteraction>> blocks;
+    private final Consumer<PlaybackBridge.BlockInteraction> blockInteractions;
     private final Consumer<Throwable> failureHandler;
 
     /**
      * @param entities what the scene shows of the entity with a client entity ID
      * @param interactions receives the interactions
+     * @param blocks the click on a recorded block at a position, when there is one
+     * @param blockInteractions receives the clicks on recorded blocks
      * @param failureHandler receives failures; the packet then passes on
      */
     ReplayEntityInteractions(
             IntFunction<Optional<RecordedEntity>> entities,
             Consumer<PlaybackBridge.EntityInteraction> interactions,
+            java.util.function.BiFunction<net.minecraft.core.BlockPos, org.bukkit.inventory.EquipmentSlot,
+                    Optional<PlaybackBridge.BlockInteraction>> blocks,
+            Consumer<PlaybackBridge.BlockInteraction> blockInteractions,
             Consumer<Throwable> failureHandler) {
         this.entities = Objects.requireNonNull(entities, "entities");
         this.interactions = Objects.requireNonNull(interactions, "interactions");
+        this.blocks = Objects.requireNonNull(blocks, "blocks");
+        this.blockInteractions = Objects.requireNonNull(blockInteractions, "blockInteractions");
         this.failureHandler = Objects.requireNonNull(failureHandler, "failureHandler");
     }
 
     @Override
     public void channelRead(ChannelHandlerContext context, Object message) {
+        if (message instanceof net.minecraft.network.protocol.game.ServerboundUseItemOnPacket use) {
+            useBlock(context, use);
+            return;
+        }
         int entityId;
         boolean attack;
         InteractionHand hand;
@@ -76,6 +92,25 @@ final class ReplayEntityInteractions extends ChannelInboundHandlerAdapter {
         } catch (Throwable failure) {
             failureHandler.accept(failure);
             context.fireChannelRead(message);
+        }
+    }
+
+    /** Consumes the use of a recorded block, such as a chest of the replay. */
+    private void useBlock(ChannelHandlerContext context, net.minecraft.network.protocol.game.ServerboundUseItemOnPacket use) {
+        try {
+            org.bukkit.inventory.EquipmentSlot hand = CraftEquipmentSlot.getHand(use.getHand());
+            Optional<PlaybackBridge.BlockInteraction> interaction =
+                    blocks.apply(use.getHitResult().getBlockPos(), hand);
+            if (interaction.isEmpty()) {
+                context.fireChannelRead(use);
+                return;
+            }
+            if (use.getHand() == InteractionHand.MAIN_HAND) {
+                blockInteractions.accept(interaction.get());
+            }
+        } catch (Throwable failure) {
+            failureHandler.accept(failure);
+            context.fireChannelRead(use);
         }
     }
 }

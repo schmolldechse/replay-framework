@@ -241,7 +241,7 @@ final class DefaultPlaybackService implements PlaybackService {
         // The scene is the global and the world tracks; state tracks are read
         // only when a subject's state is asked for.
         List<CompletableFuture<PreparedArtifacts>> preparing = manifest.tracks().stream()
-                .filter(track -> track.kind() != TrackKind.STATE)
+                .filter(track -> track.kind() == TrackKind.GLOBAL || track.kind() == TrackKind.WORLD)
                 .map(track -> fetchAndReadIndex(verified, track)
                         .thenApply(index -> new PreparedArtifacts(
                                 track,
@@ -325,6 +325,8 @@ final class DefaultPlaybackService implements PlaybackService {
                                     states.withSubject(interaction.entity()),
                                     interaction.attack(),
                                     interaction.hand())));
+                    bridge.setBlockInteractionHandler(interaction -> eventDispatcher.blockInteracted(
+                            sessionId, request.replayId(), viewerId, interaction));
                     SeekPoint initialPoint = reference.index()
                             .seekCheckpointFloor(Duration.ZERO)
                             .orElseThrow(() -> corrupt("replay has no initial checkpoint"));

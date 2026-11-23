@@ -44,6 +44,7 @@ final class ArgusWatch implements SceneObservation.Watch {
     private final Map<UUID, Companion> companions = new LinkedHashMap<>();
     private final Set<UUID> overBudget = new HashSet<>();
     private final SubjectStates subjects;
+    private final BlockStates blocks;
     private volatile RecordingScope coverage;
     private volatile boolean closeRequested;
     private boolean opened;
@@ -59,8 +60,9 @@ final class ArgusWatch implements SceneObservation.Watch {
         this.fixedEyes = List.copyOf(fixedEyes);
         this.coverage = initialCoverage;
         this.onClose = onClose;
-        this.subjects = new SubjectStates(services, request.observationId(),
-                Math.max(1L, request.options().stateSampleInterval().toMillis() / MILLIS_PER_TICK));
+        long intervalTicks = Math.max(1L, request.options().stateSampleInterval().toMillis() / MILLIS_PER_TICK);
+        this.subjects = new SubjectStates(services, request.observationId(), intervalTicks);
+        this.blocks = new BlockStates(services, request.observationId(), intervalTicks);
     }
 
     @Override
@@ -146,6 +148,7 @@ final class ArgusWatch implements SceneObservation.Watch {
         refreshCoverage();
         if (!scenes.isEmpty()) {
             subjects.tick(coverage);
+            blocks.tick(coverage);
         }
     }
 

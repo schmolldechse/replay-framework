@@ -58,6 +58,8 @@ public final class Paper26_2PlaybackBridge implements PlaybackBridge {
     /** The recorded world the viewer watches; only its frames are sent. */
     private final AtomicReference<String> viewedWorld = new AtomicReference<>();
     private final Paper26_2SceneEntityTracker scene = new Paper26_2SceneEntityTracker();
+    private final Paper26_2SceneBlocks sceneBlocks = new Paper26_2SceneBlocks();
+    private volatile java.util.function.Consumer<BlockInteraction> blockInteractions;
 
     /**
      * Opens one channel-local playback boundary and schedules gate
@@ -204,6 +206,7 @@ public final class Paper26_2PlaybackBridge implements PlaybackBridge {
             gate.resumeIsolation();
             resetter.reset();
             scene.clear();
+            sceneBlocks.clear();
             Paper26_2ReplayPacketRewriter currentRewriter = rewriter.get();
             if (currentRewriter != null) {
                 currentRewriter.resetView();
@@ -336,9 +339,51 @@ public final class Paper26_2PlaybackBridge implements PlaybackBridge {
         return Paper26_2SubjectStateDecoder.decode(subject, packets);
     }
 
+    @Override
+    public java.util.Optional<dev.voldechse.replayframework.api.playback.SubjectState> decodeBlock(
+            dev.voldechse.replayframework.api.recording.BlockPosition position, List<RawPacketFrame> frames) {
+        return Paper26_2BlockStateDecoder.decode(
+                position,
+                frames,
+                frame -> registry.find(frame.phase(), PacketDescriptor.Direction.CLIENTBOUND, frame.packetId())
+                        .map(descriptor -> descriptor.typeName().endsWith(":block_entity_data")
+                                || descriptor.typeName().endsWith(":block_update"))
+                        .orElse(false),
+                codec::decode,
+                net.minecraft.server.MinecraftServer.getServer().registryAccess());
+    }
+
+    @Override
+    public void setBlockInteractionHandler(java.util.function.Consumer<BlockInteraction> handler) {
+        this.blockInteractions = java.util.Objects.requireNonNull(handler, "handler");
+    }
+
+    /** The viewer's click on a recorded block of the viewed world, when there is one at the position. */
+    private java.util.Optional<BlockInteraction> blockInteraction(
+            net.minecraft.core.BlockPos pos, org.bukkit.inventory.EquipmentSlot hand) {
+        String world = viewedWorld.get();
+        java.util.function.Consumer<BlockInteraction> handler = blockInteractions;
+        if (world == null || handler == null) {
+            return java.util.Optional.empty();
+        }
+        return sceneBlocks.block(world, pos).map(block -> new BlockInteraction(
+                net.kyori.adventure.key.Key.key(world),
+                new dev.voldechse.replayframework.api.recording.BlockPosition(pos.getX(), pos.getY(), pos.getZ()),
+                block,
+                hand));
+    }
+
+    private void blockInteracted(BlockInteraction interaction) {
+        java.util.function.Consumer<BlockInteraction> handler = blockInteractions;
+        if (handler != null) {
+            handler.accept(interaction);
+        }
+    }
+
     /**
-     * Reads the viewer's use and attack packets aimed at replay entities and
-     * hands them to the playback; the server never sees them.
+     * Reads the viewer's use and attack packets aimed at replay entities, and
+     * its clicks on recorded blocks such as chests, and hands them to the
+     * playback; the server never sees them.
      */
     @Override
     public void setInteractionHandler(java.util.function.Consumer<EntityInteraction> handler) {
@@ -351,7 +396,8 @@ public final class Paper26_2PlaybackBridge implements PlaybackBridge {
                 pipeline.addBefore(
                         ReplayEntityInteractions.SERVER_HANDLER_NAME,
                         ReplayEntityInteractions.HANDLER_NAME,
-                        new ReplayEntityInteractions(this::entity, handler, this::fail));
+                        new ReplayEntityInteractions(
+                                this::entity, handler, this::blockInteraction, this::blockInteracted, this::fail));
             }
         });
     }
@@ -489,6 +535,7 @@ public final class Paper26_2PlaybackBridge implements PlaybackBridge {
                         "replay packet descriptor disappeared from the verified registry", null));
         // Players are followed in every world, before the world filter.
         scene.observe(frame, descriptor.typeName(), codec::decode);
+        sceneBlocks.observe(frame, descriptor.typeName(), codec::decode);
         // A client can only apply packets of the world it is in; a chunk of
         // another dimension has a different height and breaks the connection.
         String world = viewedWorld.get();
