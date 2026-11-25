@@ -1,5 +1,7 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.playback;
 
+import dev.voldechse.replayframework.adapter.playback.ViewerInteractions;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -35,14 +37,14 @@ class ReplayEntityInteractionsTest {
             Map.of(), List.of(), Set.of(), Optional.empty());
 
     private static final net.minecraft.core.BlockPos CHEST = new net.minecraft.core.BlockPos(4, 64, 9);
-    private static final PlaybackBridge.BlockInteraction CHEST_CLICK = new PlaybackBridge.BlockInteraction(
+    private static final ViewerInteractions.BlockInteraction CHEST_CLICK = new ViewerInteractions.BlockInteraction(
             Key.key("minecraft:overworld"),
             new dev.voldechse.replayframework.api.recording.BlockPosition(4, 64, 9),
             Key.key("minecraft:chest"),
             EquipmentSlot.HAND);
 
-    private final List<PlaybackBridge.EntityInteraction> interactions = new ArrayList<>();
-    private final List<PlaybackBridge.BlockInteraction> blockInteractions = new ArrayList<>();
+    private final List<ViewerInteractions.EntityInteraction> interactions = new ArrayList<>();
+    private final List<ViewerInteractions.BlockInteraction> blockInteractions = new ArrayList<>();
     private final List<Throwable> failures = new ArrayList<>();
 
     @BeforeAll
@@ -60,8 +62,8 @@ class ReplayEntityInteractionsTest {
 
         assertNull(channel.readInbound());
         assertEquals(List.of(
-                new PlaybackBridge.EntityInteraction(LLAMA, false, EquipmentSlot.OFF_HAND),
-                new PlaybackBridge.EntityInteraction(LLAMA, true, EquipmentSlot.HAND)), interactions);
+                new ViewerInteractions.EntityInteraction(LLAMA, false, EquipmentSlot.OFF_HAND),
+                new ViewerInteractions.EntityInteraction(LLAMA, true, EquipmentSlot.HAND)), interactions);
         assertTrue(failures.isEmpty());
     }
 
@@ -111,7 +113,7 @@ class ReplayEntityInteractionsTest {
                 id -> id == REPLAY_ENTITY ? Optional.of(LLAMA) : Optional.empty(),
                 interactions::add,
                 (pos, hand) -> pos.equals(CHEST)
-                        ? Optional.of(new PlaybackBridge.BlockInteraction(
+                        ? Optional.of(new ViewerInteractions.BlockInteraction(
                                 CHEST_CLICK.world(), CHEST_CLICK.position(), CHEST_CLICK.block(), hand))
                         : Optional.empty(),
                 blockInteractions::add,

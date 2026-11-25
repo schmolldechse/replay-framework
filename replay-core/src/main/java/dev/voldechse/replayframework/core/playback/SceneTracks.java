@@ -1,6 +1,7 @@
 package dev.voldechse.replayframework.core.playback;
 
-import dev.voldechse.replayframework.adapter.PlaybackBridge;
+import dev.voldechse.replayframework.adapter.playback.SceneQueries;
+
 import dev.voldechse.replayframework.api.playback.RecordedPlayer;
 import dev.voldechse.replayframework.format.RawPacketFrame;
 import dev.voldechse.replayframework.format.ReplayIndex;
@@ -33,7 +34,7 @@ final class SceneTracks implements AutoCloseable {
     private final Map<String, MergedTrackData.Track> worlds;
     private final ReplayIndex reference;
     private final long durationNanos;
-    private final PlaybackBridge bridge;
+    private final SceneQueries bridge;
     private final MergedTrackData timeline;
     private volatile String viewed;
 
@@ -49,7 +50,7 @@ final class SceneTracks implements AutoCloseable {
             Map<String, MergedTrackData.Track> worlds,
             ReplayIndex reference,
             long durationNanos,
-            PlaybackBridge bridge) {
+            SceneQueries bridge) {
         this.global = Objects.requireNonNull(global, "global");
         this.worlds = Map.copyOf(Objects.requireNonNull(worlds, "worlds"));
         this.reference = Objects.requireNonNull(reference, "reference");

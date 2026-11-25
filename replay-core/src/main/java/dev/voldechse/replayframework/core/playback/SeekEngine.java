@@ -1,6 +1,7 @@
 package dev.voldechse.replayframework.core.playback;
 
-import dev.voldechse.replayframework.adapter.PlaybackBridge;
+import dev.voldechse.replayframework.adapter.playback.ViewerStream;
+
 import dev.voldechse.replayframework.adapter.PlaybackEmissionMode;
 import dev.voldechse.replayframework.api.playback.PlaybackSpeed;
 import dev.voldechse.replayframework.core.playback.buffer.PrefetchPlanner;
@@ -26,14 +27,14 @@ final class SeekEngine {
     private final ReplayIndex index;
     private final long durationNanos;
     private final PlaybackTimeline.PlaybackData data;
-    private final PlaybackBridge bridge;
+    private final ViewerStream bridge;
     private final Executor continuationExecutor;
 
     SeekEngine(
             ReplayIndex index,
             Duration duration,
             PlaybackTimeline.PlaybackData data,
-            PlaybackBridge bridge,
+            ViewerStream bridge,
             Executor continuationExecutor) {
         this.index = Objects.requireNonNull(index, "index");
         this.durationNanos = toNanos(duration, "duration");

@@ -1,11 +1,11 @@
 package dev.voldechse.replayframework.core.playback;
 
+import dev.voldechse.replayframework.adapter.playback.SceneQueries;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.voldechse.replayframework.adapter.PlaybackBridge;
-import dev.voldechse.replayframework.adapter.playback.PlaybackIdentityContext;
 import dev.voldechse.replayframework.api.playback.PlaybackSpeed;
 import dev.voldechse.replayframework.api.playback.RecordedPlayer;
 import dev.voldechse.replayframework.core.playback.buffer.PrefetchPlanner;
@@ -102,21 +102,25 @@ class SceneTracksTest {
         return new RawPacketFrame(elapsedNanos, elapsedNanos / 10L, sequence, PacketPhase.PLAY, 1, new byte[0]);
     }
 
-    private static final class FakeBridge implements PlaybackBridge {
+    private static final class FakeBridge implements SceneQueries {
         private List<RecordedPlayer> played = List.of();
         private List<RecordedPlayer> found = List.of();
         private final List<List<Integer>> scanned = new ArrayList<>();
 
         @Override
-        public void setIdentityContext(PlaybackIdentityContext context) {
+        public List<dev.voldechse.replayframework.adapter.playback.ObserverAnchor> observerAnchors(
+                List<RawPacketFrame> checkpointFrames) {
+            return List.of();
         }
 
         @Override
-        public void send(RawPacketFrame frame) {
+        public java.util.Optional<dev.voldechse.replayframework.api.playback.RecordedEntity> entity(int clientEntityId) {
+            return java.util.Optional.empty();
         }
 
         @Override
-        public void resetView() {
+        public List<dev.voldechse.replayframework.api.playback.RecordedEntity> entities() {
+            return List.of();
         }
 
         @Override
@@ -129,13 +133,13 @@ class SceneTracksTest {
             scanned.add(frames.stream().map(RawPacketFrame::sequence).toList());
             return found;
         }
-
-        @Override
-        public void close() {
-        }
     }
 
     private static final class FakeTrack implements PlaybackTimeline.PlaybackData {
+        @Override
+        public void close() {
+        }
+
         private final List<RawPacketFrame> frames;
         private SeekPoint requestedAfter;
 
@@ -169,10 +173,6 @@ class SceneTracksTest {
         @Override
         public PlaybackTimeline.BufferProgress progress(Duration position) {
             return new PlaybackTimeline.BufferProgress(Duration.ZERO, Duration.ZERO, true);
-        }
-
-        @Override
-        public void close() {
         }
     }
 }

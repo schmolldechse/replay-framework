@@ -1,5 +1,7 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2;
 
+import dev.voldechse.replayframework.adapter.StubPlaybackBridge;
+
 import dev.voldechse.replayframework.adapter.CaptureBridge;
 import dev.voldechse.replayframework.adapter.CheckpointEncoder;
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
@@ -184,7 +186,7 @@ final class Paper26_2PacketRegistryTest {
     }
 
     private static PlaybackBridge noOpPlaybackBridge() {
-        return new PlaybackBridge() {
+        return new StubPlaybackBridge() {
             @Override
             public void setIdentityContext(dev.voldechse.replayframework.adapter.playback.PlaybackIdentityContext context) {
                 java.util.Objects.requireNonNull(context);

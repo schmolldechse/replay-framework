@@ -1,218 +1,34 @@
 package dev.voldechse.replayframework.adapter;
 
 import dev.voldechse.replayframework.adapter.playback.PlaybackIdentityContext;
-import dev.voldechse.replayframework.adapter.playback.ObserverAnchor;
-import dev.voldechse.replayframework.format.RawPacketFrame;
-import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
-import java.util.Objects;
+import dev.voldechse.replayframework.adapter.playback.SceneQueries;
+import dev.voldechse.replayframework.adapter.playback.StateDecoder;
+import dev.voldechse.replayframework.adapter.playback.ViewerInteractions;
+import dev.voldechse.replayframework.adapter.playback.ViewerStream;
+import dev.voldechse.replayframework.adapter.playback.ViewerWorld;
 import java.util.function.Consumer;
 
 /**
- * Adapter boundary for writing validated replay packets to one prepared viewer.
+ * Adapter boundary for one prepared viewer. Each role is its own interface,
+ * so the core depends only on the role it uses and a new feature adds a role
+ * instead of growing this one:
+ *
+ * <ul>
+ *   <li>{@link ViewerStream}: frames, view reset and the outbound queue;</li>
+ *   <li>{@link ViewerWorld}: the recorded world the viewer watches;</li>
+ *   <li>{@link SceneQueries}: entities, players and observer anchors;</li>
+ *   <li>{@link StateDecoder}: subject and block state;</li>
+ *   <li>{@link ViewerInteractions}: the viewer's clicks on the replay.</li>
+ * </ul>
  */
-public interface PlaybackBridge {
+public interface PlaybackBridge extends ViewerStream, ViewerWorld, SceneQueries, StateDecoder, ViewerInteractions {
 
     /** Binds the bridge to one deterministic, session-local identity map. */
     void setIdentityContext(PlaybackIdentityContext context);
 
     /** Routes asynchronous adapter failures back into the owning playback session. */
-    default void setFailureHandler(Consumer<Throwable> failureHandler) {
-        Objects.requireNonNull(failureHandler, "failureHandler");
-    }
+    void setFailureHandler(Consumer<Throwable> failureHandler);
 
-    /**
-     * Decodes ordered observer anchors from an initial checkpoint. Native
-     * packet interpretation remains owned by the versioned adapter.
-     */
-    default List<ObserverAnchor> observerAnchors(List<RawPacketFrame> checkpointFrames) {
-        Objects.requireNonNull(checkpointFrames, "checkpointFrames");
-        return List.of();
-    }
-
-    /** Activates live replay-packet suppression after observer placement. */
-    default void activateReplayIsolation() {
-    }
-
-    /**
-     * Sends one validated clientbound replay frame.
-     *
-     * @param frame raw frame from the matching adapter format
-     * @throws IncompatibleAdapterException when the frame is unknown or blocked
-     * @throws IllegalStateException after {@link #close()}
-     */
-    void send(RawPacketFrame frame);
-
-    /**
-     * Enqueues an ordered batch for one emission purpose. Adapters may filter
-     * transient packets during reconstruction and must retain bounded outbound
-     * processing. The default preserves compatibility with bridges that have
-     * no adapter-specific batching implementation.
-     *
-     * @param frames ordered frames from the matching adapter format
-     * @param mode live playback or state reconstruction
-     */
-    default void sendBatch(List<RawPacketFrame> frames, PlaybackEmissionMode mode) {
-        Objects.requireNonNull(frames, "frames");
-        Objects.requireNonNull(mode, "mode");
-        for (RawPacketFrame frame : List.copyOf(frames)) {
-            send(frame);
-        }
-    }
-
-    /**
-     * Clears the current replay view using adapter-valid clientbound packets.
-     *
-     * @throws IllegalStateException after {@link #close()}
-     */
-    void resetView();
-
-    /**
-     * Chooses the recorded world the viewer watches. A recording can span
-     * several worlds, and a client can only apply the frames of one: a chunk
-     * of another dimension has a different height and breaks the client's
-     * connection. Frames of other worlds are not sent; frames of no world,
-     * such as chat, always are. The viewer's own live world does not matter,
-     * because playback places the viewer in a world of its own.
-     */
-    default void viewWorld(String recordedWorld) {
-    }
-
-    /** Returns the recorded world the viewer watches, when one was chosen. */
-    default java.util.Optional<String> viewedWorld() {
-        return java.util.Optional.empty();
-    }
-
-    /**
-     * Returns the players of the replay at the current playback position,
-     * across all recorded worlds. The default bridge knows none.
-     */
-    /**
-     * Builds the state of a subject from the frames of its state track: the
-     * checkpoint at the playback position's barrier, then the frames up to
-     * the position. The default bridge knows no state.
-     */
-    default java.util.Optional<dev.voldechse.replayframework.api.playback.SubjectState> decodeState(
-            dev.voldechse.replayframework.api.playback.RecordedSubject subject,
-            List<RawPacketFrame> frames) {
-        return java.util.Optional.empty();
-    }
-
-    /**
-     * Builds the state of a block, such as the contents of a chest, from the
-     * frames of its world's block state track: the checkpoint at the playback
-     * position's barrier, then the frames up to the position. The default
-     * bridge knows no block state.
-     */
-    default java.util.Optional<dev.voldechse.replayframework.api.playback.SubjectState> decodeBlock(
-            dev.voldechse.replayframework.api.recording.BlockPosition position,
-            List<RawPacketFrame> frames) {
-        return java.util.Optional.empty();
-    }
-
-    /**
-     * Receives the viewer's clicks on blocks with recorded state, such as a
-     * chest of the replay. The bridge keeps them from the server.
-     */
-    default void setBlockInteractionHandler(Consumer<BlockInteraction> handler) {
-    }
-
-    /**
-     * A viewer's click on a block of the replay with recorded state.
-     *
-     * @param world the recorded world of the block
-     * @param position the block's position
-     * @param block the block's type, such as {@code minecraft:chest}
-     * @param hand the hand the viewer used
-     */
-    record BlockInteraction(
-            net.kyori.adventure.key.Key world,
-            dev.voldechse.replayframework.api.recording.BlockPosition position,
-            net.kyori.adventure.key.Key block,
-            org.bukkit.inventory.EquipmentSlot hand) {
-        public BlockInteraction {
-            java.util.Objects.requireNonNull(world, "world");
-            java.util.Objects.requireNonNull(position, "position");
-            java.util.Objects.requireNonNull(block, "block");
-            java.util.Objects.requireNonNull(hand, "hand");
-        }
-    }
-
-    /** What the scene shows of the entity the viewer's client knows by this ID. */
-    default java.util.Optional<dev.voldechse.replayframework.api.playback.RecordedEntity> entity(
-            int clientEntityId) {
-        return java.util.Optional.empty();
-    }
-
-    /** Every entity of the viewed world at the current position. */
-    default java.util.List<dev.voldechse.replayframework.api.playback.RecordedEntity> entities() {
-        return java.util.List.of();
-    }
-
-    /**
-     * Receives the viewer's interactions with replay entities. The bridge
-     * reads them from the viewer's serverbound packets and keeps them from
-     * the server, which knows no such entity.
-     */
-    default void setInteractionHandler(Consumer<EntityInteraction> handler) {
-    }
-
-    /**
-     * A viewer's interaction with a replay entity.
-     *
-     * @param entity what the scene shows of the entity
-     * @param attack whether the viewer attacked instead of using it
-     * @param hand the hand the viewer used
-     */
-    record EntityInteraction(
-            dev.voldechse.replayframework.api.playback.RecordedEntity entity,
-            boolean attack,
-            org.bukkit.inventory.EquipmentSlot hand) {
-        public EntityInteraction {
-            java.util.Objects.requireNonNull(entity, "entity");
-            java.util.Objects.requireNonNull(hand, "hand");
-        }
-    }
-
-    /**
-     * The players of the replay as the frames played so far show them: every
-     * known name, and the location of the players in the viewed world.
-     */
-    default java.util.List<dev.voldechse.replayframework.api.playback.RecordedPlayer> recordedPlayers() {
-        return java.util.List.of();
-    }
-
-    /**
-     * The players found in frames of one world that are not played, such as a
-     * world's checkpoint and the frames up to the playback position. Used to
-     * locate players in worlds the viewer does not watch.
-     */
-    default java.util.List<dev.voldechse.replayframework.api.playback.RecordedPlayer> players(
-            List<RawPacketFrame> frames) {
-        return java.util.List.of();
-    }
-
-    /**
-     * Completes after all previously queued view packets have been processed
-     * by the adapter and flushed to the viewer connection.
-     *
-     * @return completion stage for the current outbound queue
-     */
-    default CompletionStage<Void> awaitOutboundIdle() {
-        return CompletableFuture.completedFuture(null);
-    }
-
-    /**
-     * Discards replay packets that were queued before a superseding seek.
-     * Implementations must not discard packets already handed to the network.
-     */
-    default void discardQueuedReplayPackets() {
-        // Bridges without an outbound queue have nothing to discard.
-    }
-
-    /**
-     * Closes the bridge and removes bridge-owned handlers. Repeated calls are safe.
-     */
+    /** Closes the bridge and removes bridge-owned handlers. Repeated calls are safe. */
     void close();
 }

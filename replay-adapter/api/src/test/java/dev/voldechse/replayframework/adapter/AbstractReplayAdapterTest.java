@@ -62,7 +62,7 @@ class AbstractReplayAdapterTest {
                 (proxy, method, args) -> { throw new AssertionError("adapter composition mutated or read player state: " + method); });
     }
 
-    private static final class Bridge implements PlaybackBridge {
+    private static final class Bridge extends StubPlaybackBridge {
         private PlaybackIdentityContext identity;
         public void setIdentityContext(PlaybackIdentityContext context) { identity = context; }
         public void send(RawPacketFrame frame) {}

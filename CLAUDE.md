@@ -78,7 +78,7 @@ instead of being extension points.
    `Paper26_2ReplayPacketRewriter`, `Paper26_2CaptureOrder`,
    `Paper26_2AuthoritativeStateIndex`. A second version would copy them.
 2. (Resolved in phase 1.) `Paper26_2PlaybackBridge` and `Paper26_2CaptureBridge` are god classes.
-3. `PlaybackBridge` (adapter API) has 19 default methods; every feature added one.
+3. (Resolved in phase 2, step 1.) `PlaybackBridge` (adapter API) has 19 default methods; every feature added one.
 4. Scene tracking and state decoding mix version-independent rules with
    Minecraft packet decoding. (Open: `Paper26_2SceneEntityTracker`, 360 lines,
    still does both; carried over to phase 2.)
@@ -205,6 +205,15 @@ Status:
   (`installPlaybackGate`, `decodeCapturedFrame`, `uninstallHandler`,
   `uninstallHandlerAndWait`) and the unused `EntityPosition.blockX/Y/Z` are
   gone. Checked in game (replay `5badacb0`), committed.
+
+Phase 2 status:
+- Step 1 implemented: `PlaybackBridge` extends the roles `ViewerStream`,
+  `ViewerWorld`, `SceneQueries`, `StateDecoder`, `ViewerInteractions` (package
+  `adapter.playback`) and keeps only lifecycle; no defaults remain.
+  `PacketScheduler` and `SeekEngine` take `ViewerStream`, `StateTracks` takes
+  `StateDecoder`, `SceneTracks` takes `SceneQueries`. Test stubs extend
+  `StubPlaybackBridge` from the test fixtures of `replay-adapter:api`. Checked
+  in game, committed.
 
 Fixes found while testing phase 1, outside the plan: viewer worlds without
 blocks (`d0c3bc9`), checkpoint-only tracks accepted by the finalizer

@@ -1,6 +1,7 @@
 package dev.voldechse.replayframework.core.playback;
 
-import dev.voldechse.replayframework.adapter.PlaybackBridge;
+import dev.voldechse.replayframework.adapter.playback.ViewerStream;
+
 import dev.voldechse.replayframework.api.playback.PlaybackSpeed;
 import dev.voldechse.replayframework.core.playback.buffer.PrefetchPlanner;
 import dev.voldechse.replayframework.format.RawPacketFrame;
@@ -58,7 +59,7 @@ final class PacketScheduler {
 
     private final PlaybackClock clock;
     private final PlaybackTimeline.PlaybackData data;
-    private final PlaybackBridge bridge;
+    private final ViewerStream bridge;
     private final Listener listener;
     private final long prefetchRefreshNanos;
     private final AtomicBoolean availabilityPending = new AtomicBoolean();
@@ -81,7 +82,7 @@ final class PacketScheduler {
     PacketScheduler(
             PlaybackClock clock,
             PlaybackTimeline.PlaybackData data,
-            PlaybackBridge bridge,
+            ViewerStream bridge,
             Listener listener) {
         this(clock, data, bridge, listener, Duration.ofSeconds(30));
     }
@@ -89,7 +90,7 @@ final class PacketScheduler {
     PacketScheduler(
             PlaybackClock clock,
             PlaybackTimeline.PlaybackData data,
-            PlaybackBridge bridge,
+            ViewerStream bridge,
             Listener listener,
             Duration preloadAhead) {
         this.clock = Objects.requireNonNull(clock, "clock");

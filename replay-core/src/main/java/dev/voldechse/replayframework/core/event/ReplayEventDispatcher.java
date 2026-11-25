@@ -176,7 +176,7 @@ public final class ReplayEventDispatcher implements ReplayEventPublisher, AutoCl
             PlaybackSessionId sessionId,
             ReplayId replayId,
             UUID viewerId,
-            dev.voldechse.replayframework.adapter.PlaybackBridge.BlockInteraction interaction) {
+            dev.voldechse.replayframework.adapter.playback.ViewerInteractions.BlockInteraction interaction) {
         publish(new ReplayEventPublisher.PlaybackBlockInteracted(
                 sessionId, replayId, viewerId, interaction.world(), interaction.position(),
                 interaction.block(), interaction.hand(), Instant.now()));

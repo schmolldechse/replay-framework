@@ -1,5 +1,7 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.playback;
 
+import dev.voldechse.replayframework.adapter.playback.ViewerInteractions;
+
 import dev.voldechse.replayframework.adapter.PlaybackBridge;
 import dev.voldechse.replayframework.api.playback.RecordedEntity;
 import io.netty.channel.ChannelHandlerContext;
@@ -33,10 +35,10 @@ final class ReplayEntityInteractions extends ChannelInboundHandlerAdapter {
     static final String SERVER_HANDLER_NAME = "packet_handler";
 
     private final IntFunction<Optional<RecordedEntity>> entities;
-    private final Consumer<PlaybackBridge.EntityInteraction> interactions;
+    private final Consumer<ViewerInteractions.EntityInteraction> interactions;
     private final java.util.function.BiFunction<net.minecraft.core.BlockPos, org.bukkit.inventory.EquipmentSlot,
-            Optional<PlaybackBridge.BlockInteraction>> blocks;
-    private final Consumer<PlaybackBridge.BlockInteraction> blockInteractions;
+            Optional<ViewerInteractions.BlockInteraction>> blocks;
+    private final Consumer<ViewerInteractions.BlockInteraction> blockInteractions;
     private final Consumer<Throwable> failureHandler;
 
     /**
@@ -48,10 +50,10 @@ final class ReplayEntityInteractions extends ChannelInboundHandlerAdapter {
      */
     ReplayEntityInteractions(
             IntFunction<Optional<RecordedEntity>> entities,
-            Consumer<PlaybackBridge.EntityInteraction> interactions,
+            Consumer<ViewerInteractions.EntityInteraction> interactions,
             java.util.function.BiFunction<net.minecraft.core.BlockPos, org.bukkit.inventory.EquipmentSlot,
-                    Optional<PlaybackBridge.BlockInteraction>> blocks,
-            Consumer<PlaybackBridge.BlockInteraction> blockInteractions,
+                    Optional<ViewerInteractions.BlockInteraction>> blocks,
+            Consumer<ViewerInteractions.BlockInteraction> blockInteractions,
             Consumer<Throwable> failureHandler) {
         this.entities = Objects.requireNonNull(entities, "entities");
         this.interactions = Objects.requireNonNull(interactions, "interactions");
@@ -87,7 +89,7 @@ final class ReplayEntityInteractions extends ChannelInboundHandlerAdapter {
                 context.fireChannelRead(message);
                 return;
             }
-            interactions.accept(new PlaybackBridge.EntityInteraction(
+            interactions.accept(new ViewerInteractions.EntityInteraction(
                     entity.get(), attack, CraftEquipmentSlot.getHand(hand)));
         } catch (Throwable failure) {
             failureHandler.accept(failure);
@@ -99,7 +101,7 @@ final class ReplayEntityInteractions extends ChannelInboundHandlerAdapter {
     private void useBlock(ChannelHandlerContext context, net.minecraft.network.protocol.game.ServerboundUseItemOnPacket use) {
         try {
             org.bukkit.inventory.EquipmentSlot hand = CraftEquipmentSlot.getHand(use.getHand());
-            Optional<PlaybackBridge.BlockInteraction> interaction =
+            Optional<ViewerInteractions.BlockInteraction> interaction =
                     blocks.apply(use.getHitResult().getBlockPos(), hand);
             if (interaction.isEmpty()) {
                 context.fireChannelRead(use);

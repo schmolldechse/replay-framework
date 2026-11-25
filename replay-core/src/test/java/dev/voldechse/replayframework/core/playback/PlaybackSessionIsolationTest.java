@@ -1,5 +1,7 @@
 package dev.voldechse.replayframework.core.playback;
 
+import dev.voldechse.replayframework.adapter.StubPlaybackBridge;
+
 import com.google.gson.Gson;
 import dev.voldechse.replayframework.adapter.AdapterDescriptor;
 import dev.voldechse.replayframework.adapter.CheckpointEncoder;
@@ -206,7 +208,7 @@ final class PlaybackSessionIsolationTest {
             public void close() {
             }
         };
-        PlaybackBridge bridge = new PlaybackBridge() {
+        PlaybackBridge bridge = new StubPlaybackBridge() {
             @Override
             public void setIdentityContext(dev.voldechse.replayframework.adapter.playback.PlaybackIdentityContext context) {
                 java.util.Objects.requireNonNull(context);
@@ -639,7 +641,7 @@ final class PlaybackSessionIsolationTest {
         }
     }
 
-    private static final class TrackingBridge implements PlaybackBridge {
+    private static final class TrackingBridge extends StubPlaybackBridge {
         private final AtomicInteger closeCount = new AtomicInteger();
         private final AtomicInteger resetCount = new AtomicInteger();
         private volatile String viewedWorld;

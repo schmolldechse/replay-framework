@@ -1,5 +1,7 @@
 package dev.voldechse.replayframework.core.playback;
 
+import dev.voldechse.replayframework.adapter.playback.ViewerInteractions;
+
 import dev.voldechse.replayframework.adapter.AdapterDescriptor;
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
 import dev.voldechse.replayframework.adapter.PlaybackBridge;
@@ -321,7 +323,7 @@ final class DefaultPlaybackService implements PlaybackService {
                     StateTracks states = resources.stateTracks.get();
                     bridge.setInteractionHandler(interaction -> eventDispatcher.entityInteracted(
                             sessionId, request.replayId(), viewerId,
-                            new PlaybackBridge.EntityInteraction(
+                            new ViewerInteractions.EntityInteraction(
                                     states.withSubject(interaction.entity()),
                                     interaction.attack(),
                                     interaction.hand())));

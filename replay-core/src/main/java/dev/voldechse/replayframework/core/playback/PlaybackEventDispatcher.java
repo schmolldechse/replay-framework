@@ -80,7 +80,7 @@ final class PlaybackEventDispatcher implements ReplayEventPublisher {
             PlaybackSessionId sessionId,
             ReplayId replayId,
             UUID viewerId,
-            dev.voldechse.replayframework.adapter.PlaybackBridge.EntityInteraction interaction) {
+            dev.voldechse.replayframework.adapter.playback.ViewerInteractions.EntityInteraction interaction) {
         delegate.playbackEntityInteracted(
                 sessionId, replayId, viewerId, interaction.entity(), interaction.attack(), interaction.hand());
     }
@@ -89,7 +89,7 @@ final class PlaybackEventDispatcher implements ReplayEventPublisher {
             PlaybackSessionId sessionId,
             ReplayId replayId,
             UUID viewerId,
-            dev.voldechse.replayframework.adapter.PlaybackBridge.BlockInteraction interaction) {
+            dev.voldechse.replayframework.adapter.playback.ViewerInteractions.BlockInteraction interaction) {
         delegate.playbackBlockInteracted(sessionId, replayId, viewerId, interaction);
     }
 

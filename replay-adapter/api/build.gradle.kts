@@ -1,5 +1,6 @@
 plugins {
     `java-library`
+    `java-test-fixtures`
 }
 
 group = "dev.voldechse.replayframework.adapter"
@@ -8,6 +9,7 @@ dependencies {
     api(project(":replay-api"))
     api(project(":replay-format"))
     compileOnly(libs.paper.api)
+    testFixturesCompileOnly(libs.paper.api)
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.paper.api)
     testRuntimeOnly(libs.junit.platform.launcher)

@@ -155,6 +155,20 @@ Application UX remains
 outside the framework: integrations decide where a viewer stands, what controls
 exist, and when normal player state is restored.
 
+The core talks to a viewer through `PlaybackBridge`, which is made of role
+interfaces, each used by the part of the core that needs it:
+
+| Role | Methods | Used by |
+|---|---|---|
+| `ViewerStream` | frames, batches, view reset, isolation, the outbound queue | `PacketScheduler`, `SeekEngine` |
+| `ViewerWorld` | the recorded world the viewer watches | `PlaybackTimeline` |
+| `SceneQueries` | entities, players, observer anchors | `SceneTracks`, `PlaybackTimeline` |
+| `StateDecoder` | subject and block state | `StateTracks` |
+| `ViewerInteractions` | the viewer's clicks on entities and blocks | `DefaultPlaybackService` |
+
+The roles have no default methods, so an adapter states every capability
+explicitly, and a new capability becomes a role of its own.
+
 Playback opening reserves the viewer UUID before asynchronous work begins, so a
 viewer cannot acquire two concurrent sessions while catalog and artifact work
 is in flight. The runtime then verifies the replay artifact and adapter

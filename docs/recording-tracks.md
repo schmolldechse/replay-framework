@@ -242,18 +242,18 @@ earlier format revisions are not read.
 - **Other worlds.** `PlaybackSession.recordedPlayers()` reads, for every
   world the viewer does not watch, that world's checkpoint at the floor
   barrier and its frames up to the current position. The adapter scans them
-  for players and their positions (`PlaybackBridge.players(frames)`).
+  for players and their positions (`SceneQueries.players(frames)`).
 - **State.** `PlaybackSession.state(subject)` opens the subject's track on
   first use, reads its checkpoint at the floor barrier and its frames up to
   the current position, and lets the adapter decode them
-  (`PlaybackBridge.decodeState`).
+  (`StateDecoder.decodeState`).
 
 - **Containers.** `PlaybackSession.container(world, position)` opens the
   world's block state track on first use and reads it like a state track.
   The adapter finds the latest frame of the position by the position every
   block state packet starts with, without decoding the others, and loads
   its data into a fresh block entity of its type
-  (`PlaybackBridge.decodeBlock`).
+  (`StateDecoder.decodeBlock`).
 
 State tracks and block state tracks keep the checkpoint of their last
 barrier and the last decoded result; a query whose barrier and frames are

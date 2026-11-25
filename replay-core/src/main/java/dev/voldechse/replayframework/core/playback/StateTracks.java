@@ -1,6 +1,7 @@
 package dev.voldechse.replayframework.core.playback;
 
-import dev.voldechse.replayframework.adapter.PlaybackBridge;
+import dev.voldechse.replayframework.adapter.playback.StateDecoder;
+
 import dev.voldechse.replayframework.api.playback.RecordedSubject;
 import dev.voldechse.replayframework.api.playback.SubjectState;
 import dev.voldechse.replayframework.api.recording.BlockPosition;
@@ -42,7 +43,7 @@ final class StateTracks implements AutoCloseable {
     private final List<TrackDescriptor> blockTracks;
     private final ReplayIndex reference;
     private final long durationNanos;
-    private final PlaybackBridge bridge;
+    private final StateDecoder bridge;
     private final Function<TrackDescriptor, CompletionStage<MergedTrackData.Track>> opener;
     private final Map<Integer, CompletableFuture<MergedTrackData.Track>> open = new ConcurrentHashMap<>();
     private final Map<Integer, CachedCheckpoint> checkpoints = new ConcurrentHashMap<>();
@@ -62,7 +63,7 @@ final class StateTracks implements AutoCloseable {
             List<TrackDescriptor> tracks,
             ReplayIndex reference,
             long durationNanos,
-            PlaybackBridge bridge,
+            StateDecoder bridge,
             Function<TrackDescriptor, CompletionStage<MergedTrackData.Track>> opener) {
         this.tracks = tracks.stream().filter(track -> track.kind() == TrackKind.STATE).toList();
         this.blockTracks = tracks.stream().filter(track -> track.kind() == TrackKind.BLOCK_STATE).toList();
@@ -73,7 +74,7 @@ final class StateTracks implements AutoCloseable {
     }
 
     /** No state tracks; for playbacks built without them. */
-    static StateTracks none(PlaybackBridge bridge) {
+    static StateTracks none(StateDecoder bridge) {
         return new StateTracks(List.of(), ReplayIndex.of(List.of(new SeekPoint(0L, 0, 0, 0L))), 0L,
                 bridge, track -> CompletableFuture.failedFuture(new IllegalStateException("no tracks")));
     }

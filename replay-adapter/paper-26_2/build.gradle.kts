@@ -8,6 +8,7 @@ dependencies {
     implementation(project(":replay-adapter:paper-common"))
     paperweight.paperDevBundle(libs.versions.paper262.get())
     testImplementation(libs.junit.jupiter)
+    testImplementation(testFixtures(project(":replay-adapter:api")))
     testRuntimeOnly(libs.junit.platform.launcher)
 }
 

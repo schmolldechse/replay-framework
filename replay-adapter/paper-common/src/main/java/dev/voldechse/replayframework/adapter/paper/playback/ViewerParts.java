@@ -1,5 +1,7 @@
 package dev.voldechse.replayframework.adapter.paper.playback;
 
+import dev.voldechse.replayframework.adapter.playback.ViewerInteractions;
+
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.PlaybackBridge;
 import dev.voldechse.replayframework.adapter.codec.PacketCodec;
@@ -57,13 +59,13 @@ public interface ViewerParts {
         Optional<RecordedEntity> entity(int clientEntityId);
 
         /** Receives a click on a replay entity. */
-        void entityInteracted(PlaybackBridge.EntityInteraction interaction);
+        void entityInteracted(ViewerInteractions.EntityInteraction interaction);
 
         /** The click on a recorded container at a position, when there is one. */
-        Optional<PlaybackBridge.BlockInteraction> block(BlockPosition position, EquipmentSlot hand);
+        Optional<ViewerInteractions.BlockInteraction> block(BlockPosition position, EquipmentSlot hand);
 
         /** Receives a click on a recorded container. */
-        void blockInteracted(PlaybackBridge.BlockInteraction interaction);
+        void blockInteracted(ViewerInteractions.BlockInteraction interaction);
 
         /** Reports a failure; the packet passes on. */
         void fail(Throwable failure);

@@ -1,9 +1,9 @@
 package dev.voldechse.replayframework.core.playback;
 
+import dev.voldechse.replayframework.adapter.playback.StateDecoder;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import dev.voldechse.replayframework.adapter.PlaybackBridge;
-import dev.voldechse.replayframework.adapter.playback.PlaybackIdentityContext;
 import dev.voldechse.replayframework.api.playback.PlaybackSpeed;
 import dev.voldechse.replayframework.api.playback.RecordedSubject;
 import dev.voldechse.replayframework.api.playback.SubjectState;
@@ -122,23 +122,7 @@ class StateTracksTest {
     }
 
     /** Reports the number of frames it was given as the experience level. */
-    private final class CountingBridge implements PlaybackBridge {
-        @Override
-        public void setIdentityContext(PlaybackIdentityContext context) {
-        }
-
-        @Override
-        public void send(RawPacketFrame frame) {
-        }
-
-        @Override
-        public void resetView() {
-        }
-
-        @Override
-        public void close() {
-        }
-
+    private final class CountingBridge implements StateDecoder {
         @Override
         public Optional<SubjectState> decodeBlock(
                 dev.voldechse.replayframework.api.recording.BlockPosition position, List<RawPacketFrame> frames) {
@@ -154,6 +138,10 @@ class StateTracksTest {
     }
 
     private final class FakeTrack implements PlaybackTimeline.PlaybackData {
+        @Override
+        public void close() {
+        }
+
         private final Map<Integer, List<RawPacketFrame>> checkpoints;
         private final List<RawPacketFrame> frames;
 
@@ -191,10 +179,6 @@ class StateTracksTest {
         @Override
         public PlaybackTimeline.BufferProgress progress(Duration position) {
             return new PlaybackTimeline.BufferProgress(Duration.ZERO, Duration.ZERO, true);
-        }
-
-        @Override
-        public void close() {
         }
     }
 }
