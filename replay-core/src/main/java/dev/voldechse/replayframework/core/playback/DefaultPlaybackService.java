@@ -193,10 +193,10 @@ final class DefaultPlaybackService implements PlaybackService {
             ReplayArtifactReader.VerifiedReplay verified,
             OpenResources resources) {
         ReplayManifest manifest = verified.manifest();
-        // The scene is the global and the world tracks; state tracks are read
-        // only when a subject's state is asked for.
+        // The scene is played from the tracks with the scene role; state tracks
+        // are read only when a subject's state is asked for.
         List<CompletableFuture<PreparedArtifacts>> preparing = manifest.tracks().stream()
-                .filter(track -> track.kind() == TrackKind.GLOBAL || track.kind() == TrackKind.WORLD)
+                .filter(track -> track.kind().role() == TrackKind.Role.SCENE)
                 .map(track -> fetchAndReadIndex(verified, track)
                         .thenApply(index -> new PreparedArtifacts(
                                 track,
@@ -209,7 +209,7 @@ final class DefaultPlaybackService implements PlaybackService {
                 .thenApply(ignored -> preparing.stream().map(CompletableFuture::join).toList())
                 .thenCompose(prepared -> {
                     PreparedArtifacts reference = prepared.stream()
-                            .filter(track -> track.track().kind() == TrackKind.GLOBAL)
+                            .filter(track -> track.track().kind().keyedBy() == TrackKind.KeyedBy.NOTHING)
                             .findFirst()
                             .orElseThrow(() -> corrupt("replay has no global track"));
                     MergedTrackData.Track globalTrack = null;
@@ -233,7 +233,7 @@ final class DefaultPlaybackService implements PlaybackService {
                                         buffer,
                                         point -> cachedCheckpoint(cache, verified, track, point)),
                                 track.index());
-                        if (track.track().kind() == TrackKind.GLOBAL) {
+                        if (track.track().kind().keyedBy() == TrackKind.KeyedBy.NOTHING) {
                             globalTrack = opened;
                         } else {
                             worldTracks.put(track.track().world().orElseThrow(), opened);

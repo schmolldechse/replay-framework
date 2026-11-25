@@ -81,7 +81,7 @@ instead of being extension points.
 3. (Resolved in phase 2, step 1.) `PlaybackBridge` (adapter API) has 19 default methods; every feature added one.
 4. (Resolved in phase 2, step 4.) Scene tracking mixes version-independent
    rules with Minecraft packet decoding.
-5. Track kinds are not an extension point: `BLOCK_STATE` needed about 12 edits.
+5. (Resolved in phase 3, step 2.) Track kinds are not an extension point: `BLOCK_STATE` needed about 12 edits.
 6. (Resolved in phase 2, step 2.) `CaptureContext` has 11 fields mixing
    filtering, provenance and routing.
 7. `RecordingCoordinator` (1,093 lines) and `RecordingSegmentAppender` (742)
@@ -249,7 +249,14 @@ Phase 3 status:
   playback service, appender, `RecordingTarget` (staging is required),
   `CapturedPacket`, `CapturePacket` and `CaptureContext.unknown()`; the
   coordinator always takes a lease. Tests use `TestContexts` (adapter API
-  test fixtures) and `TestLeases`. Checked in game (replay `483dba2d`), committed.
+  test fixtures) and `TestLeases`. Checked in game (replay `483dba2d`), committed (`7efc5b0`).
+- Step 2 implemented: `TrackKind` declares `keyedBy` (nothing, world,
+  subject) and `role` (scene, state). `TrackKey` (format) identifies a track;
+  `TrackDescriptor` validates through it and `ReplayManifest` rejects a second
+  track with the same key. `TrackKeys` (core) is the only mapping from
+  `TrackRoute` to track and frame world; the appender keeps its tracks by
+  `TrackKey`. Playback selects scene tracks and `StateTracks` by role and
+  looks state tracks up by key. Checked in game (replay `37ed042f`), committed.
 
 Fixes found while testing, outside the plan: viewer worlds without blocks
 (`d0c3bc9`), checkpoint-only tracks accepted by the finalizer (`cae1d7f`),

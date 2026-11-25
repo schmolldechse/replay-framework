@@ -9,10 +9,12 @@ import dev.voldechse.replayframework.format.RawPacketFrame;
 import dev.voldechse.replayframework.format.ReplayIndex;
 import dev.voldechse.replayframework.format.SeekPoint;
 import dev.voldechse.replayframework.format.TrackDescriptor;
+import dev.voldechse.replayframework.format.TrackKey;
 import dev.voldechse.replayframework.format.TrackKind;
 import dev.voldechse.replayframework.format.TrackSubject;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -39,8 +41,8 @@ import java.util.function.Function;
  */
 final class StateTracks implements AutoCloseable {
 
-    private final List<TrackDescriptor> tracks;
-    private final List<TrackDescriptor> blockTracks;
+    /** The tracks with the state role, by key. */
+    private final Map<TrackKey, TrackDescriptor> tracks;
     private final ReplayIndex reference;
     private final long durationNanos;
     private final StateDecoder bridge;
@@ -52,7 +54,7 @@ final class StateTracks implements AutoCloseable {
     private volatile boolean closed;
 
     /**
-     * @param tracks the replay's tracks; only state and block state tracks are used
+     * @param tracks the replay's tracks; only those with the state role are used
      * @param reference the index the playback seeks on; its checkpoint
      *                  ordinals are those of every track
      * @param durationNanos the replay duration
@@ -65,8 +67,13 @@ final class StateTracks implements AutoCloseable {
             long durationNanos,
             StateDecoder bridge,
             Function<TrackDescriptor, CompletionStage<MergedTrackData.Track>> opener) {
-        this.tracks = tracks.stream().filter(track -> track.kind() == TrackKind.STATE).toList();
-        this.blockTracks = tracks.stream().filter(track -> track.kind() == TrackKind.BLOCK_STATE).toList();
+        Map<TrackKey, TrackDescriptor> byKey = new LinkedHashMap<>();
+        for (TrackDescriptor track : tracks) {
+            if (track.kind().role() == TrackKind.Role.STATE) {
+                byKey.put(track.key(), track);
+            }
+        }
+        this.tracks = byKey;
         this.reference = Objects.requireNonNull(reference, "reference");
         this.durationNanos = durationNanos;
         this.bridge = Objects.requireNonNull(bridge, "bridge");
@@ -91,9 +98,7 @@ final class StateTracks implements AutoCloseable {
                         ? TrackSubject.Kind.PLAYER
                         : TrackSubject.Kind.ENTITY,
                 subject.id());
-        Optional<TrackDescriptor> track = tracks.stream()
-                .filter(candidate -> candidate.subject().orElseThrow().equals(wanted))
-                .findFirst();
+        Optional<TrackDescriptor> track = Optional.ofNullable(tracks.get(TrackKey.state(wanted)));
         if (track.isEmpty()) {
             return CompletableFuture.completedFuture(Optional.empty());
         }
@@ -113,9 +118,7 @@ final class StateTracks implements AutoCloseable {
         if (closed) {
             return CompletableFuture.failedFuture(new IllegalStateException("playback is closed"));
         }
-        Optional<TrackDescriptor> track = blockTracks.stream()
-                .filter(candidate -> candidate.world().orElseThrow().equals(world))
-                .findFirst();
+        Optional<TrackDescriptor> track = Optional.ofNullable(tracks.get(TrackKey.blockState(world)));
         if (track.isEmpty()) {
             return CompletableFuture.completedFuture(Optional.empty());
         }
@@ -206,14 +209,14 @@ final class StateTracks implements AutoCloseable {
     /** Adds the state track subject to an entity, when the recording has one for it. */
     dev.voldechse.replayframework.api.playback.RecordedEntity withSubject(
             dev.voldechse.replayframework.api.playback.RecordedEntity entity) {
-        for (TrackDescriptor track : tracks) {
-            TrackSubject subject = track.subject().orElseThrow();
-            if (subject.id().equals(entity.id())) {
+        for (TrackDescriptor track : tracks.values()) {
+            Optional<TrackSubject> subject = track.subject();
+            if (subject.isPresent() && subject.get().id().equals(entity.id())) {
                 return entity.withSubject(Optional.of(new RecordedSubject(
-                        subject.kind() == TrackSubject.Kind.PLAYER
+                        subject.get().kind() == TrackSubject.Kind.PLAYER
                                 ? RecordedSubject.Kind.PLAYER
                                 : RecordedSubject.Kind.ENTITY,
-                        subject.id())));
+                        subject.get().id())));
             }
         }
         return entity;

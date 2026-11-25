@@ -12,17 +12,25 @@ another world is read only when someone asks for it.
 
 ## Track kinds
 
-| Kind | Key | Contents | Read during playback |
-|---|---|---|---|
-| `GLOBAL` | none | world-wide packets: chat, tab list, player profiles | always |
-| `WORLD` | world key | the scene of one world: chunks, blocks, entities, effects, time, weather, border | the viewed world always; other worlds when players there are queried |
-| `STATE` | subject | the state of one subject that the scene does not show | when the subject's state is queried |
-| `BLOCK_STATE` | world key | the contents of the containers of one world: chests, barrels, furnaces and more | when a container's contents are queried |
+| Kind | Keyed by | Role | Contents | Read during playback |
+|---|---|---|---|---|
+| `GLOBAL` | nothing | scene | world-wide packets: chat, tab list, player profiles | always |
+| `WORLD` | world | scene | the scene of one world: chunks, blocks, entities, effects, time, weather, border | the viewed world always; other worlds when players there are queried |
+| `STATE` | subject | state | the state of one subject that the scene does not show | when the subject's state is queried |
+| `BLOCK_STATE` | world | state | the contents of the containers of one world: chests, barrels, furnaces and more | when a container's contents are queried |
 
 A recording has exactly one `GLOBAL` track, one `WORLD` track per recorded
 world, one `STATE` track per recorded subject and one `BLOCK_STATE` track
 per world with containers. A track is created when its first packet
 arrives.
+
+`TrackKind` declares what each kind is keyed by and its role. A `TrackKey`
+(kind plus world or subject) identifies a track: descriptor validation
+checks the key against the kind, and a manifest holds at most one track per
+key. Playback plays the tracks with the scene role and reads those with the
+state role on demand. A new kind therefore needs its constant in
+`TrackKind`, a `TrackRoute` and its case in the core's `TrackKeys`, and a
+playback consumer; the wire format stays the same.
 
 For example, a four-minute recording of two players who travelled from the
 overworld into the nether, while a few chest minecarts and donkeys were in
@@ -43,8 +51,8 @@ Nearly all of the data is scene. A viewer in the nether reads tracks 0 and
 ## Routing
 
 Every captured packet carries exactly one `TrackRoute` in its
-`CaptureContext`, set by the adapter. The core maps it to a track and to the
-world in which a playback client applies the frame:
+`CaptureContext`, set by the adapter. The core's `TrackKeys` maps it to a
+track and to the world in which a playback client applies the frame:
 
 | Route | Track | Frame world |
 |---|---|---|

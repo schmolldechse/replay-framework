@@ -1,8 +1,5 @@
 package dev.voldechse.replayframework.core.recording;
 
-import dev.voldechse.replayframework.adapter.TrackRoute;
-
-import dev.voldechse.replayframework.adapter.CaptureSubject;
 import dev.voldechse.replayframework.adapter.CheckpointEncoder;
 import dev.voldechse.replayframework.api.recording.ReplayBudget;
 import dev.voldechse.replayframework.api.recording.ReplayCompletionReason;
@@ -10,7 +7,7 @@ import dev.voldechse.replayframework.api.recording.ReplayFailureCode;
 import dev.voldechse.replayframework.core.capture.CapturedPacket;
 import dev.voldechse.replayframework.format.RawPacketFrame;
 import dev.voldechse.replayframework.format.ReplayCheckpoint;
-import dev.voldechse.replayframework.format.TrackDescriptor;
+import dev.voldechse.replayframework.format.TrackKey;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -47,11 +44,8 @@ final class RecordingSegmentAppender implements AutoCloseable {
     private final AtomicBoolean loopStarted = new AtomicBoolean();
     private final AtomicBoolean failureReported = new AtomicBoolean();
     private final AtomicBoolean completionReported = new AtomicBoolean();
-    /**
-     * The tracks of the recording: by world key for the scene, where the empty
-     * key is the global track, and by subject for state tracks.
-     */
-    private final Map<Object, TrackWriter> tracks = new LinkedHashMap<>();
+    /** The tracks of the recording by key, in order of their IDs. */
+    private final Map<TrackKey, TrackWriter> tracks = new LinkedHashMap<>();
     /** The replay time of every checkpoint barrier, by ordinal. */
     private final List<Long> checkpointTimes = new ArrayList<>();
 
@@ -156,7 +150,7 @@ final class RecordingSegmentAppender implements AutoCloseable {
     private void initializeArtifacts() throws IOException {
         checkpointScheduler.registerInitial(initialCheckpoint);
         // The global track always exists, so every recording has track 0.
-        track(Optional.empty());
+        track(TrackKeys.scene(Optional.empty()));
         writeBarrier(initialCheckpoint, List.of(), List.of());
         for (RawPacketFrame frame : initialCheckpoint.initializationFrames()) {
             RecordingBudgetTracker.BudgetObservation observation = budgetTracker.afterFrame(
@@ -177,13 +171,7 @@ final class RecordingSegmentAppender implements AutoCloseable {
     private void appendPacket(CapturedPacket captured) throws IOException {
         RawPacketFrame frame = toFrame(captured);
         validateOrder(frame);
-        TrackWriter track = switch (captured.context().route()) {
-            case TrackRoute.Subject subject -> track(subject.subject());
-            case TrackRoute.BlockState ignored ->
-                    blockStateTrack(frame.world().orElseThrow());
-            case TrackRoute.Scene ignored -> track(frame.world());
-            case TrackRoute.WorldWide ignored -> track(frame.world());
-        };
+        TrackWriter track = track(TrackKeys.of(captured.context().route(), frame.world()));
         boolean rotate;
         try {
             rotate = track.segmentDurationReached(frame.elapsedNanos());
@@ -223,43 +211,20 @@ final class RecordingSegmentAppender implements AutoCloseable {
         }
     }
 
-    /** The track of a world, or the global track for the empty key. */
-    private TrackWriter track(Optional<String> world) throws IOException {
-        return track(world, id -> world.map(key -> TrackDescriptor.world(id, key))
-                .orElseGet(() -> TrackDescriptor.global(id)));
-    }
-
-    /** The block state track of a world. */
-    private TrackWriter blockStateTrack(String world) throws IOException {
-        return track(new BlockStateKey(world), id -> TrackDescriptor.blockState(id, world));
-    }
-
-    /** The key of a world's block state track, apart from the key of its scene track. */
-    private record BlockStateKey(String world) {
-    }
-
-    /** The state track of a subject. */
-    private TrackWriter track(CaptureSubject subject) throws IOException {
-        return track(subject.subject(),
-                id -> TrackDescriptor.state(id, subject.subject(), subject.label()));
-    }
-
     /**
-     * The track of a key: a world key, or a subject. A track created after
+     * The track of a key, created on first use. A track created after
      * the first barrier gets empty checkpoints for the earlier barriers, so
      * all tracks share their checkpoint ordinals.
      */
-    private TrackWriter track(Object key, java.util.function.IntFunction<TrackDescriptor> describe)
-            throws IOException {
-        TrackWriter existing = tracks.get(key);
+    private TrackWriter track(TrackKeys.Track track) throws IOException {
+        TrackWriter existing = tracks.get(track.key());
         if (existing != null) {
             return existing;
         }
         int id = tracks.size();
-        TrackDescriptor descriptor = describe.apply(id);
         TrackWriter created;
         try {
-            created = new TrackWriter(descriptor, workspace, adapterId, budget);
+            created = new TrackWriter(track.key().describe(id, track.label()), workspace, adapterId, budget);
             for (int ordinal = 0; ordinal < checkpointTimes.size(); ordinal++) {
                 created.writeCheckpoint(new ReplayCheckpoint(
                         ordinal, checkpointTimes.get(ordinal), List.of()));
@@ -267,7 +232,7 @@ final class RecordingSegmentAppender implements AutoCloseable {
         } catch (IllegalArgumentException formatFailure) {
             throw new CorruptWriterException(formatFailure);
         }
-        tracks.put(key, created);
+        tracks.put(track.key(), created);
         return created;
     }
 
@@ -282,26 +247,29 @@ final class RecordingSegmentAppender implements AutoCloseable {
             List<CheckpointEncoder.SubjectState> subjects,
             List<CheckpointEncoder.BlockStates> blockStates)
             throws IOException {
-        Map<Object, List<RawPacketFrame>> byTrack = new LinkedHashMap<>();
+        Map<TrackKey, List<RawPacketFrame>> byTrack = new LinkedHashMap<>();
         for (RawPacketFrame frame : checkpoint.initializationFrames()) {
-            if (!byTrack.containsKey(frame.world())) {
-                track(frame.world());
+            TrackKeys.Track scene = TrackKeys.scene(frame.world());
+            if (!byTrack.containsKey(scene.key())) {
+                track(scene);
             }
-            byTrack.computeIfAbsent(frame.world(), ignored -> new ArrayList<>()).add(frame);
+            byTrack.computeIfAbsent(scene.key(), ignored -> new ArrayList<>()).add(frame);
         }
         for (CheckpointEncoder.SubjectState state : subjects) {
-            track(state.subject());
-            byTrack.put(state.subject().subject(), state.frames());
+            TrackKeys.Track subject = TrackKeys.subject(state.subject());
+            track(subject);
+            byTrack.put(subject.key(), state.frames());
         }
         for (CheckpointEncoder.BlockStates blocks : blockStates) {
             if (blocks.frames().isEmpty()) {
                 continue;
             }
-            blockStateTrack(blocks.world());
-            byTrack.put(new BlockStateKey(blocks.world()), blocks.frames());
+            TrackKeys.Track blockState = TrackKeys.blockState(blocks.world());
+            track(blockState);
+            byTrack.put(blockState.key(), blocks.frames());
         }
         try {
-            for (Map.Entry<Object, TrackWriter> entry : tracks.entrySet()) {
+            for (Map.Entry<TrackKey, TrackWriter> entry : tracks.entrySet()) {
                 entry.getValue().writeCheckpoint(new ReplayCheckpoint(
                         checkpoint.ordinal(),
                         checkpoint.elapsedNanos(),
@@ -430,25 +398,7 @@ final class RecordingSegmentAppender implements AutoCloseable {
                 captured.phase(),
                 captured.packetId(),
                 captured.payload(),
-                frameWorld(captured));
-    }
-
-    /**
-     * The world a playback client must be in to apply the frame. Packets that
-     * concern no place, such as chat or the tab list, apply in every world.
-     * The state of a subject belongs to no world; the state of a block to its
-     * world.
-     */
-    private static java.util.Optional<String> frameWorld(CapturedPacket captured) {
-        var context = captured.context();
-        return switch (context.route()) {
-            case TrackRoute.Scene ignored ->
-                    context.world().map(net.kyori.adventure.key.Key::asString);
-            case TrackRoute.BlockState ignored ->
-                    context.world().map(net.kyori.adventure.key.Key::asString);
-            case TrackRoute.WorldWide ignored -> java.util.Optional.empty();
-            case TrackRoute.Subject ignored -> java.util.Optional.empty();
-        };
+                TrackKeys.frameWorld(captured.context()));
     }
 
     private void validateOrder(RawPacketFrame frame) {

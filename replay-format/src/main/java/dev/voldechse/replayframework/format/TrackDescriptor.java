@@ -30,7 +30,7 @@ public record TrackDescriptor(
     /** Longest label in UTF-8 bytes. */
     public static final int MAX_LABEL_LENGTH = 256;
 
-    /** Validates that the key matches the kind. */
+    /** Validates the label and that world and subject match what the kind is keyed by. */
     public TrackDescriptor {
         if (id < 0) {
             throw new IllegalArgumentException("track id must not be negative");
@@ -42,53 +42,33 @@ public record TrackDescriptor(
         if (label.getBytes(StandardCharsets.UTF_8).length > MAX_LABEL_LENGTH) {
             throw new IllegalArgumentException("track label is too long");
         }
-        switch (kind) {
-            case GLOBAL -> {
-                if (world.isPresent() || subject.isPresent()) {
-                    throw new IllegalArgumentException("a global track has no world and no subject");
-                }
-            }
-            case WORLD -> {
-                if (world.isEmpty() || subject.isPresent()) {
-                    throw new IllegalArgumentException("a world track has a world and no subject");
-                }
-                RawPacketFrame.requireWorldKey(world.get());
-            }
-            case STATE -> {
-                if (subject.isEmpty() || world.isPresent()) {
-                    throw new IllegalArgumentException("a state track has a subject and no world");
-                }
-            }
-            case BLOCK_STATE -> {
-                if (world.isEmpty() || subject.isPresent()) {
-                    throw new IllegalArgumentException("a block state track has a world and no subject");
-                }
-                RawPacketFrame.requireWorldKey(world.get());
-            }
-        }
+        // The key checks world and subject against what the kind is keyed by.
+        new TrackKey(kind, world, subject);
+    }
+
+    /** What identifies this track within its replay. */
+    public TrackKey key() {
+        return new TrackKey(kind, world, subject);
     }
 
     /** Creates the block state track of one world. */
     public static TrackDescriptor blockState(int id, String world) {
-        return new TrackDescriptor(
-                id, TrackKind.BLOCK_STATE, Optional.of(world), Optional.empty(), world);
+        return TrackKey.blockState(world).describe(id, world);
     }
 
     /** Creates the global track. */
     public static TrackDescriptor global(int id) {
-        return new TrackDescriptor(id, TrackKind.GLOBAL, Optional.empty(), Optional.empty(), "");
+        return TrackKey.global().describe(id, "");
     }
 
     /** Creates the track of one world. */
     public static TrackDescriptor world(int id, String world) {
-        return new TrackDescriptor(
-                id, TrackKind.WORLD, Optional.of(world), Optional.empty(), world);
+        return TrackKey.world(world).describe(id, world);
     }
 
     /** Creates the state track of one subject. */
     public static TrackDescriptor state(int id, TrackSubject subject, String label) {
-        return new TrackDescriptor(
-                id, TrackKind.STATE, Optional.empty(), Optional.of(subject), label);
+        return TrackKey.state(subject).describe(id, label);
     }
 
     /** The world every frame of this track belongs to; empty for global and subject state tracks. */

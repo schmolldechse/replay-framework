@@ -95,36 +95,15 @@ public record ReplayManifest(
     private static List<TrackDescriptor> validateTracks(List<TrackDescriptor> tracks) {
         Objects.requireNonNull(tracks, "tracks");
         Set<Integer> ids = new HashSet<>();
-        Set<String> worlds = new HashSet<>();
-        Set<TrackSubject> subjects = new HashSet<>();
-        Set<String> blockStates = new HashSet<>();
-        int globals = 0;
+        Set<TrackKey> keys = new HashSet<>();
         for (TrackDescriptor track : tracks) {
             Objects.requireNonNull(track, "tracks contains null");
             if (!ids.add(track.id())) {
                 throw new IllegalArgumentException("duplicate track id: " + track.id());
             }
-            switch (track.kind()) {
-                case GLOBAL -> globals++;
-                case WORLD -> {
-                    if (!worlds.add(track.world().orElseThrow())) {
-                        throw new IllegalArgumentException("duplicate world track: " + track.world().get());
-                    }
-                }
-                case STATE -> {
-                    if (!subjects.add(track.subject().orElseThrow())) {
-                        throw new IllegalArgumentException("duplicate state track: " + track.subject().get());
-                    }
-                }
-                case BLOCK_STATE -> {
-                    if (!blockStates.add(track.world().orElseThrow())) {
-                        throw new IllegalArgumentException("duplicate block state track: " + track.world().get());
-                    }
-                }
+            if (!keys.add(track.key())) {
+                throw new IllegalArgumentException("duplicate track: " + track.key());
             }
-        }
-        if (globals > 1) {
-            throw new IllegalArgumentException("a replay has at most one global track");
         }
         return tracks.stream().sorted(Comparator.comparingInt(TrackDescriptor::id)).toList();
     }
