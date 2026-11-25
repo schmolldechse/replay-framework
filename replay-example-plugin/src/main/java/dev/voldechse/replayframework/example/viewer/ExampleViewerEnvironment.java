@@ -43,7 +43,7 @@ import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.World;
 import org.bukkit.WorldCreator;
-import org.bukkit.WorldType;
+import org.bukkit.generator.ChunkGenerator;
 
 /**
  * Owns the Example-side environment around one independent replay viewer.
@@ -418,7 +418,7 @@ public final class ExampleViewerEnvironment {
         }
         World world = new WorldCreator(worldName)
                 .environment(environment)
-                .type(WorldType.FLAT)
+                .generator(new EmptyGenerator())
                 .generateStructures(false)
                 .createWorld();
         if (world == null) {
@@ -759,5 +759,19 @@ public final class ExampleViewerEnvironment {
         CompletableFuture<T> result = new CompletableFuture<>();
         result.completeExceptionally(failure);
         return result;
+    }
+
+    /**
+     * Generates no blocks. The server checks a viewer's movement against the
+     * blocks of its viewer world, which the viewer never sees; any terrain
+     * there would stop the viewer at invisible walls.
+     */
+    private static final class EmptyGenerator extends ChunkGenerator {
+
+        /** A fixed spawn, so Paper does not search the empty world for a safe one. */
+        @Override
+        public Location getFixedSpawnLocation(World world, java.util.Random random) {
+            return new Location(world, 0.5, 64.0, 0.5);
+        }
     }
 }
