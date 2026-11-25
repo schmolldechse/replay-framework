@@ -5,56 +5,51 @@ import dev.voldechse.replayframework.api.recording.ReplayBudget;
 import dev.voldechse.replayframework.api.recording.ReplayCompletionReason;
 import dev.voldechse.replayframework.api.recording.ReplayFailureCode;
 import dev.voldechse.replayframework.core.capture.CapturedPacket;
+import dev.voldechse.replayframework.core.recording.WriterFailures.CorruptWriterException;
+import dev.voldechse.replayframework.core.recording.WriterFailures.StorageWriteException;
 import dev.voldechse.replayframework.format.RawPacketFrame;
 import dev.voldechse.replayframework.format.ReplayCheckpoint;
-import dev.voldechse.replayframework.format.TrackKey;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 /**
  * Single-owner writer for the immutable artifacts of one recording session.
+ * It drains the session queue, routes each packet to its track, rotates
+ * segments, tracks the budget and seals the tracks; the tracks live in a
+ * {@link TrackSet} and the checkpoint barriers are written by a
+ * {@link CheckpointBarrierWriter}.
  *
  * <p>The loop must run on the session's virtual thread. No capture producer
  * may call a format writer or mutate the artifact lists.</p>
  */
 final class RecordingSegmentAppender implements AutoCloseable {
     private final Path workspace;
-    private final String adapterId;
     private final long recordingStartCaptureTimeNanos;
     private final SessionPacketQueue queue;
     private final ReplayCheckpoint initialCheckpoint;
-    private final ReplayBudget budget;
     private final RecordingBudgetTracker budgetTracker;
-    private final CheckpointScheduler checkpointScheduler;
+    private final TrackSet tracks;
+    private final CheckpointBarrierWriter barriers;
     private final Consumer<ReplayCompletionReason> budgetStop;
     private final BiConsumer<ReplayFailureCode, Throwable> failure;
     private final Consumer<RecordingArtifacts> completion;
     private final AtomicBoolean loopStarted = new AtomicBoolean();
     private final AtomicBoolean failureReported = new AtomicBoolean();
     private final AtomicBoolean completionReported = new AtomicBoolean();
-    /** The tracks of the recording by key, in order of their IDs. */
-    private final Map<TrackKey, TrackWriter> tracks = new LinkedHashMap<>();
-    /** The replay time of every checkpoint barrier, by ordinal. */
-    private final List<Long> checkpointTimes = new ArrayList<>();
 
     private State state = State.NEW;
     private long segmentCount;
     private long lastElapsedNanos = -1L;
     private long lastServerTick = -1L;
     private int lastSequence = -1;
-    private int activeCheckpointOrdinal;
     private CapturedPacket deferredPacket;
     private boolean budgetStopNotified;
     private RecordingArtifacts sealedArtifacts;
@@ -71,14 +66,15 @@ final class RecordingSegmentAppender implements AutoCloseable {
             BiConsumer<ReplayFailureCode, Throwable> failure,
             Consumer<RecordingArtifacts> completion) {
         this.workspace = requireWorkspace(workspace);
-        this.adapterId = requireAdapterId(adapterId);
         this.recordingStartCaptureTimeNanos = recordingStartCaptureTimeNanos;
         this.queue = Objects.requireNonNull(queue, "queue");
         this.initialCheckpoint = Objects.requireNonNull(initialCheckpoint, "initialCheckpoint");
-        this.budget = Objects.requireNonNull(budget, "budget");
-        this.budgetTracker = new RecordingBudgetTracker(budget);
-        this.checkpointScheduler = Objects.requireNonNull(
-                checkpointScheduler, "checkpointScheduler");
+        this.budgetTracker = new RecordingBudgetTracker(Objects.requireNonNull(budget, "budget"));
+        this.tracks = new TrackSet(this.workspace, requireAdapterId(adapterId), budget);
+        this.barriers = new CheckpointBarrierWriter(
+                Objects.requireNonNull(checkpointScheduler, "checkpointScheduler"),
+                tracks,
+                recordingStartCaptureTimeNanos);
         this.budgetStop = Objects.requireNonNull(budgetStop, "budgetStop");
         this.failure = Objects.requireNonNull(failure, "failure");
         this.completion = Objects.requireNonNull(completion, "completion");
@@ -122,7 +118,7 @@ final class RecordingSegmentAppender implements AutoCloseable {
             Thread.currentThread().interrupt();
             fail(ReplayFailureCode.SERVER_CRASH, interrupted);
         } catch (Throwable unexpected) {
-            fail(classify(unexpected), unwrap(unexpected));
+            fail(WriterFailures.classify(unexpected), WriterFailures.unwrap(unexpected));
         }
     }
 
@@ -148,30 +144,25 @@ final class RecordingSegmentAppender implements AutoCloseable {
     }
 
     private void initializeArtifacts() throws IOException {
-        checkpointScheduler.registerInitial(initialCheckpoint);
         // The global track always exists, so every recording has track 0.
-        track(TrackKeys.scene(Optional.empty()));
-        writeBarrier(initialCheckpoint, List.of(), List.of());
-        for (RawPacketFrame frame : initialCheckpoint.initializationFrames()) {
-            RecordingBudgetTracker.BudgetObservation observation = budgetTracker.afterFrame(
-                    frame, RecordingBudgetTracker.UnitKind.CHECKPOINT_FRAME);
-            notifyBudgetStop(observation.completionReason());
-        }
+        tracks.track(TrackKeys.scene(Optional.empty()));
+        barriers.writeInitial(initialCheckpoint);
+        countCheckpointFrames(initialCheckpoint);
     }
 
     private void processPacket(CapturedPacket captured) throws IOException {
         appendPacket(captured);
 
         Optional<CheckpointEncoder.CheckpointRequest> periodic =
-                checkpointScheduler.dueForElapsed(lastElapsedNanos, lastServerTick);
-        periodic.ifPresent(this::writeCheckpointRequestUnchecked);
+                barriers.due(lastElapsedNanos, lastServerTick);
+        periodic.ifPresent(this::writeCheckpointUnchecked);
     }
 
     /** Appends one ordered delta without recursively scheduling a checkpoint. */
     private void appendPacket(CapturedPacket captured) throws IOException {
         RawPacketFrame frame = toFrame(captured);
         validateOrder(frame);
-        TrackWriter track = track(TrackKeys.of(captured.context().route(), frame.world()));
+        TrackWriter track = tracks.track(TrackKeys.of(captured.context().route(), frame.world()));
         boolean rotate;
         try {
             rotate = track.segmentDurationReached(frame.elapsedNanos());
@@ -180,7 +171,7 @@ final class RecordingSegmentAppender implements AutoCloseable {
                     new IllegalArgumentException("segment duration calculation overflow", overflow));
         }
         if (rotate && !budgetTracker.stopRequested()) {
-            finishSegment(track);
+            TrackSet.finishSegment(track);
         }
 
         // A structural rotation may have sealed the previous segment before a
@@ -207,145 +198,23 @@ final class RecordingSegmentAppender implements AutoCloseable {
         notifyBudgetStop(observation.completionReason());
 
         if (track.segmentSizeReached() && !budgetTracker.stopRequested()) {
-            finishSegment(track);
+            TrackSet.finishSegment(track);
         }
     }
 
-    /**
-     * The track of a key, created on first use. A track created after
-     * the first barrier gets empty checkpoints for the earlier barriers, so
-     * all tracks share their checkpoint ordinals.
-     */
-    private TrackWriter track(TrackKeys.Track track) throws IOException {
-        TrackWriter existing = tracks.get(track.key());
-        if (existing != null) {
-            return existing;
-        }
-        int id = tracks.size();
-        TrackWriter created;
+    private void writeCheckpointUnchecked(CheckpointEncoder.CheckpointRequest request) {
         try {
-            created = new TrackWriter(track.key().describe(id, track.label()), workspace, adapterId, budget);
-            for (int ordinal = 0; ordinal < checkpointTimes.size(); ordinal++) {
-                created.writeCheckpoint(new ReplayCheckpoint(
-                        ordinal, checkpointTimes.get(ordinal), List.of()));
-            }
-        } catch (IllegalArgumentException formatFailure) {
-            throw new CorruptWriterException(formatFailure);
-        }
-        tracks.put(track.key(), created);
-        return created;
-    }
-
-    /**
-     * Writes one checkpoint barrier: each world track gets the scene frames
-     * of its world, each state track the state of its subject, each block
-     * state track the state of its world's blocks, and every other track an
-     * empty checkpoint.
-     */
-    private void writeBarrier(
-            ReplayCheckpoint checkpoint,
-            List<CheckpointEncoder.SubjectState> subjects,
-            List<CheckpointEncoder.BlockStates> blockStates)
-            throws IOException {
-        Map<TrackKey, List<RawPacketFrame>> byTrack = new LinkedHashMap<>();
-        for (RawPacketFrame frame : checkpoint.initializationFrames()) {
-            TrackKeys.Track scene = TrackKeys.scene(frame.world());
-            if (!byTrack.containsKey(scene.key())) {
-                track(scene);
-            }
-            byTrack.computeIfAbsent(scene.key(), ignored -> new ArrayList<>()).add(frame);
-        }
-        for (CheckpointEncoder.SubjectState state : subjects) {
-            TrackKeys.Track subject = TrackKeys.subject(state.subject());
-            track(subject);
-            byTrack.put(subject.key(), state.frames());
-        }
-        for (CheckpointEncoder.BlockStates blocks : blockStates) {
-            if (blocks.frames().isEmpty()) {
-                continue;
-            }
-            TrackKeys.Track blockState = TrackKeys.blockState(blocks.world());
-            track(blockState);
-            byTrack.put(blockState.key(), blocks.frames());
-        }
-        try {
-            for (Map.Entry<TrackKey, TrackWriter> entry : tracks.entrySet()) {
-                entry.getValue().writeCheckpoint(new ReplayCheckpoint(
-                        checkpoint.ordinal(),
-                        checkpoint.elapsedNanos(),
-                        byTrack.getOrDefault(entry.getKey(), List.of())));
-            }
-        } catch (IllegalArgumentException formatFailure) {
-            throw new CorruptWriterException(formatFailure);
-        }
-        checkpointTimes.add(checkpoint.elapsedNanos());
-        activeCheckpointOrdinal = checkpoint.ordinal();
-    }
-
-    private void writeCheckpointRequestUnchecked(CheckpointEncoder.CheckpointRequest request) {
-        try {
-            writeCheckpointRequest(request);
+            countCheckpointFrames(barriers.write(request, this::drainPacketsThrough));
         } catch (IOException exception) {
             throw new StorageWriteException(exception);
         }
     }
 
-    private void writeCheckpointRequest(CheckpointEncoder.CheckpointRequest request)
-            throws IOException {
-        CheckpointEncoder.CheckpointCapture capture;
-        try {
-            capture = checkpointScheduler.capture(request).toCompletableFuture().join();
-        } catch (CompletionException exception) {
-            throw new AdapterCheckpointException(unwrap(exception));
-        } catch (RuntimeException exception) {
-            throw new AdapterCheckpointException(exception);
-        }
-        if (capture == null) {
-            throw new CorruptWriterException(
-                    new IllegalArgumentException("checkpoint encoder returned null capture"));
-        }
-        long captureElapsedNanos;
-        try {
-            captureElapsedNanos = Math.subtractExact(
-                    capture.point().captureTimeNanos(), recordingStartCaptureTimeNanos);
-        } catch (ArithmeticException overflow) {
-            throw new CorruptWriterException(
-                    new IllegalArgumentException("checkpoint capture time cannot be rebased", overflow));
-        }
-        if (captureElapsedNanos < request.elapsedNanos()) {
-            throw new CorruptWriterException(
-                    new IllegalArgumentException("checkpoint capture precedes its request"));
-        }
-        drainPacketsThrough(capture.point());
-        List<RawPacketFrame> barrierFrames = new ArrayList<>(capture.initializationFrames());
-        capture.subjects().forEach(state -> barrierFrames.addAll(state.frames()));
-        capture.blockStates().forEach(blocks -> barrierFrames.addAll(blocks.frames()));
-        for (RawPacketFrame frame : barrierFrames) {
-            if (frame.elapsedNanos() != captureElapsedNanos
-                    || frame.serverTick() != capture.point().serverTick()) {
-                throw new CorruptWriterException(
-                        new IllegalArgumentException(
-                                "checkpoint frame does not match its actual capture point"));
-            }
-        }
-        int ordinal = checkpointScheduler.nextOrdinal();
-        ReplayCheckpoint canonical;
-        try {
-            canonical = new ReplayCheckpoint(
-                    ordinal, captureElapsedNanos, capture.initializationFrames());
-        } catch (IllegalArgumentException formatFailure) {
-            throw new CorruptWriterException(formatFailure);
-        }
-        writeBarrier(canonical, capture.subjects(), capture.blockStates());
-        for (RawPacketFrame frame : canonical.initializationFrames()) {
+    private void countCheckpointFrames(ReplayCheckpoint checkpoint) {
+        for (RawPacketFrame frame : checkpoint.initializationFrames()) {
             RecordingBudgetTracker.BudgetObservation observation = budgetTracker.afterFrame(
                     frame, RecordingBudgetTracker.UnitKind.CHECKPOINT_FRAME);
             notifyBudgetStop(observation.completionReason());
-        }
-        try {
-            checkpointScheduler.markWritten(canonical, capture.point().serverTick());
-        } catch (IllegalArgumentException invariantFailure) {
-            throw new CorruptWriterException(invariantFailure);
         }
     }
 
@@ -416,21 +285,11 @@ final class RecordingSegmentAppender implements AutoCloseable {
         }
     }
 
-    private static void finishSegment(TrackWriter track) {
-        try {
-            track.finishOpenSegment();
-        } catch (IOException exception) {
-            throw new StorageWriteException(exception);
-        } catch (IllegalArgumentException formatFailure) {
-            throw new CorruptWriterException(formatFailure);
-        }
-    }
-
     private void seal() throws IOException {
         if (state != State.RUNNING) {
             return;
         }
-        tracks.values().forEach(RecordingSegmentAppender::finishSegment);
+        tracks.finishAll();
         state = State.SEALED;
         sealedArtifacts = snapshotArtifacts(budgetTracker.completionReason());
         if (completionReported.compareAndSet(false, true)) {
@@ -447,12 +306,12 @@ final class RecordingSegmentAppender implements AutoCloseable {
         RecordingBudgetTracker.BudgetSnapshot snapshot = budgetTracker.snapshot();
         return new RecordingArtifacts(
                 workspace,
-                tracks.values().stream().map(TrackWriter::artifacts).toList(),
+                tracks.artifacts(),
                 snapshot.lastElapsedNanos(),
                 snapshot.payloadBytes(),
                 snapshot.packetCount(),
                 segmentCount,
-                checkpointTimes.size(),
+                tracks.barrierCount(),
                 reason);
     }
 
@@ -473,7 +332,7 @@ final class RecordingSegmentAppender implements AutoCloseable {
             return;
         }
         state = State.FAILED;
-        tracks.values().forEach(track -> track.abort(cause));
+        tracks.abortAll(cause);
         if (failureReported.compareAndSet(false, true)) {
             try {
                 failure.accept(code, cause);
@@ -481,30 +340,6 @@ final class RecordingSegmentAppender implements AutoCloseable {
                 // A failure callback must never escape into the writer thread.
             }
         }
-    }
-
-    private static ReplayFailureCode classify(Throwable failure) {
-        if (failure instanceof StorageWriteException || failure instanceof IOException) {
-            return ReplayFailureCode.STORAGE_ERROR;
-        }
-        if (failure instanceof AdapterCheckpointException
-                || failure instanceof IllegalArgumentException) {
-            return ReplayFailureCode.ADAPTER_ERROR;
-        }
-        if (failure instanceof CorruptWriterException) {
-            return ReplayFailureCode.CORRUPT_DATA;
-        }
-        return ReplayFailureCode.INTERNAL_ERROR;
-    }
-
-    private static Throwable unwrap(Throwable failure) {
-        Throwable current = failure;
-        while ((current instanceof CompletionException
-                || current instanceof java.util.concurrent.ExecutionException)
-                && current.getCause() != null) {
-            current = current.getCause();
-        }
-        return current;
     }
 
     private static Path requireWorkspace(Path workspace) {
@@ -571,24 +406,6 @@ final class RecordingSegmentAppender implements AutoCloseable {
                     || segmentCount < 0L || checkpointCount < 0L) {
                 throw new IllegalArgumentException("recording artifact counters must not be negative");
             }
-        }
-    }
-
-    private static final class StorageWriteException extends RuntimeException {
-        StorageWriteException(IOException cause) {
-            super("replay artifact write failed", cause);
-        }
-    }
-
-    private static final class CorruptWriterException extends RuntimeException {
-        CorruptWriterException(Throwable cause) {
-            super("replay artifact format invariant failed", cause);
-        }
-    }
-
-    private static final class AdapterCheckpointException extends RuntimeException {
-        AdapterCheckpointException(Throwable cause) {
-            super("checkpoint encoder failed", cause);
         }
     }
 }

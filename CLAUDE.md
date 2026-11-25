@@ -63,7 +63,7 @@ from `replay-runtime-paper/run`; while it runs, the runtime JAR is locked and
 | `replay-runtime-paper` | the Paper plugin that composes everything |
 | `replay-example-plugin` | reference integration (commands, menus, viewer worlds) |
 
-## Modularization (phase 1 done)
+## Modularization (done)
 
 Analysis from 2026-11-23. The weakness: logic that should be shared lives in
 the 26.2 adapter, and the interfaces between layers grow with every feature
@@ -84,9 +84,9 @@ instead of being extension points.
 5. (Resolved in phase 3, step 2.) Track kinds are not an extension point: `BLOCK_STATE` needed about 12 edits.
 6. (Resolved in phase 2, step 2.) `CaptureContext` has 11 fields mixing
    filtering, provenance and routing.
-7. `RecordingCoordinator` (1,093 lines) and `RecordingSegmentAppender` (742)
-   mix lifecycle, catalog transitions, Argus, checkpoints, routing, budget and
-   failures.
+7. (Resolved in phase 3, step 4.) `RecordingCoordinator` (1,093 lines) and
+   `RecordingSegmentAppender` (742) mix lifecycle, catalog transitions, Argus,
+   checkpoints, routing, budget and failures.
 8. (Resolved in phase 3, step 3.) `DefaultPlaybackService.prepareSession` is one block of about 130 lines.
 9. (Resolved in phase 3, step 3.) Track opening exists twice in `DefaultPlaybackService`.
 10. (Resolved in phase 3, step 1.) Dimension-change checkpoints are wired but never emitted (18 references).
@@ -102,7 +102,7 @@ check by the user, and is committed only after approval.
 |---|---|---|
 | 1 | Shared Paper base: version-independent capture bridge, playback bridge (split into queue, pipeline, lifecycle, filter), checkpoint assembly; small per-version hooks (codec, connection access, snapshot source) | done |
 | 2 | Adapter contract: `PlaybackBridge` split into role interfaces; `CaptureContext` routing as one `TrackRoute` type; carried over from phase 1: `ServerboundTap` and the shared scene model (finding 4) | done |
-| 3 | Core: track kinds as an extension point; split recording and playback assembly; one track opener; remove dead paths (findings 10 to 12) | open |
+| 3 | Core: track kinds as an extension point; split recording and playback assembly; one track opener; remove dead paths (findings 10 to 12) | done |
 
 Decisions made during the phases are recorded below.
 
@@ -265,7 +265,18 @@ Phase 3 status:
   state and interactions, place the viewer, register) and closes what it
   opened on failure. `DefaultPlaybackService` drops from 778 to 281 lines:
   open, load and verify the replay, timeline listener. Checked in game (replay
-  `37ed042f`), committed.
+  `37ed042f`), committed (`43526ce`).
+- Step 4 implemented: the appender keeps its tracks in `TrackSet` (creation
+  with backfilled checkpoints, barrier distribution, sealing) and writes
+  requested barriers through `CheckpointBarrierWriter` (capture, rebase,
+  validation, drain to the capture point); the writer exceptions and their
+  classification are `WriterFailures`. The coordinator runs each start as a
+  `RecordingInitialization` and delegates scene watches to `SceneWatches`
+  and failure events, lease release and FAILED transitions to
+  `RecordingFailures`; it keeps the registry, shutdown, finalization and
+  failure callbacks. Coordinator 975 to 438 lines, appender 594 to 411.
+  Checked in game (replays `b02d51da`, `66b11baa`, and `f72a4359` finalized
+  by a server shutdown), committed.
 
 Fixes found while testing, outside the plan: viewer worlds without blocks
 (`d0c3bc9`), checkpoint-only tracks accepted by the finalizer (`cae1d7f`),

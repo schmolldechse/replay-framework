@@ -111,6 +111,20 @@ One virtual writer thread is the only owner of the session's format writers and
 artifact lists; it drains the queue, rotates segments, consumes checkpoint
 signals, and seals the artifacts after admission closes.
 
+In the core, the `RecordingCoordinator` owns the registry of active
+recordings, shutdown, finalization and the failures that end a recording. A
+start runs as a `RecordingInitialization`, one step per asynchronous port:
+create the catalog row, take the lease, verify the adapter and resolve the
+scope, encode the initial checkpoint, register the session, move the catalog
+to RECORDING, activate the session and start its writer. `SceneWatches` keeps
+the virtual observers of each recording and the scope its checkpoints cover;
+`RecordingFailures` publishes failure events, releases the lease and moves
+the catalog row to FAILED. The writer, `RecordingSegmentAppender`, keeps its
+tracks in a `TrackSet`, where a track created late gets empty checkpoints
+for the earlier barriers, and writes each checkpoint barrier through a
+`CheckpointBarrierWriter`, which checks the adapter's capture against its
+capture point before it reaches the tracks.
+
 ## Playback data flow
 
 ```mermaid
