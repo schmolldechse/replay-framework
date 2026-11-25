@@ -534,7 +534,13 @@ final class ReplayFinalizer implements RecordingCoordinator.FinalizationHandler 
         return normalized;
     }
 
-    private static void validateSeekPoints(
+    /**
+     * Checks that every seek point of a track references artifacts that exist.
+     * A track without segments, such as the state track of a subject that only
+     * checkpoints contain, anchors each checkpoint at segment 0, offset 0,
+     * as playback expects.
+     */
+    static void validateSeekPoints(
             List<SeekPoint> seekPoints,
             int segmentCount,
             int checkpointCount) {
@@ -545,7 +551,7 @@ final class ReplayFinalizer implements RecordingCoordinator.FinalizationHandler 
         for (SeekPoint point : seekPoints) {
             if (point.checkpointOrdinal() >= checkpointCount
                     || (segmentCount == 0
-                    ? !point.equals(seekPoints.getFirst())
+                    ? point.segmentOrdinal() != 0 || point.frameOffset() != 0L
                     : point.segmentOrdinal() >= segmentCount)) {
                 throw new ArtifactValidationException("seek point references a missing artifact");
             }
@@ -579,7 +585,7 @@ final class ReplayFinalizer implements RecordingCoordinator.FinalizationHandler 
     private record PreparedArtifacts(Path workspace, List<ReplayArtifactPublisher.TrackFiles> tracks) {
     }
 
-    private static final class ArtifactValidationException extends RuntimeException {
+    static final class ArtifactValidationException extends RuntimeException {
         private ArtifactValidationException(String message) {
             super(message);
         }

@@ -62,6 +62,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 final class ReplayFinalizerTest {
@@ -93,6 +94,26 @@ final class ReplayFinalizerTest {
         } finally {
             fixture.close();
         }
+    }
+
+    @Test
+    void acceptsATrackThatOnlyCheckpointsContain() {
+        ReplayFinalizer.validateSeekPoints(List.of(
+                new SeekPoint(0L, 0, 0, 0L),
+                new SeekPoint(30_000_000_000L, 1, 0, 0L),
+                new SeekPoint(60_000_000_000L, 2, 0, 0L)), 0, 3);
+    }
+
+    @Test
+    void rejectsASeekPointIntoASegmentOfATrackWithoutSegments() {
+        assertThrows(ReplayFinalizer.ArtifactValidationException.class,
+                () -> ReplayFinalizer.validateSeekPoints(List.of(
+                        new SeekPoint(0L, 0, 0, 0L),
+                        new SeekPoint(30_000_000_000L, 1, 0, 128L)), 0, 2));
+        assertThrows(ReplayFinalizer.ArtifactValidationException.class,
+                () -> ReplayFinalizer.validateSeekPoints(List.of(
+                        new SeekPoint(0L, 0, 0, 0L),
+                        new SeekPoint(30_000_000_000L, 1, 1, 0L)), 1, 2));
     }
 
     @Test
