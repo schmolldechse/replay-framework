@@ -79,9 +79,8 @@ instead of being extension points.
    `Paper26_2AuthoritativeStateIndex`. A second version would copy them.
 2. (Resolved in phase 1.) `Paper26_2PlaybackBridge` and `Paper26_2CaptureBridge` are god classes.
 3. (Resolved in phase 2, step 1.) `PlaybackBridge` (adapter API) has 19 default methods; every feature added one.
-4. Scene tracking and state decoding mix version-independent rules with
-   Minecraft packet decoding. (Open: `Paper26_2SceneEntityTracker`, 360 lines,
-   still does both; carried over to phase 2.)
+4. (Resolved in phase 2, step 4.) Scene tracking mixes version-independent
+   rules with Minecraft packet decoding.
 5. Track kinds are not an extension point: `BLOCK_STATE` needed about 12 edits.
 6. (Resolved in phase 2, step 2.) `CaptureContext` has 11 fields mixing
    filtering, provenance and routing.
@@ -102,7 +101,7 @@ check by the user, and is committed only after approval.
 | Phase | Content | Status |
 |---|---|---|
 | 1 | Shared Paper base: version-independent capture bridge, playback bridge (split into queue, pipeline, lifecycle, filter), checkpoint assembly; small per-version hooks (codec, connection access, snapshot source) | done |
-| 2 | Adapter contract: `PlaybackBridge` split into role interfaces; `CaptureContext` routing as one `TrackRoute` type; carried over from phase 1: `ServerboundTap` and the shared scene model (finding 4) | open |
+| 2 | Adapter contract: `PlaybackBridge` split into role interfaces; `CaptureContext` routing as one `TrackRoute` type; carried over from phase 1: `ServerboundTap` and the shared scene model (finding 4) | done |
 | 3 | Core: track kinds as an extension point; split recording and playback assembly; one track opener; remove dead paths (findings 10 to 12) | open |
 
 Decisions made during the phases are recorded below.
@@ -226,7 +225,14 @@ Phase 2 status:
   shared contract of the actor effects. `CaptureHooks` loses `installHandlers`
   and `uninstallHandlers` and gains `serverboundDefinitions`,
   `serverboundIdentifier` and `actorEffects`; the bridge installs both taps.
-  Checked in game (replay `844364e5`), committed.
+  Checked in game (replay `844364e5`), committed (`bfff7a0`).
+- Step 4 implemented: `SceneModel`, `SceneChange` and the hook `SceneDecoder`
+  in `adapter.paper.playback.scene`. The model keeps entities, player names
+  and containers by the version-independent rules; `Paper26_2SceneDecoder`
+  only turns packets into changes (metadata IDs, movement wire format, item
+  and effect conversion) and replaces `Paper26_2SceneEntityTracker` and
+  `Paper26_2SceneBlocks`. State decoders and observer anchors stay in
+  `Paper26_2ViewerScene`. Checked in game (replay `55089ed8`), committed.
 
 Fixes found while testing, outside the plan: viewer worlds without blocks
 (`d0c3bc9`), checkpoint-only tracks accepted by the finalizer (`cae1d7f`),

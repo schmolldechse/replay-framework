@@ -448,6 +448,7 @@ A version adapter provides:
 | `CaptureHooks` | the live codec, connection identity, unbundling, Paper's connection hook, the identifier of a received packet and the `ActorEffects` for the shared capture bridge |
 | `SnapshotSource`, `CheckpointCodec` | the detached state of a coverage as native packets, and their encoding |
 | `PlaybackHooks` | per viewer: the codec, the classification of live packets, rewriting, view reset, the scene and the interaction handler |
+| `SceneDecoder` | the changes a replayed packet makes to the shared `SceneModel` of entities, players and containers |
 
 The [Paper 26.2 adapter](adapters/paper-26.2.md) is the reference
 implementation.

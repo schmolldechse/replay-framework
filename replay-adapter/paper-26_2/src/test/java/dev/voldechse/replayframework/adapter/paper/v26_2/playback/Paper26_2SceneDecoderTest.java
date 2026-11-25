@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.mojang.authlib.GameProfile;
+import dev.voldechse.replayframework.adapter.paper.playback.scene.SceneModel;
 import dev.voldechse.replayframework.api.playback.RecordedPlayer;
 import dev.voldechse.replayframework.format.PacketPhase;
 import dev.voldechse.replayframework.format.RawPacketFrame;
@@ -28,13 +29,14 @@ import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-class Paper26_2SceneEntityTrackerTest {
+/** The 26.2 scene decoder feeding the shared scene model, with real packets. */
+class Paper26_2SceneDecoderTest {
     private static final String PREFIX = "play.clientbound.minecraft:";
     private static final UUID ALEX = UUID.fromString("00000000-0000-0000-0000-00000000000a");
     private static final UUID STEVE = UUID.fromString("00000000-0000-0000-0000-00000000000b");
 
     private final Map<RawPacketFrame, Object> packets = new IdentityHashMap<>();
-    private final Paper26_2SceneEntityTracker tracker = new Paper26_2SceneEntityTracker();
+    private final SceneModel scene = new SceneModel(new Paper26_2SceneDecoder(this::decode));
 
     @BeforeAll
     static void bootstrapMinecraftRegistries() {
@@ -47,13 +49,13 @@ class Paper26_2SceneEntityTrackerTest {
         observe("player_info_update", 0, info(ALEX, "Alex"), Optional.empty());
         observe("add_entity", 7, spawn(7, ALEX, 10, 64, 20), Optional.of("minecraft:the_nether"));
 
-        RecordedPlayer alex = tracker.players().getFirst();
+        RecordedPlayer alex = scene.players().getFirst();
         assertEquals("Alex", alex.name());
         assertEquals(new RecordedPlayer.Location(Key.key("minecraft:the_nether"), 10, 64, 20, 0, 0),
                 alex.location().orElseThrow());
 
         observeRaw("move_entity_pos", movement(7, 4096, -2048, 8192));
-        RecordedPlayer.Location moved = tracker.players().getFirst().location().orElseThrow();
+        RecordedPlayer.Location moved = scene.players().getFirst().location().orElseThrow();
         assertEquals(11, moved.x(), 1.0e-9);
         assertEquals(63.5, moved.y(), 1.0e-9);
         assertEquals(22, moved.z(), 1.0e-9);
@@ -62,10 +64,10 @@ class Paper26_2SceneEntityTrackerTest {
                 7, new PositionMoveRotation(new Vec3(-5, 70, 3), Vec3.ZERO, 90, 10), Set.of(), true),
                 Optional.empty());
         assertEquals(new RecordedPlayer.Location(Key.key("minecraft:the_nether"), -5, 70, 3, 90, 10),
-                tracker.players().getFirst().location().orElseThrow());
+                scene.players().getFirst().location().orElseThrow());
 
         observe("remove_entities", 7, new ClientboundRemoveEntitiesPacket(7), Optional.empty());
-        RecordedPlayer removed = tracker.players().getFirst();
+        RecordedPlayer removed = scene.players().getFirst();
         assertEquals("Alex", removed.name());
         assertFalse(removed.inScene());
     }
@@ -79,7 +81,7 @@ class Paper26_2SceneEntityTrackerTest {
                 Optional.of("minecraft:overworld"));
         observeRaw("move_entity_pos", movement(3, 4096, 0, 0));
 
-        List<RecordedPlayer> players = tracker.players();
+        List<RecordedPlayer> players = scene.players();
         assertEquals(List.of("Alex", "steve"), players.stream().map(RecordedPlayer::name).toList());
         assertTrue(players.stream().noneMatch(RecordedPlayer::inScene));
     }
@@ -92,29 +94,29 @@ class Paper26_2SceneEntityTrackerTest {
                 Optional.of("minecraft:the_nether"));
         observe("set_entity_data", 7, new net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket(7, List.of(
                 new net.minecraft.network.syncher.SynchedEntityData.DataValue<>(
-                        Paper26_2SceneEntityTracker.SHARED_FLAGS,
+                        Paper26_2SceneDecoder.SHARED_FLAGS,
                         net.minecraft.network.syncher.EntityDataSerializers.BYTE, (byte) ((1 << 1) | (1 << 6))),
                 new net.minecraft.network.syncher.SynchedEntityData.DataValue<>(
                         net.minecraft.world.entity.LivingEntity.DATA_HEALTH_ID.id(),
                         net.minecraft.network.syncher.EntityDataSerializers.FLOAT, 12.5F))),
                 Optional.empty());
 
-        var alex = tracker.entity(7).orElseThrow();
+        var alex = scene.entity(7).orElseThrow();
         assertEquals(ALEX, alex.id());
         assertEquals(net.kyori.adventure.key.Key.key("minecraft:player"), alex.type());
         assertEquals(java.util.OptionalDouble.of(12.5), alex.health());
         assertEquals(java.util.Set.of(
                 dev.voldechse.replayframework.api.playback.RecordedEntity.Flag.SNEAKING,
                 dev.voldechse.replayframework.api.playback.RecordedEntity.Flag.GLOWING), alex.flags());
-        assertEquals(List.of(ALEX), tracker.entities("minecraft:overworld").stream()
+        assertEquals(List.of(ALEX), scene.entities("minecraft:overworld").stream()
                 .map(dev.voldechse.replayframework.api.playback.RecordedEntity::id).toList());
-        assertEquals(1, tracker.entities("minecraft:the_nether").size());
+        assertEquals(1, scene.entities("minecraft:the_nether").size());
     }
 
     @Test
     void readsTheDataIdsOfTheEntityClass() throws Exception {
-        assertEquals(Paper26_2SceneEntityTracker.SHARED_FLAGS, accessorId("DATA_SHARED_FLAGS_ID"));
-        assertEquals(Paper26_2SceneEntityTracker.CUSTOM_NAME, accessorId("DATA_CUSTOM_NAME"));
+        assertEquals(Paper26_2SceneDecoder.SHARED_FLAGS, accessorId("DATA_SHARED_FLAGS_ID"));
+        assertEquals(Paper26_2SceneDecoder.CUSTOM_NAME, accessorId("DATA_CUSTOM_NAME"));
     }
 
     private static int accessorId(String field) throws Exception {
@@ -128,23 +130,30 @@ class Paper26_2SceneEntityTrackerTest {
         observe("player_info_update", 0, info(ALEX, "Alex"), Optional.empty());
         observe("add_entity", 7, spawn(7, ALEX, 0, 0, 0), Optional.of("minecraft:overworld"));
 
-        tracker.clear();
+        scene.clear();
 
-        assertTrue(tracker.players().isEmpty());
+        assertTrue(scene.players().isEmpty());
     }
 
     private void observe(String type, int entityId, Object packet, Optional<String> world) {
         RawPacketFrame frame = new RawPacketFrame(
                 0L, 0L, 0, PacketPhase.PLAY, 1, varInt(entityId), world);
         packets.put(frame, packet);
-        tracker.observe(frame, PREFIX + type, packets::get);
+        scene.observe(frame, PREFIX + type);
     }
 
     private void observeRaw(String type, byte[] payload) {
         RawPacketFrame frame = new RawPacketFrame(0L, 0L, 0, PacketPhase.PLAY, 1, payload);
-        tracker.observe(frame, PREFIX + type, ignored -> {
+        scene.observe(frame, PREFIX + type);
+    }
+
+    /** Decodes the frames this test built; movement frames must never be decoded. */
+    private Object decode(RawPacketFrame frame) {
+        Object packet = packets.get(frame);
+        if (packet == null) {
             throw new AssertionError("movement must not be decoded");
-        });
+        }
+        return packet;
     }
 
     private static ClientboundAddEntityPacket spawn(int id, UUID uuid, double x, double y, double z) {

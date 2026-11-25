@@ -133,11 +133,10 @@ flowchart TB
 | `ReplayChannelWriter` (shared) | writes encoded replay packets from an anchor behind `compress` (or `prepender`), skipping the gate, the clientbound tap and the server's encoder, but keeping compression, framing and encryption |
 | `ViewerGate` (shared) | suppresses live scene packets that would conflict with the replay; classifies the packet object by its definition, without encoding it; passes the viewer's own state and user interface |
 | `Paper26_2PlaybackHooks` | the 26.2 parts of a viewer: live codec, classification of live packets by type, rewriter, resetter, scene, interaction handler |
-| `Paper26_2ViewerScene` | the entity tracker, container positions, state decoders and observer anchors of a viewer |
+| `Paper26_2ViewerScene` | the shared `SceneModel` with the 26.2 scene decoder, the state decoders and the observer anchors of a viewer |
 | `Paper26_2ViewResetter` | removes replay-owned boss bars, tab entries, entities and block cracks on reset and close |
-| `Paper26_2SceneEntityTracker` | keeps type, position, name, health, equipment, effects and flags of every replay entity from the frames played |
+| `Paper26_2SceneDecoder` | turns played frames into the changes of the shared `SceneModel`, which keeps type, position, name, health, equipment, effects and flags of every replay entity and the containers with recorded contents |
 | `Paper26_2SubjectStateDecoder` | decodes a state track's packets into a `SubjectState` |
-| `Paper26_2SceneBlocks` | knows where the scene shows a container with recorded contents |
 | `Paper26_2BlockStateDecoder` | builds a container's contents from the block state track |
 | `ReplayEntityInteractions` | consumes `interact` and `attack` packets aimed at replay entities and `use_item_on` packets aimed at recorded containers |
 

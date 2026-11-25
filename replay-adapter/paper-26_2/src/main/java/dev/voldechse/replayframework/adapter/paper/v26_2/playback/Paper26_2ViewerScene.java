@@ -4,6 +4,7 @@ import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.PacketRegistry;
 import dev.voldechse.replayframework.adapter.codec.PacketCodec;
 import dev.voldechse.replayframework.adapter.paper.playback.ViewerScene;
+import dev.voldechse.replayframework.adapter.paper.playback.scene.SceneModel;
 import dev.voldechse.replayframework.adapter.playback.ObserverAnchor;
 import dev.voldechse.replayframework.api.playback.RecordedEntity;
 import dev.voldechse.replayframework.api.playback.RecordedPlayer;
@@ -17,68 +18,65 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import net.kyori.adventure.key.Key;
-import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.game.ClientboundAddEntityPacket;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
 
 /**
- * What a Paper 26.2 viewer's playback knows about the scene: the entities and
- * players of {@link Paper26_2SceneEntityTracker}, the containers of
- * {@link Paper26_2SceneBlocks}, and the decoding of subject and block state.
+ * What a Paper 26.2 viewer's playback knows about the scene: the shared
+ * {@link SceneModel} fed by {@link Paper26_2SceneDecoder}, and the decoding of
+ * subject and block state.
  */
 final class Paper26_2ViewerScene implements ViewerScene {
 
     private final PacketRegistry registry;
     private final PacketCodec<Object> codec;
-    private final Paper26_2SceneEntityTracker entities = new Paper26_2SceneEntityTracker();
-    private final Paper26_2SceneBlocks blocks = new Paper26_2SceneBlocks();
+    private final SceneModel scene;
 
     Paper26_2ViewerScene(PacketRegistry registry, PacketCodec<Object> codec) {
         this.registry = Objects.requireNonNull(registry, "registry");
         this.codec = Objects.requireNonNull(codec, "codec");
+        this.scene = new SceneModel(new Paper26_2SceneDecoder(codec::decode));
     }
 
     @Override
     public void observe(RawPacketFrame frame, String typeName) {
-        entities.observe(frame, typeName, codec::decode);
-        blocks.observe(frame, typeName, codec::decode);
+        scene.observe(frame, typeName);
     }
 
     @Override
     public void clear() {
-        entities.clear();
-        blocks.clear();
+        scene.clear();
     }
 
     @Override
     public List<RecordedPlayer> players() {
-        return entities.players();
+        return scene.players();
     }
 
-    /** Reads the players of frames that are not played, with a tracker of their own. */
+    /** Reads the players of frames that are not played, with a scene of their own. */
     @Override
     public List<RecordedPlayer> players(List<RawPacketFrame> frames) {
-        Paper26_2SceneEntityTracker tracker = new Paper26_2SceneEntityTracker();
+        SceneModel own = new SceneModel(new Paper26_2SceneDecoder(codec::decode));
         for (RawPacketFrame frame : frames) {
-            typeName(frame).ifPresent(typeName -> tracker.observe(frame, typeName, codec::decode));
+            typeName(frame).ifPresent(typeName -> own.observe(frame, typeName));
         }
-        return tracker.players();
+        return own.players();
     }
 
     @Override
     public Optional<RecordedEntity> entity(int recordedEntityId) {
-        return entities.entity(recordedEntityId);
+        return scene.entity(recordedEntityId);
     }
 
     @Override
     public List<RecordedEntity> entities(String world) {
-        return entities.entities(world);
+        return scene.entities(world);
     }
 
     @Override
     public Optional<Key> container(String world, BlockPosition position) {
-        return blocks.block(world, new BlockPos(position.x(), position.y(), position.z()));
+        return scene.container(world, position);
     }
 
     @Override
