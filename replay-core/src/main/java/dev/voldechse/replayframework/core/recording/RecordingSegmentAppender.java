@@ -1,5 +1,7 @@
 package dev.voldechse.replayframework.core.recording;
 
+import dev.voldechse.replayframework.adapter.TrackRoute;
+
 import dev.voldechse.replayframework.adapter.CaptureSubject;
 import dev.voldechse.replayframework.adapter.CheckpointEncoder;
 import dev.voldechse.replayframework.adapter.CheckpointSignalSource;
@@ -221,14 +223,13 @@ final class RecordingSegmentAppender implements AutoCloseable {
     private void appendPacket(CapturedPacket captured) throws IOException {
         RawPacketFrame frame = toFrame(captured);
         validateOrder(frame);
-        TrackWriter track;
-        if (captured.context().subject().isPresent()) {
-            track = track(captured.context().subject().get());
-        } else if (captured.context().blockState()) {
-            track = blockStateTrack(frame.world().orElseThrow());
-        } else {
-            track = track(frame.world());
-        }
+        TrackWriter track = switch (captured.context().route()) {
+            case TrackRoute.Subject subject -> track(subject.subject());
+            case TrackRoute.BlockState ignored ->
+                    blockStateTrack(frame.world().orElseThrow());
+            case TrackRoute.Scene ignored -> track(frame.world());
+            case TrackRoute.WorldWide ignored -> track(frame.world());
+        };
         boolean rotate;
         try {
             rotate = track.segmentDurationReached(frame.elapsedNanos());
@@ -519,12 +520,14 @@ final class RecordingSegmentAppender implements AutoCloseable {
      */
     private static java.util.Optional<String> frameWorld(CapturedPacket captured) {
         var context = captured.context();
-        if (context.blockState()) {
-            return context.world().map(net.kyori.adventure.key.Key::asString);
-        }
-        return context.worldWide() || context.subject().isPresent()
-                ? java.util.Optional.empty()
-                : context.world().map(net.kyori.adventure.key.Key::asString);
+        return switch (context.route()) {
+            case TrackRoute.Scene ignored ->
+                    context.world().map(net.kyori.adventure.key.Key::asString);
+            case TrackRoute.BlockState ignored ->
+                    context.world().map(net.kyori.adventure.key.Key::asString);
+            case TrackRoute.WorldWide ignored -> java.util.Optional.empty();
+            case TrackRoute.Subject ignored -> java.util.Optional.empty();
+        };
     }
 
     private void validateOrder(RawPacketFrame frame) {

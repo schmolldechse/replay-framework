@@ -42,18 +42,19 @@ Nearly all of the data is scene. A viewer in the nether reads tracks 0 and
 
 ## Routing
 
-The core routes every captured packet to exactly one track:
+Every captured packet carries exactly one `TrackRoute` in its
+`CaptureContext`, set by the adapter. The core maps it to a track and to the
+world in which a playback client applies the frame:
 
-```mermaid
-flowchart TD
-    packet["Captured packet"] --> subject{"Names a subject?"}
-    subject -->|yes| state["STATE track of that subject"]
-    subject -->|no| block{"Block state?"}
-    block -->|yes| blocks["BLOCK_STATE track of its world"]
-    block -->|no| wide{"World-wide?"}
-    wide -->|yes| global["GLOBAL track"]
-    wide -->|no| world["WORLD track of its world"]
-```
+| Route | Track | Frame world |
+|---|---|---|
+| `Subject` | `STATE` track of that subject | none |
+| `BlockState` | `BLOCK_STATE` track of its world | its world |
+| `WorldWide` | `GLOBAL` track | none, applies in every world |
+| `Scene` | `WORLD` track of its world | its world |
+
+A later route replaces an earlier one, so a packet can never claim two
+tracks.
 
 - A packet names a subject when its definition declares it as the
   recipient's own state (`RecipientState`), or when Argus sampled it for an

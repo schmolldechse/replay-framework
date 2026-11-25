@@ -83,7 +83,8 @@ instead of being extension points.
    Minecraft packet decoding. (Open: `Paper26_2SceneEntityTracker`, 360 lines,
    still does both; carried over to phase 2.)
 5. Track kinds are not an extension point: `BLOCK_STATE` needed about 12 edits.
-6. `CaptureContext` has 11 fields mixing filtering, provenance and routing.
+6. (Resolved in phase 2, step 2.) `CaptureContext` has 11 fields mixing
+   filtering, provenance and routing.
 7. `RecordingCoordinator` (1,093 lines) and `RecordingSegmentAppender` (742)
    mix lifecycle, catalog transitions, Argus, checkpoints, routing, budget and
    failures.
@@ -213,7 +214,13 @@ Phase 2 status:
   `PacketScheduler` and `SeekEngine` take `ViewerStream`, `StateTracks` takes
   `StateDecoder`, `SceneTracks` takes `SceneQueries`. Test stubs extend
   `StubPlaybackBridge` from the test fixtures of `replay-adapter:api`. Checked
-  in game, committed.
+  in game, committed (`4f10346`).
+- Step 2 implemented: `CaptureContext` carries one `TrackRoute` (`Scene`,
+  `WorldWide`, `Subject`, `BlockState`) instead of `worldWide`, `subject` and
+  `blockState`; a later route replaces an earlier one. `worldWide()` remains
+  as a derived query for the scope filter and the recipient-copy merger.
+  `RecordingSegmentAppender` picks track and frame world with a `switch`.
+  Checked in game (replay `4068e3d8`), committed.
 
 Fixes found while testing phase 1, outside the plan: viewer worlds without
 blocks (`d0c3bc9`), checkpoint-only tracks accepted by the finalizer

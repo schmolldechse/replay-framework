@@ -20,17 +20,11 @@ import net.kyori.adventure.key.Key;
  * @param normalizedChat normalized chat text, when the packet is chat
  * @param customPayloadChannel exact custom-payload channel, when applicable
  * @param origin source the packet was observed through
- * @param worldWide whether the packet concerns its whole world instead of a
- *                  place in it, such as a tab-list entry or public chat
  * @param observation the scene observation an {@link CaptureOrigin#OBSERVER}
  *                    packet belongs to; empty for every other origin
  * @param recipientCopy the event this packet is a copy of, when the server
  *                      sends the event to several players separately
- * @param subject the subject whose state the packet describes; such a packet
- *                belongs to the subject's state track, not to the scene
- * @param blockState whether the packet carries the state of a block of its
- *                   world that the scene does not show; such a packet belongs
- *                   to the world's block state track
+ * @param route the track the packet belongs to
  */
 public record CaptureContext(
         Optional<PacketDisposition> disposition,
@@ -39,11 +33,9 @@ public record CaptureContext(
         Optional<String> normalizedChat,
         Optional<Key> customPayloadChannel,
         CaptureOrigin origin,
-        boolean worldWide,
         Optional<UUID> observation,
         Optional<RecipientCopy> recipientCopy,
-        Optional<CaptureSubject> subject,
-        boolean blockState) {
+        TrackRoute route) {
 
     /** Creates a context for scene state observed through a player view. */
     public CaptureContext(
@@ -53,7 +45,7 @@ public record CaptureContext(
             Optional<String> normalizedChat,
             Optional<Key> customPayloadChannel) {
         this(disposition, world, position, normalizedChat, customPayloadChannel,
-                CaptureOrigin.PLAYER_VIEW, false, Optional.empty(), Optional.empty(), Optional.empty(), false);
+                CaptureOrigin.PLAYER_VIEW, Optional.empty(), Optional.empty(), TrackRoute.SCENE);
     }
 
     /**
@@ -80,7 +72,15 @@ public record CaptureContext(
         Objects.requireNonNull(origin, "origin");
         observation = requireOptional(observation, "observation");
         recipientCopy = requireOptional(recipientCopy, "recipientCopy");
-        subject = requireOptional(subject, "subject");
+        Objects.requireNonNull(route, "route");
+        if (route instanceof TrackRoute.BlockState && world.isEmpty()) {
+            throw new IllegalArgumentException("block state needs a world");
+        }
+    }
+
+    /** Whether the packet concerns its whole world instead of a place in it. */
+    public boolean worldWide() {
+        return route instanceof TrackRoute.WorldWide;
     }
 
     /**
@@ -100,14 +100,12 @@ public record CaptureContext(
     public CaptureContext withOrigin(CaptureOrigin nextOrigin) {
         return new CaptureContext(
                 disposition, world, position, normalizedChat, customPayloadChannel,
-                nextOrigin, worldWide, observation, recipientCopy, subject, blockState);
+                nextOrigin, observation, recipientCopy, route);
     }
 
     /** Returns this context for a packet that concerns its whole world. */
     public CaptureContext asWorldWide() {
-        return new CaptureContext(
-                disposition, world, position, normalizedChat, customPayloadChannel,
-                origin, true, observation, recipientCopy, subject, blockState);
+        return routedTo(TrackRoute.WORLD_WIDE);
     }
 
     /**
@@ -117,25 +115,22 @@ public record CaptureContext(
     public CaptureContext observedBy(UUID observationId) {
         return new CaptureContext(
                 disposition, world, position, normalizedChat, customPayloadChannel,
-                CaptureOrigin.OBSERVER, worldWide,
+                CaptureOrigin.OBSERVER,
                 Optional.of(Objects.requireNonNull(observationId, "observationId")),
-                recipientCopy, subject, blockState);
+                recipientCopy, route);
     }
 
     /** Returns this context for one copy of an event sent to several players. */
     public CaptureContext asRecipientCopy(RecipientCopy copy) {
         return new CaptureContext(
                 disposition, world, position, normalizedChat, customPayloadChannel,
-                origin, worldWide, observation,
-                Optional.of(Objects.requireNonNull(copy, "copy")), subject, blockState);
+                origin, observation,
+                Optional.of(Objects.requireNonNull(copy, "copy")), route);
     }
 
     /** Returns this context for a packet that describes the state of a subject. */
     public CaptureContext withSubject(CaptureSubject stateSubject) {
-        return new CaptureContext(
-                disposition, world, position, normalizedChat, customPayloadChannel,
-                origin, worldWide, observation, recipientCopy,
-                Optional.of(Objects.requireNonNull(stateSubject, "stateSubject")), blockState);
+        return routedTo(TrackRoute.subject(Objects.requireNonNull(stateSubject, "stateSubject")));
     }
 
     /**
@@ -147,9 +142,14 @@ public record CaptureContext(
         if (world.isEmpty()) {
             throw new IllegalStateException("block state needs a world");
         }
+        return routedTo(TrackRoute.BLOCK_STATE);
+    }
+
+    /** Returns this context for another track; the route replaces the previous one. */
+    public CaptureContext routedTo(TrackRoute nextRoute) {
         return new CaptureContext(
                 disposition, world, position, normalizedChat, customPayloadChannel,
-                origin, worldWide, observation, recipientCopy, subject, true);
+                origin, observation, recipientCopy, Objects.requireNonNull(nextRoute, "nextRoute"));
     }
 
     private static <T> Optional<T> requireOptional(Optional<T> value, String name) {
