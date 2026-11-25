@@ -58,12 +58,12 @@ from `replay-runtime-paper/run`; while it runs, the runtime JAR is locked and
 | `replay-format` | tracks, segments, checkpoints, index, manifest |
 | `replay-core` | recording, tracks, playback, catalog, metadata |
 | `replay-adapter:api` | contract between core and a version adapter |
-| `replay-adapter:paper-common` | version-independent Paper parts: Argus, definition base classes and catalogs, recipient copies and state |
-| `replay-adapter:paper-26_2` | the 26.2 adapter: definitions, codec, eye, snapshots, bridges |
+| `replay-adapter:paper-common` | version-independent Paper parts: Argus, definition base classes and catalogs, recipient copies and state; channel handlers, capture and playback bridges, checkpoint assembly |
+| `replay-adapter:paper-26_2` | the 26.2 adapter: definitions, codecs, eye, snapshots, and the hooks the shared bridges call |
 | `replay-runtime-paper` | the Paper plugin that composes everything |
 | `replay-example-plugin` | reference integration (commands, menus, viewer worlds) |
 
-## Modularization (in progress)
+## Modularization (phase 1 done)
 
 Analysis from 2026-11-23. The weakness: logic that should be shared lives in
 the 26.2 adapter, and the interfaces between layers grow with every feature
@@ -71,16 +71,17 @@ instead of being extension points.
 
 ### Findings
 
-1. About 3,000 lines of the 26.2 adapter do not depend on the version:
+1. (Resolved in phase 1.) About 3,000 lines of the 26.2 adapter do not depend on the version:
    `Paper26_2CaptureBridge` (669 lines, 6 Minecraft references),
    `Paper26_2PlaybackBridge` (719, 2), `Paper26_2CheckpointEncoder` (548, 0),
    `ReplayViewerOutboundGate`, `PacketEventsReplayWriter`,
    `Paper26_2ReplayPacketRewriter`, `Paper26_2CaptureOrder`,
    `Paper26_2AuthoritativeStateIndex`. A second version would copy them.
-2. `Paper26_2PlaybackBridge` and `Paper26_2CaptureBridge` are god classes.
+2. (Resolved in phase 1.) `Paper26_2PlaybackBridge` and `Paper26_2CaptureBridge` are god classes.
 3. `PlaybackBridge` (adapter API) has 19 default methods; every feature added one.
 4. Scene tracking and state decoding mix version-independent rules with
-   Minecraft packet decoding.
+   Minecraft packet decoding. (Open: `Paper26_2SceneEntityTracker`, 360 lines,
+   still does both; carried over to phase 2.)
 5. Track kinds are not an extension point: `BLOCK_STATE` needed about 12 edits.
 6. `CaptureContext` has 11 fields mixing filtering, provenance and routing.
 7. `RecordingCoordinator` (1,093 lines) and `RecordingSegmentAppender` (742)
@@ -99,8 +100,8 @@ check by the user, and is committed only after approval.
 
 | Phase | Content | Status |
 |---|---|---|
-| 1 | Shared Paper base: version-independent capture bridge, playback bridge (split into queue, pipeline, lifecycle, filter), checkpoint assembly and scene model; small per-version hooks (codec, connection access, snapshot source, scene decoder) | in progress |
-| 2 | Adapter contract: `PlaybackBridge` split into role interfaces; `CaptureContext` routing as one `TrackRoute` type | open |
+| 1 | Shared Paper base: version-independent capture bridge, playback bridge (split into queue, pipeline, lifecycle, filter), checkpoint assembly; small per-version hooks (codec, connection access, snapshot source) | done |
+| 2 | Adapter contract: `PlaybackBridge` split into role interfaces; `CaptureContext` routing as one `TrackRoute` type; carried over from phase 1: `ServerboundTap` and the shared scene model (finding 4) | open |
 | 3 | Core: track kinds as an extension point; split recording and playback assembly; one track opener; remove dead paths (findings 10 to 12) | open |
 
 Decisions made during the phases are recorded below.
@@ -156,7 +157,7 @@ Shared classes in `paper-common` (new package `adapter.paper.channel`,
 | Shared class | Replaces | Role |
 |---|---|---|
 | `ClientboundTap` (done) | PacketEvents listener in `Paper26_2CaptureBridge` | per player channel, before `packet_handler`; hands packet objects to capture |
-| `ServerboundTap` | `Paper26_2ServerboundReceiver` | per player channel, before `packet_handler` |
+| `ServerboundTap` (carried over to phase 2) | `Paper26_2ServerboundReceiver` (81 lines) | per player channel, before `packet_handler` |
 | `ReplayChannelWriter` (done) | `PacketEventsReplayWriter` | writes encoded replay packets from an anchor behind `compress` |
 | `PaperCaptureBridge` (done) | `Paper26_2CaptureBridge` | taps, capture order, Argus publishing, definitions, failures |
 | `CaptureOrder`, `CaptureStateIndex` (done) | `Paper26_2CaptureOrder`, `Paper26_2AuthoritativeStateIndex` | unchanged, moved |
@@ -198,4 +199,13 @@ Status:
   `CheckpointCodec` in `adapter.paper.checkpoint`. `PacketCheckpointFamily`
   carries the assembly order; the encoder's duplicate enum, the three family
   filters and `Paper26_2CheckpointEncoder` are gone. Checked in game (replay
-  `2b16a81f`), committed.
+  `2b16a81f`), committed (`389e0c0`).
+- Step 5: docs describe the shared base (architecture, version contract,
+  adapter doc, README); dead accessor methods from before the shared bridges
+  (`installPlaybackGate`, `decodeCapturedFrame`, `uninstallHandler`,
+  `uninstallHandlerAndWait`) and the unused `EntityPosition.blockX/Y/Z` are
+  gone. Checked in game (replay `5badacb0`), committed.
+
+Fixes found while testing phase 1, outside the plan: viewer worlds without
+blocks (`d0c3bc9`), checkpoint-only tracks accepted by the finalizer
+(`cae1d7f`), relative movement replayed during seeks (`165d817`).

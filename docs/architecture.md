@@ -13,8 +13,8 @@ flowchart TD
 
     runtime --> core["replay-core<br/>Recording, playback, metadata, catalog"]
     runtime --> adapterApi["replay-adapter:api<br/>Shared adapter contract"]
-    adapterApi --> paperCommon["paper-common<br/>Definition contracts, Argus"]
-    paperCommon --> adapter262["paper-26_2<br/>Definitions, eye, checkpoints, playback"]
+    adapterApi --> paperCommon["paper-common<br/>Argus, definition contracts,<br/>capture, playback, checkpoints"]
+    paperCommon --> adapter262["paper-26_2<br/>Definitions, codecs, eye,<br/>snapshots, version hooks"]
     runtime --> format["replay-format<br/>Tracks, segments, indexes, checkpoints, manifests"]
     runtime --> storage["replay-storage:*<br/>Local, S3, SFTP artifacts"]
     runtime --> database["replay-database:postgresql<br/>Catalog, leases, metadata revisions"]
@@ -30,6 +30,24 @@ the adapter matching the server's Minecraft version, constructs the dependency
 graph with Guice, runs Flyway before
 Hibernate, then publishes a `ReplayFramework` facade to Paper's
 `ServicesManager` and `ReplayFrameworkProvider`.
+
+### Shared Paper base and version modules
+
+Everything that works the same on every Paper version lives in
+`paper-common`, which may use the Paper API and Netty but no Minecraft server
+classes. A version module implements small hooks for what really differs: the
+packet definitions, the codec of its protocol and its access to the server.
+
+| `paper-common` package | Owns | Hook a version implements |
+|---|---|---|
+| `argus` | virtual observers, scene merge, sampled state and block states | the eye and the platform queries |
+| `channel` | the clientbound tap before `packet_handler` and the write anchor behind compression | none |
+| `capture` | `PaperCaptureBridge`: taps, capture order, Argus publishing, state routing, failures | `CaptureHooks`: codec, connection identity, Paper's connection hook |
+| `playback` | `PaperPlaybackBridge`, `ViewerOutboundQueue`, `ViewerGate`: lifecycle, frame pipeline, world filter, batching, live isolation | `PlaybackHooks` with `ViewerParts`: codec, rewriter, view reset, scene |
+| `checkpoint` | `CheckpointAssembler`: order, validation and numbering of checkpoint packets | `SnapshotSource` and `CheckpointCodec` |
+| `packet` | definition base classes, catalogs, recipient copies and state | the definitions themselves |
+
+The [Paper 26.2 adapter](adapters/paper-26.2.md) describes the version half.
 
 ## Recording data flow
 

@@ -9,13 +9,10 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelOutboundHandler;
 import io.netty.channel.ChannelPipeline;
 import java.lang.reflect.Field;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.function.Consumer;
 import net.minecraft.network.Connection;
 import net.minecraft.network.PacketEncoder;
 import net.minecraft.network.ProtocolInfo;
@@ -45,40 +42,6 @@ public final class PaperConnectionAccessor {
     }
 
     /**
-     * Installs a viewer gate immediately before Paper's packet encoder. All
-     * pipeline mutations remain event-loop local and installation failures are
-     * routed to the caller instead of escaping into Netty.
-     */
-    public void installPlaybackGate(
-            ConnectionHandle connection,
-            String handlerName,
-            ChannelOutboundHandler gate,
-            Consumer<Throwable> installationFailureHandler) {
-        Objects.requireNonNull(connection, "connection");
-        requireHandlerName(handlerName);
-        Objects.requireNonNull(gate, "gate");
-        Objects.requireNonNull(installationFailureHandler, "installationFailureHandler");
-
-        connection.channel().eventLoop().execute(() -> {
-            try {
-                ChannelPipeline pipeline = connection.channel().pipeline();
-                if (pipeline.get(handlerName) != null) {
-                    throw incompatible("reserved playback handler name is already in use", null);
-                }
-
-                ChannelHandlerContext encoderContext = pipeline.context(PacketEncoder.class);
-                if (encoderContext == null
-                        || !(encoderContext.handler() instanceof PacketEncoder<?>)) {
-                    throw incompatible("Paper packet encoder is not installed", null);
-                }
-                pipeline.addAfter(encoderContext.name(), handlerName, gate);
-            } catch (Throwable failure) {
-                reportInstallationFailure(installationFailureHandler, failure);
-            }
-        });
-    }
-
-    /**
      * Decodes a raw PLAY clientbound frame with the codec currently bound to
      * the target connection. Transport compression and encryption are not part
      * of a replay payload and are intentionally not involved here.
@@ -104,24 +67,6 @@ public final class PaperConnectionAccessor {
                 || !descriptor.replayable()) {
             throw incompatible("replay packet is blocked by the verified registry", null);
         }
-        return decodeClientboundFrame(connection, frame);
-    }
-
-    /**
-     * Decodes an observed clientbound frame only to derive its capture scope.
-     * The packet still remains non-replayable unless the registry separately
-     * grants a playback contract.
-     */
-    public Object decodeCapturedFrame(
-            ConnectionHandle connection,
-            RawPacketFrame frame,
-            PacketRegistry registry) {
-        Objects.requireNonNull(connection, "connection");
-        Objects.requireNonNull(frame, "frame");
-        Objects.requireNonNull(registry, "registry");
-        registry.find(frame.phase(), PacketDescriptor.Direction.CLIENTBOUND, frame.packetId())
-                .orElseThrow(() -> incompatible(
-                        "captured packet ID is not in the verified registry", null));
         return decodeClientboundFrame(connection, frame);
     }
 
@@ -161,58 +106,6 @@ public final class PaperConnectionAccessor {
             throw incompatible("Paper 26.2 clientbound codec failed for packet ID " + frame.packetId(), exception);
         } finally {
             buffer.release();
-        }
-    }
-
-    /** Removes a named handler on the channel event loop; missing handlers are safe. */
-    public void uninstallHandler(ConnectionHandle connection, String handlerName) {
-        Objects.requireNonNull(connection, "connection");
-        requireHandlerName(handlerName);
-        try {
-            connection.channel().eventLoop().execute(() -> removeHandler(connection, handlerName));
-        } catch (Throwable ignored) {
-            // A closed event loop is an expected disconnect/shutdown path.
-        }
-    }
-
-    /**
-     * Removes a handler before returning when called off the channel event
-     * loop. This is used by playback cleanup so the live player state is not
-     * restored while the replay gate can still suppress its packets.
-     */
-    public void uninstallHandlerAndWait(ConnectionHandle connection, String handlerName) {
-        Objects.requireNonNull(connection, "connection");
-        requireHandlerName(handlerName);
-        if (connection.channel().eventLoop().inEventLoop()) {
-            removeHandler(connection, handlerName);
-            return;
-        }
-
-        java.util.concurrent.CompletableFuture<Void> removed =
-                new java.util.concurrent.CompletableFuture<>();
-        try {
-            connection.channel().eventLoop().execute(() -> {
-                try {
-                    removeHandler(connection, handlerName);
-                    removed.complete(null);
-                } catch (Throwable failure) {
-                    removed.completeExceptionally(failure);
-                }
-            });
-            removed.join();
-        } catch (Throwable ignored) {
-            // A closed event loop is an expected disconnect/shutdown path.
-        }
-    }
-
-    private static void removeHandler(ConnectionHandle connection, String handlerName) {
-        try {
-            if (connection.channel().pipeline().get(handlerName) != null) {
-                connection.channel().pipeline().remove(handlerName);
-            }
-        } catch (Throwable ignored) {
-            // A closed or already dismantled Paper channel is an expected
-            // quit path and must not turn shutdown into a second failure.
         }
     }
 
@@ -377,23 +270,6 @@ public final class PaperConnectionAccessor {
             return field;
         } catch (ReflectiveOperationException | RuntimeException exception) {
             throw incompatible("Paper packet encoder layout is incompatible", exception);
-        }
-    }
-
-    private static void requireHandlerName(String handlerName) {
-        Objects.requireNonNull(handlerName, "handlerName");
-        if (handlerName.isEmpty() || PACKET_ENCODER_NAME.equals(handlerName)) {
-            throw new IllegalArgumentException("invalid packet handler name");
-        }
-    }
-
-    private static void reportInstallationFailure(
-            Consumer<Throwable> installationFailureHandler,
-            Throwable failure) {
-        try {
-            installationFailureHandler.accept(failure);
-        } catch (Throwable ignored) {
-            // A diagnostic callback must never escape the Netty event loop.
         }
     }
 

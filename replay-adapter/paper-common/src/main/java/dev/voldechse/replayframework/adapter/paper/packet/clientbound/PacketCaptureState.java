@@ -38,24 +38,5 @@ public interface PacketCaptureState {
                 throw new IllegalArgumentException("entity position must be finite and have a world");
             }
         }
-
-        public int blockX() {
-            return floor(x);
-        }
-
-        public int blockY() {
-            return floor(y);
-        }
-
-        public int blockZ() {
-            return floor(z);
-        }
-
-        private static int floor(double value) {
-            if (value < Integer.MIN_VALUE || value > Integer.MAX_VALUE) {
-                throw new IllegalArgumentException("entity position exceeds block-coordinate bounds");
-            }
-            return (int) Math.floor(value);
-        }
     }
 }

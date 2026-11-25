@@ -431,8 +431,9 @@ Closing an eye publishes the unloads of whatever only it was holding.
 One adapter module supports one Minecraft version. Everything that does not
 depend on the version lives in `paper-common`, `replay-adapter:api` and the
 core and is inherited: Argus with its placement, merging and lifecycle, the
-actor-effect orchestration, both definition catalogs, scope routing,
-tracks, checkpoints and playback.
+actor-effect orchestration, both definition catalogs, the channel handlers,
+the capture and playback bridges, checkpoint assembly, scope routing and
+tracks.
 
 A version adapter provides:
 
@@ -444,8 +445,9 @@ A version adapter provides:
 | Serverbound definitions | one per PLAY serverbound packet: what it triggers |
 | `ArgusPlatform` | the eye, sampled world and subject state, the online players, the native packets Argus builds |
 | Effect families | one per kind of effect that bypasses its actor |
-| Snapshot provider | the checkpoint of a coverage |
-| Playback bridge | rewriting, the viewer gate, injection, scene queries and interactions |
+| `CaptureHooks` | the live codec, connection identity, unbundling and Paper's connection hook for the shared capture bridge |
+| `SnapshotSource`, `CheckpointCodec` | the detached state of a coverage as native packets, and their encoding |
+| `PlaybackHooks` | per viewer: the codec, the classification of live packets, rewriting, view reset, the scene and the interaction handler |
 
 The [Paper 26.2 adapter](adapters/paper-26.2.md) is the reference
 implementation.

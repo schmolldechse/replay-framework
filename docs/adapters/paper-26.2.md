@@ -2,9 +2,10 @@
 
 The Paper 26.2 adapter implements the [version contract](../virtual-observer.md#version-contract)
 for Minecraft 26.2. It owns everything that depends on the protocol: packet
-definitions, the native codec, the Argus eye, checkpoints and the playback
-bridge. This document describes its boundaries and lists the policy of every
-packet.
+definitions, the native codecs, the Argus eye, world snapshots and the hooks
+the shared Paper base in `paper-common` calls for capture, playback and
+checkpoints (see [architecture](../architecture.md#shared-paper-base-and-version-modules)).
+This document describes its boundaries and lists the policy of every packet.
 
 ## Runtime baseline
 

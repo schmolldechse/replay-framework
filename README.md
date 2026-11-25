@@ -142,8 +142,8 @@ The `runServer` task starts a local Paper 26.2 development server.
 | `replay-runtime-paper` | Paper plugin that composes and publishes the framework |
 | `replay-core` | recording, tracks, playback, artifact, metadata and catalog orchestration |
 | `replay-adapter:api` | contract between the core and a version adapter |
-| `replay-adapter:paper-common` | version-independent Paper parts: Argus, definition catalogs, recipient copies and state |
-| `replay-adapter:paper-26_2` | Paper 26.2 packet definitions, eye, checkpoints and playback bridge |
+| `replay-adapter:paper-common` | version-independent Paper parts: Argus, definition catalogs, recipient copies and state, and the shared capture, playback and checkpoint bridges |
+| `replay-adapter:paper-26_2` | Paper 26.2 packet definitions, codecs, eye, world snapshots and the hooks the shared bridges call |
 | `replay-format` | track, segment, checkpoint, index and manifest codecs |
 | `replay-storage:*` | Local, S3 and SFTP artifact storage |
 | `replay-database:postgresql` | PostgreSQL repositories, Flyway migrations and metadata persistence |
