@@ -6,7 +6,8 @@ import dev.voldechse.replayframework.adapter.ReplayAdapter;
 import dev.voldechse.replayframework.adapter.paper.capture.PaperCaptureBridge;
 import dev.voldechse.replayframework.adapter.paper.v26_2.capture.Paper26_2CaptureHooks;
 import dev.voldechse.replayframework.adapter.paper.v26_2.capture.PaperConnectionAccessor;
-import dev.voldechse.replayframework.adapter.paper.v26_2.checkpoint.Paper26_2CheckpointEncoder;
+import dev.voldechse.replayframework.adapter.paper.checkpoint.CheckpointAssembler;
+import dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.Paper26_2ClientboundPacketCatalog;
 import dev.voldechse.replayframework.adapter.paper.v26_2.checkpoint.Paper26_2NativePacketCodec;
 import dev.voldechse.replayframework.adapter.paper.v26_2.checkpoint.Paper26_2SnapshotProvider;
 import dev.voldechse.replayframework.adapter.paper.playback.PaperPlaybackBridge;
@@ -50,8 +51,9 @@ public final class Paper26_2AdapterProvider implements PaperAdapterProvider {
                     new ArrayBlockingQueue<>(128),
                     Thread.ofPlatform().name("replay-checkpoint-", 0).factory(),
                     new ThreadPoolExecutor.AbortPolicy());
-            Paper26_2CheckpointEncoder checkpointEncoder = new Paper26_2CheckpointEncoder(
-                    registry, snapshotProvider, nativePacketCodec, checkpointExecutor);
+            CheckpointAssembler checkpointEncoder = new CheckpointAssembler(
+                    registry, Paper26_2ClientboundPacketCatalog.catalog(), snapshotProvider, nativePacketCodec,
+                    checkpointExecutor);
             AtomicReference<Paper26_2ReplayAdapter> adapterReference = new AtomicReference<>();
             Paper26_2ReplayAdapter adapter = new Paper26_2ReplayAdapter(
                     captureBridge,

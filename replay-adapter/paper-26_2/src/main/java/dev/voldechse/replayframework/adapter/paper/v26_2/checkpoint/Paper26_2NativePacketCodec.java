@@ -3,7 +3,12 @@ package dev.voldechse.replayframework.adapter.paper.v26_2.checkpoint;
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.PacketDisposition;
+import dev.voldechse.replayframework.adapter.paper.checkpoint.CheckpointCodec;
+import dev.voldechse.replayframework.adapter.paper.checkpoint.EncodedPacket;
+import dev.voldechse.replayframework.adapter.paper.checkpoint.PacketBlueprint;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.v26_2.Paper26_2PacketRegistry;
+import dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.Paper26_2ClientboundPacketCatalog;
 import dev.voldechse.replayframework.format.PacketPhase;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -26,7 +31,7 @@ import net.minecraft.server.MinecraftServer;
  * contract.</p>
  */
 public final class Paper26_2NativePacketCodec
-        implements Paper26_2CheckpointEncoder.NativePacketCodec, AutoCloseable {
+        implements CheckpointCodec, AutoCloseable {
 
     private final Paper26_2PacketRegistry registry;
     private final ProtocolInfo<?> protocolInfo;
@@ -79,12 +84,13 @@ public final class Paper26_2NativePacketCodec
     }
 
     @Override
-    public Paper26_2CheckpointEncoder.EncodedPacket encode(
-            Paper26_2CheckpointEncoder.PacketBlueprint blueprint) {
+    public EncodedPacket encode(PacketBlueprint blueprint) {
         Objects.requireNonNull(blueprint, "blueprint");
         synchronized (lock) {
             ensureOpen();
-            Packet<?> packet = blueprint.nativePacket();
+            if (!(blueprint.nativePacket() instanceof Packet<?> packet)) {
+                throw incompatible("checkpoint blueprint does not hold a Minecraft packet", null);
+            }
             if (packet.type() == null || packet.type().flow() != PacketFlow.CLIENTBOUND) {
                 throw incompatible("Paper checkpoint packet is not clientbound", null);
             }
@@ -109,7 +115,7 @@ public final class Paper26_2NativePacketCodec
 
                 byte[] payload = new byte[buffer.readableBytes()];
                 buffer.readBytes(payload);
-                return new Paper26_2CheckpointEncoder.EncodedPacket(
+                return new EncodedPacket(
                         descriptor.typeName(),
                         PacketPhase.PLAY,
                         PacketDescriptor.Direction.CLIENTBOUND,
@@ -126,6 +132,16 @@ public final class Paper26_2NativePacketCodec
                 buffer.release();
             }
         }
+    }
+
+    /** Encodes a packet of a subject's or a block's state for a checkpoint. */
+    @Override
+    public StatePacket encodeStatePacket(Object nativePacket) {
+        if (!(nativePacket instanceof Packet<?> packet)) {
+            throw incompatible("checkpoint state is not a Minecraft packet", null);
+        }
+        EncodedStatePacket encoded = encodeState(packet);
+        return new StatePacket(encoded.packetId(), encoded.payload());
     }
 
     /** Encodes one adapter-generated PLAY state packet for neutral capture. */
@@ -246,7 +262,7 @@ public final class Paper26_2NativePacketCodec
     }
 
     private void validateDescriptor(
-            Paper26_2CheckpointEncoder.PacketBlueprint blueprint,
+            PacketBlueprint blueprint,
             String packetTypeName,
             PacketDescriptor descriptor) {
         if (!packetTypeName.equals(descriptor.typeName())
@@ -262,7 +278,9 @@ public final class Paper26_2NativePacketCodec
             throw incompatible(
                     "native checkpoint packet is not replayable: " + descriptor.typeName(), null);
         }
-        if (Paper26_2CheckpointEncoder.familyFor(descriptor.typeName()) != blueprint.family()) {
+        if (Paper26_2ClientboundPacketCatalog.catalog().find(descriptor.typeName())
+                .flatMap(ClientboundPacketDefinition::checkpointFamily)
+                .orElse(null) != blueprint.family()) {
             throw incompatible("native checkpoint packet family mismatch", null);
         }
     }

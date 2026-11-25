@@ -163,7 +163,7 @@ Shared classes in `paper-common` (new package `adapter.paper.channel`,
 | `PaperPlaybackBridge` (done) | `Paper26_2PlaybackBridge` | lifecycle, frame pipeline, world filter, queries |
 | `ViewerOutboundQueue` (done) | part of `Paper26_2PlaybackBridge` | batching, per-turn limit, idle waiters, discard |
 | `ViewerGate` (done) | `ReplayViewerOutboundGate` | classifies live packet objects (D2) |
-| `CheckpointAssembler` | `Paper26_2CheckpointEncoder` | ordering, validation and encoding of checkpoint packets |
+| `CheckpointAssembler` (done) | `Paper26_2CheckpointEncoder` | ordering, validation and encoding of checkpoint packets |
 
 Hooks the version module implements:
 
@@ -171,7 +171,8 @@ Hooks the version module implements:
 |---|---|
 | `CaptureHooks` (done, `Paper26_2CaptureHooks`) | capture: registry, definitions, Argus platform, server tick, connection identity, unbundling, encoding of sent, observed and state packets, Paper's connection hook, the version's own handlers |
 | `PlaybackHooks` (done, `Paper26_2PlaybackHooks`) | playback: the viewer's channel and the `ViewerParts` of a viewer: codec, live classification, `ViewerRewriter`, `ViewResetter`, `ViewerScene`, interaction handler |
-| `SnapshotSource` | the native packets of a checkpoint for a coverage |
+| `SnapshotSource` (done, `Paper26_2SnapshotProvider`) | the native packets of a checkpoint for a coverage |
+| `CheckpointCodec` (done, `Paper26_2NativePacketCodec`) | encoding of checkpoint scene and state packets |
 
 Order of work, each step compiling and tested: (1) hooks and channel
 handlers, PacketEvents removed; (2) shared capture bridge; (3) shared playback
@@ -191,4 +192,10 @@ Status:
   The 26.2 module keeps `Paper26_2PlaybackHooks` and `Paper26_2ViewerScene`
   (310 lines) instead of the 720-line bridge; rewriter, resetter, trackers and
   decoders implement the interfaces. Checked in game (replay `aab662ec`),
-  committed.
+  committed (`7613d5f`).
+- Step 4 implemented: `CheckpointAssembler`, `CheckpointSnapshot`,
+  `PacketBlueprint`, `EncodedPacket` and the hooks `SnapshotSource`,
+  `CheckpointCodec` in `adapter.paper.checkpoint`. `PacketCheckpointFamily`
+  carries the assembly order; the encoder's duplicate enum, the three family
+  filters and `Paper26_2CheckpointEncoder` are gone. Checked in game (replay
+  `2b16a81f`), committed.

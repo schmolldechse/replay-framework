@@ -1,5 +1,13 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.checkpoint;
 
+import dev.voldechse.replayframework.adapter.paper.checkpoint.CheckpointSnapshot;
+import dev.voldechse.replayframework.adapter.paper.checkpoint.EncodedPacket;
+import dev.voldechse.replayframework.adapter.paper.checkpoint.PacketBlueprint;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketCheckpointFamily;
+
+import dev.voldechse.replayframework.adapter.paper.checkpoint.CheckpointAssembler;
+import dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.Paper26_2ClientboundPacketCatalog;
+
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.paper.v26_2.Paper26_2PacketRegistry;
@@ -28,9 +36,9 @@ final class Paper26_2NativePacketCodecTest {
     @Test
     void encodesCheckpointRelevantBorderCenterState() {
         Paper26_2PacketRegistry registry = Paper26_2PacketRegistry.discover();
-        Paper26_2CheckpointEncoder.PacketBlueprint blueprint = new Paper26_2CheckpointEncoder.PacketBlueprint(
+        PacketBlueprint blueprint = new PacketBlueprint(
                 "play.clientbound.minecraft:set_border_center",
-                Paper26_2CheckpointEncoder.CheckpointPacketFamily.GLOBAL_STATE,
+                PacketCheckpointFamily.GLOBAL_STATE,
                 "minecraft:world",
                 "global",
                 borderCenter());
@@ -46,7 +54,7 @@ final class Paper26_2NativePacketCodecTest {
         assertEquals(
                 PacketDescriptor.Direction.CLIENTBOUND, encoded.direction());
         assertEquals(0x58, encoded.packetId());
-        assertEquals(Paper26_2CheckpointEncoder.CheckpointPacketFamily.GLOBAL_STATE,
+        assertEquals(PacketCheckpointFamily.GLOBAL_STATE,
                 encoded.family());
         assertEquals("minecraft:world", encoded.worldKey());
         assertEquals("global", encoded.targetKey());
@@ -125,10 +133,10 @@ final class Paper26_2NativePacketCodecTest {
                 registry,
                 GameProtocols.CLIENTBOUND_TEMPLATE.bind(
                         net.minecraft.network.RegistryFriendlyByteBuf.decorator(RegistryAccess.EMPTY)));
-        Paper26_2CheckpointEncoder.PacketBlueprint wrongDescriptor =
-                new Paper26_2CheckpointEncoder.PacketBlueprint(
+        PacketBlueprint wrongDescriptor =
+                new PacketBlueprint(
                         "play.clientbound.minecraft:set_time",
-                        Paper26_2CheckpointEncoder.CheckpointPacketFamily.GLOBAL_STATE,
+                        PacketCheckpointFamily.GLOBAL_STATE,
                         "minecraft:world",
                         "global",
                         new ClientboundChangeDifficultyPacket(Difficulty.NORMAL, false));
@@ -142,10 +150,11 @@ final class Paper26_2NativePacketCodecTest {
     void acceptsEveryCheckpointRelevantDescriptorFromTheLiveRegistry() {
         Paper26_2PacketRegistry registry = Paper26_2PacketRegistry.discover();
 
-        new Paper26_2CheckpointEncoder(
+        new CheckpointAssembler(
                 registry,
+                Paper26_2ClientboundPacketCatalog.catalog(),
                 ignored -> CompletableFuture.completedFuture(
-                        new Paper26_2CheckpointEncoder.CheckpointSnapshot(java.util.List.of())),
+                        new CheckpointSnapshot(java.util.List.of())),
                 ignored -> null,
                 Runnable::run);
     }

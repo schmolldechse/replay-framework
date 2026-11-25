@@ -1,5 +1,8 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.definition.world;
 
+import dev.voldechse.replayframework.adapter.paper.checkpoint.CheckpointAssembler;
+import dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.Paper26_2ClientboundPacketCatalog;
+
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -15,7 +18,12 @@ import dev.voldechse.replayframework.adapter.PacketDisposition;
 import dev.voldechse.replayframework.adapter.codec.PacketCodec;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketRewriteResult;
 import dev.voldechse.replayframework.adapter.paper.v26_2.Paper26_2PacketRegistry;
-import dev.voldechse.replayframework.adapter.paper.v26_2.checkpoint.Paper26_2CheckpointEncoder;
+import dev.voldechse.replayframework.adapter.paper.checkpoint.CheckpointAssembler;
+import dev.voldechse.replayframework.adapter.paper.checkpoint.CheckpointSnapshot;
+import dev.voldechse.replayframework.adapter.paper.checkpoint.EncodedPacket;
+import dev.voldechse.replayframework.adapter.paper.checkpoint.PacketBlueprint;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketCheckpointFamily;
+import dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.Paper26_2ClientboundPacketCatalog;
 import dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.Paper26_2ClientboundPacketCatalog;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
 import dev.voldechse.replayframework.adapter.playback.PlaybackIdentityContext;
@@ -91,8 +99,8 @@ final class Id113SetTimePacketDefinitionTest {
         assertTrue(definition.classification().checkpointRelevant());
         assertEquals(PacketDescriptor.PlaybackScope.SAFE,
                 definition.classification().playbackScope());
-        assertEquals(Paper26_2CheckpointEncoder.CheckpointPacketFamily.GLOBAL_STATE,
-                Paper26_2CheckpointEncoder.familyFor(TYPE_NAME));
+        assertEquals(PacketCheckpointFamily.GLOBAL_STATE,
+                Paper26_2ClientboundPacketCatalog.catalog().require(TYPE_NAME).checkpointFamily().orElseThrow());
 
         assertEquals(1, WorldPacketDefinitions.definitions().stream()
                 .filter(candidate -> TYPE_NAME.equals(candidate.typeName()))
@@ -202,17 +210,18 @@ final class Id113SetTimePacketDefinitionTest {
                 overworldClock, new ClockNetworkState(24_000L, 0.0F, 1.0F),
                 customClock, new ClockNetworkState(900L, 0.5F, 0.25F));
         ClientboundSetTimePacket packet = packet(700_000L, updates);
-        var blueprint = new Paper26_2CheckpointEncoder.PacketBlueprint(
+        var blueprint = new PacketBlueprint(
                 TYPE_NAME,
-                Paper26_2CheckpointEncoder.CheckpointPacketFamily.GLOBAL_STATE,
+                PacketCheckpointFamily.GLOBAL_STATE,
                 "minecraft:world",
                 "time",
                 packet);
-        var encoder = new Paper26_2CheckpointEncoder(
+        var encoder = new CheckpointAssembler(
                 Paper26_2PacketRegistry.discover(),
+                Paper26_2ClientboundPacketCatalog.catalog(),
                 ignored -> CompletableFuture.completedFuture(
-                        new Paper26_2CheckpointEncoder.CheckpointSnapshot(List.of(blueprint))),
-                candidate -> new Paper26_2CheckpointEncoder.EncodedPacket(
+                        new CheckpointSnapshot(List.of(blueprint))),
+                candidate -> new EncodedPacket(
                         candidate.descriptorTypeName(),
                         PacketPhase.PLAY,
                         PacketDescriptor.Direction.CLIENTBOUND,

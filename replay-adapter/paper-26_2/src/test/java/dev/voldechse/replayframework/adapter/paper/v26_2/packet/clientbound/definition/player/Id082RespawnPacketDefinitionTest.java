@@ -14,7 +14,7 @@ import dev.voldechse.replayframework.adapter.PacketDisposition;
 import dev.voldechse.replayframework.adapter.codec.PacketCodec;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketRewriteResult;
 import dev.voldechse.replayframework.adapter.paper.v26_2.Paper26_2PacketRegistry;
-import dev.voldechse.replayframework.adapter.paper.v26_2.checkpoint.Paper26_2CheckpointEncoder;
+import dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.Paper26_2ClientboundPacketCatalog;
 import dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.Paper26_2ClientboundPacketCatalog;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
 import dev.voldechse.replayframework.adapter.playback.PlaybackIdentityContext;
@@ -162,8 +162,7 @@ final class Id082RespawnPacketDefinitionTest {
         assertTrue(descriptor.replayable());
         assertFalse(descriptor.checkpointRelevant());
         assertEquals(PacketDescriptor.PlaybackScope.VIEWER_LOCAL, descriptor.playbackScope());
-        assertThrows(IncompatibleAdapterException.class,
-                () -> Paper26_2CheckpointEncoder.familyFor(TYPE_NAME));
+        assertTrue(Paper26_2ClientboundPacketCatalog.catalog().require(TYPE_NAME).checkpointFamily().isEmpty());
     }
 
     @Test

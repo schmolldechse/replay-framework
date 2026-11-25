@@ -1,12 +1,19 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2;
 
+import dev.voldechse.replayframework.adapter.paper.checkpoint.CheckpointAssembler;
+import dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.Paper26_2ClientboundPacketCatalog;
+
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.PacketDisposition;
 import dev.voldechse.replayframework.adapter.PacketRegistry;
 import dev.voldechse.replayframework.adapter.CheckpointEncoder;
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
 import dev.voldechse.replayframework.api.recording.RecordingScope;
-import dev.voldechse.replayframework.adapter.paper.v26_2.checkpoint.Paper26_2CheckpointEncoder;
+import dev.voldechse.replayframework.adapter.paper.checkpoint.CheckpointAssembler;
+import dev.voldechse.replayframework.adapter.paper.checkpoint.CheckpointSnapshot;
+import dev.voldechse.replayframework.adapter.paper.checkpoint.EncodedPacket;
+import dev.voldechse.replayframework.adapter.paper.checkpoint.PacketBlueprint;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketCheckpointFamily;
 import dev.voldechse.replayframework.format.PacketPhase;
 import dev.voldechse.replayframework.format.RawPacketFrame;
 import dev.voldechse.replayframework.format.ReplayCheckpoint;
@@ -68,29 +75,30 @@ final class Paper26_2CheckpointFixtureTest {
                 metadata.descriptor().typeName(), metadata.packetId(),
                 attributes.descriptor().typeName(), attributes.packetId());
 
-        List<Paper26_2CheckpointEncoder.PacketBlueprint> packets = new ArrayList<>();
+        List<PacketBlueprint> packets = new ArrayList<>();
         for (int entityId = 48; entityId >= 1; entityId--) {
             packets.add(blueprint(
                     "minecraft:update_attributes",
-                    Paper26_2CheckpointEncoder.CheckpointPacketFamily.ENTITY_METADATA,
+                    PacketCheckpointFamily.ENTITY_METADATA,
                     "minecraft:world",
                     "entity:" + entityId + ":attributes"));
             packets.add(blueprint(
                     "minecraft:set_entity_data",
-                    Paper26_2CheckpointEncoder.CheckpointPacketFamily.ENTITY_METADATA,
+                    PacketCheckpointFamily.ENTITY_METADATA,
                     "minecraft:world",
                     "entity:" + entityId));
         }
 
         List<String> encodedTargets = new ArrayList<>();
-        Paper26_2CheckpointEncoder encoder = new Paper26_2CheckpointEncoder(
+        CheckpointAssembler encoder = new CheckpointAssembler(
                 registry,
+                Paper26_2ClientboundPacketCatalog.catalog(),
                 ignored -> CompletableFuture.completedFuture(
-                        new Paper26_2CheckpointEncoder.CheckpointSnapshot(packets)),
+                        new CheckpointSnapshot(packets)),
                 blueprint -> {
                     encodedTargets.add(blueprint.targetKey());
                     int packetId = packetIds.get(blueprint.descriptorTypeName());
-                    return new Paper26_2CheckpointEncoder.EncodedPacket(
+                    return new EncodedPacket(
                             blueprint.descriptorTypeName(),
                             PacketPhase.PLAY,
                             PacketDescriptor.Direction.CLIENTBOUND,
@@ -137,24 +145,25 @@ final class Paper26_2CheckpointFixtureTest {
             packetIds.put(specification.descriptor().typeName(), specification.packetId());
         }
 
-        Paper26_2CheckpointEncoder.CheckpointSnapshot snapshot =
-                new Paper26_2CheckpointEncoder.CheckpointSnapshot(
+        CheckpointSnapshot snapshot =
+                new CheckpointSnapshot(
                         new CheckpointEncoder.CapturePoint(150L, 8L, 4),
                         List.of(
-                        blueprint("minecraft:update_mob_effect", Paper26_2CheckpointEncoder.CheckpointPacketFamily.RUNNING_EFFECT, "minecraft:world", "entity:9"),
-                        blueprint("minecraft:set_equipment", Paper26_2CheckpointEncoder.CheckpointPacketFamily.EQUIPMENT, "minecraft:world", "entity:9"),
-                        blueprint("minecraft:add_entity", Paper26_2CheckpointEncoder.CheckpointPacketFamily.ENTITY_SPAWN, "minecraft:world", "entity:9"),
-                        blueprint("minecraft:block_entity_data", Paper26_2CheckpointEncoder.CheckpointPacketFamily.BLOCK_ENTITY, "minecraft:world", "block:1,64,1"),
-                        blueprint("minecraft:set_default_spawn_position", Paper26_2CheckpointEncoder.CheckpointPacketFamily.DIMENSION_SPAWN, "minecraft:world", "spawn"),
-                        blueprint("minecraft:set_entity_data", Paper26_2CheckpointEncoder.CheckpointPacketFamily.ENTITY_METADATA, "minecraft:world", "entity:9"),
-                        blueprint("minecraft:set_time", Paper26_2CheckpointEncoder.CheckpointPacketFamily.GLOBAL_STATE, "minecraft:world", "time"),
-                        blueprint("minecraft:set_passengers", Paper26_2CheckpointEncoder.CheckpointPacketFamily.PASSENGERS, "minecraft:world", "entity:9"),
-                        blueprint("minecraft:level_chunk_with_light", Paper26_2CheckpointEncoder.CheckpointPacketFamily.CHUNK_LIGHT, "minecraft:world", "chunk:0,0")));
+                        blueprint("minecraft:update_mob_effect", PacketCheckpointFamily.RUNNING_EFFECT, "minecraft:world", "entity:9"),
+                        blueprint("minecraft:set_equipment", PacketCheckpointFamily.EQUIPMENT, "minecraft:world", "entity:9"),
+                        blueprint("minecraft:add_entity", PacketCheckpointFamily.ENTITY_SPAWN, "minecraft:world", "entity:9"),
+                        blueprint("minecraft:block_entity_data", PacketCheckpointFamily.BLOCK_ENTITY, "minecraft:world", "block:1,64,1"),
+                        blueprint("minecraft:set_default_spawn_position", PacketCheckpointFamily.DIMENSION_SPAWN, "minecraft:world", "spawn"),
+                        blueprint("minecraft:set_entity_data", PacketCheckpointFamily.ENTITY_METADATA, "minecraft:world", "entity:9"),
+                        blueprint("minecraft:set_time", PacketCheckpointFamily.GLOBAL_STATE, "minecraft:world", "time"),
+                        blueprint("minecraft:set_passengers", PacketCheckpointFamily.PASSENGERS, "minecraft:world", "entity:9"),
+                        blueprint("minecraft:level_chunk_with_light", PacketCheckpointFamily.CHUNK_LIGHT, "minecraft:world", "chunk:0,0")));
 
-        Paper26_2CheckpointEncoder encoder = new Paper26_2CheckpointEncoder(
+        CheckpointAssembler encoder = new CheckpointAssembler(
                 registry,
+                Paper26_2ClientboundPacketCatalog.catalog(),
                 ignored -> CompletableFuture.completedFuture(snapshot),
-                blueprint -> new Paper26_2CheckpointEncoder.EncodedPacket(
+                blueprint -> new EncodedPacket(
                         blueprint.descriptorTypeName(),
                         PacketPhase.PLAY,
                         PacketDescriptor.Direction.CLIENTBOUND,
@@ -209,7 +218,7 @@ final class Paper26_2CheckpointFixtureTest {
                 .map(world -> dev.voldechse.replayframework.format.TrackDescriptor.world(1, world))
                 .orElse(dev.voldechse.replayframework.format.TrackDescriptor.global(0));
         Path checkpointPath = temporaryDirectory.resolve("initial.rfc");
-        new ReplayCheckpointWriter(checkpointPath, Paper26_2CheckpointEncoder.ADAPTER_ID, track)
+        new ReplayCheckpointWriter(checkpointPath, "paper-26.2", track)
                 .write(checkpoint);
         ReplayCheckpoint decoded = new ReplayCheckpointReader().read(checkpointPath, track);
         assertEquals(checkpoint.ordinal(), decoded.ordinal());
@@ -230,10 +239,11 @@ final class Paper26_2CheckpointFixtureTest {
                 descriptor("minecraft:block_changed_ack", 12).descriptor()));
 
         assertThrows(IncompatibleAdapterException.class,
-                () -> new Paper26_2CheckpointEncoder(
+                () -> new CheckpointAssembler(
                         registry,
+                        Paper26_2ClientboundPacketCatalog.catalog(),
                         ignored -> CompletableFuture.completedFuture(
-                                new Paper26_2CheckpointEncoder.CheckpointSnapshot(List.of())),
+                                new CheckpointSnapshot(List.of())),
                         ignored -> null,
                         directExecutor()));
     }
@@ -258,12 +268,12 @@ final class Paper26_2CheckpointFixtureTest {
                         "test/" + typeName));
     }
 
-    private static Paper26_2CheckpointEncoder.PacketBlueprint blueprint(
+    private static PacketBlueprint blueprint(
             String typeName,
-            Paper26_2CheckpointEncoder.CheckpointPacketFamily family,
+            PacketCheckpointFamily family,
             String worldKey,
             String targetKey) {
-        return new Paper26_2CheckpointEncoder.PacketBlueprint(
+        return new PacketBlueprint(
                 "play.clientbound." + typeName,
                 family,
                 worldKey,

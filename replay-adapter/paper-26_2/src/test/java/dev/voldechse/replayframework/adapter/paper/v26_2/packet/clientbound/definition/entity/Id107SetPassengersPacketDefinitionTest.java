@@ -14,7 +14,8 @@ import dev.voldechse.replayframework.adapter.PacketDisposition;
 import dev.voldechse.replayframework.adapter.codec.PacketCodec;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketRewriteResult;
 import dev.voldechse.replayframework.adapter.paper.v26_2.Paper26_2PacketRegistry;
-import dev.voldechse.replayframework.adapter.paper.v26_2.checkpoint.Paper26_2CheckpointEncoder;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketCheckpointFamily;
+import dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.Paper26_2ClientboundPacketCatalog;
 import dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.Paper26_2ClientboundPacketCatalog;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
 import dev.voldechse.replayframework.adapter.playback.PlaybackIdentityContext;
@@ -70,8 +71,8 @@ final class Id107SetPassengersPacketDefinitionTest {
         assertTrue(definition.classification().checkpointRelevant());
         assertEquals(PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES,
                 definition.classification().playbackScope());
-        assertEquals(Paper26_2CheckpointEncoder.CheckpointPacketFamily.PASSENGERS,
-                Paper26_2CheckpointEncoder.familyFor(TYPE_NAME));
+        assertEquals(PacketCheckpointFamily.PASSENGERS,
+                Paper26_2ClientboundPacketCatalog.catalog().require(TYPE_NAME).checkpointFamily().orElseThrow());
 
         var domainMatches = EntityPacketDefinitions.definitions().stream()
                 .filter(candidate -> TYPE_NAME.equals(candidate.typeName()))

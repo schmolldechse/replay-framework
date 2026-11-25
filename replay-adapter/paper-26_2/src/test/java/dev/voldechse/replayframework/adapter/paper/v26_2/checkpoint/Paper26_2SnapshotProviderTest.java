@@ -1,5 +1,10 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.checkpoint;
 
+import dev.voldechse.replayframework.adapter.paper.checkpoint.CheckpointSnapshot;
+import dev.voldechse.replayframework.adapter.paper.checkpoint.EncodedPacket;
+import dev.voldechse.replayframework.adapter.paper.checkpoint.PacketBlueprint;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketCheckpointFamily;
+
 import dev.voldechse.replayframework.adapter.CheckpointEncoder;
 import dev.voldechse.replayframework.api.recording.BlockPosition;
 import dev.voldechse.replayframework.api.recording.ChunkLoadingPolicy;
@@ -41,14 +46,14 @@ final class Paper26_2SnapshotProviderTest {
                             new BlockPosition(31, 255, 31)))
                     .build();
 
-            CompletionStage<Paper26_2CheckpointEncoder.CheckpointSnapshot> stage = provider.snapshot(
+            CompletionStage<CheckpointSnapshot> stage = provider.snapshot(
                     new CheckpointEncoder.CheckpointRequest(
                             scope,
                             12L,
                             3L,
                             CheckpointEncoder.CheckpointKind.INITIAL));
 
-            Paper26_2CheckpointEncoder.CheckpointSnapshot snapshot = stage.toCompletableFuture()
+            CheckpointSnapshot snapshot = stage.toCompletableFuture()
                     .get(5, TimeUnit.SECONDS);
             assertEquals(List.of(new Paper26_2SnapshotProvider.ScopedChunk(
                             "minecraft:world", 0, 0),
@@ -125,13 +130,13 @@ final class Paper26_2SnapshotProviderTest {
                         new BlockPosition(15, 15, 15)))
                 .build();
 
-        CompletionStage<Paper26_2CheckpointEncoder.CheckpointSnapshot> stage = provider.snapshot(
+        CompletionStage<CheckpointSnapshot> stage = provider.snapshot(
                 new CheckpointEncoder.CheckpointRequest(
                         scope, 10L, 2L, CheckpointEncoder.CheckpointKind.PERIODIC));
         assertFalse(pointAllocated.get());
 
         preloadGate.complete(null);
-        Paper26_2CheckpointEncoder.CheckpointSnapshot snapshot =
+        CheckpointSnapshot snapshot =
                 stage.toCompletableFuture().join();
         assertEquals(java.util.Optional.of(expected), snapshot.capturePoint());
     }
@@ -143,7 +148,7 @@ final class Paper26_2SnapshotProviderTest {
                 task -> CompletableFuture.failedFuture(failure),
                 new RecordingWorldAccess());
 
-        CompletionStage<Paper26_2CheckpointEncoder.CheckpointSnapshot> stage = provider.snapshot(
+        CompletionStage<CheckpointSnapshot> stage = provider.snapshot(
                 new CheckpointEncoder.CheckpointRequest(
                         RecordingScope.builder().build(),
                         0L,
@@ -207,12 +212,12 @@ final class Paper26_2SnapshotProviderTest {
         }
 
         @Override
-        public Paper26_2CheckpointEncoder.CheckpointSnapshot snapshot(
+        public CheckpointSnapshot snapshot(
                 RecordingScope scope,
                 List<Paper26_2SnapshotProvider.ScopedChunk> chunks) {
             accessThread.set(Thread.currentThread());
             snapshotChunks.set(new ArrayList<>(chunks));
-            return new Paper26_2CheckpointEncoder.CheckpointSnapshot(List.of());
+            return new CheckpointSnapshot(List.of());
         }
     }
 }

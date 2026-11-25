@@ -37,7 +37,7 @@ exposes it to adapter discovery.
 | `argus` | the eye (`Paper26_2ArgusEye`), sampled time and weather (`Paper26_2AmbientSource`), sampled entity state (`Paper26_2SubjectStates`) and the platform queries Argus needs |
 | `actor` | effects the server sends to everyone except the acting player, derived from serverbound packets |
 | `capture` | `Paper26_2CaptureHooks`, the version half of the shared `PaperCaptureBridge`: live codec, definitions, connection identity, Paper's connection hook; the serverbound receiver |
-| `checkpoint` | snapshots of a coverage and the capture barrier that separates them from later frames |
+| `checkpoint` | `Paper26_2SnapshotProvider` and `Paper26_2NativePacketCodec`, the version half of the shared `CheckpointAssembler`: snapshots of a coverage, the capture barrier that separates them from later frames, and their encoding |
 | `playback` | rewriting, the viewer gate, injection, view reset, scene queries and interactions |
 
 Definition naming and placement follow
@@ -94,8 +94,11 @@ only after it is ready. The core drains every frame ordered before the
 barrier before it writes the checkpoint, so the snapshot and the following
 frames never overlap.
 
-Snapshot data is converted to ordered native packets before it leaves the
-server thread. The checkpoint of a `STATE` track is the complete state of
+Snapshot data is converted to native packets before it leaves the server
+thread. The shared `CheckpointAssembler` in `paper-common` then orders them by
+family (dimension, chunks, block entities, global state, entities and their
+metadata), world and target, checks each against the registry and its
+definition, and numbers the frames. The checkpoint of a `STATE` track is the complete state of
 its subject, built from the same packets a client receives on join or when
 opening the subject.
 
