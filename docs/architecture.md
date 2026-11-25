@@ -42,7 +42,7 @@ packet definitions, the codec of its protocol and its access to the server.
 |---|---|---|
 | `argus` | virtual observers, scene merge, sampled state and block states | the eye and the platform queries |
 | `channel` | the clientbound tap before `packet_handler` and the write anchor behind compression | none |
-| `capture` | `PaperCaptureBridge`: taps, capture order, Argus publishing, state routing, failures | `CaptureHooks`: codec, connection identity, Paper's connection hook |
+| `capture` | `PaperCaptureBridge`: taps, capture order, Argus publishing, state routing, failures | `CaptureHooks`: codec, connection identity, Paper's connection hook, serverbound identifier, actor effects |
 | `playback` | `PaperPlaybackBridge`, `ViewerOutboundQueue`, `ViewerGate`: lifecycle, frame pipeline, world filter, batching, live isolation | `PlaybackHooks` with `ViewerParts`: codec, rewriter, view reset, scene |
 | `checkpoint` | `CheckpointAssembler`: order, validation and numbering of checkpoint packets | `SnapshotSource` and `CheckpointCodec` |
 | `packet` | definition base classes, catalogs, recipient copies and state | the definitions themselves |

@@ -11,10 +11,12 @@ import dev.voldechse.replayframework.adapter.PacketRegistry;
 import dev.voldechse.replayframework.adapter.RecipientCopy;
 import dev.voldechse.replayframework.adapter.SceneObservation;
 import dev.voldechse.replayframework.adapter.codec.PacketCodec;
+import dev.voldechse.replayframework.adapter.paper.actor.ActorEffects;
 import dev.voldechse.replayframework.adapter.paper.argus.Argus;
 import dev.voldechse.replayframework.adapter.paper.argus.ArgusPublisher;
 import dev.voldechse.replayframework.adapter.paper.channel.ClientboundTap;
 import dev.voldechse.replayframework.adapter.paper.channel.PipelineNames;
+import dev.voldechse.replayframework.adapter.paper.channel.ServerboundTap;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RecipientCopies;
 import dev.voldechse.replayframework.format.PacketPhase;
@@ -41,12 +43,12 @@ import org.bukkit.scheduler.BukkitTask;
  * Session filtering remains in the core router.
  *
  * <p>Every player connection gets a {@link ClientboundTap} that sees each
- * packet object the player is sent, before it is encoded, plus the version's
- * own handlers, such as the receiver of serverbound packets. Argus delivers
- * the scene of its eyes on the server thread. Every packet passes its
- * definition for its capture context and is published through one
- * {@link CaptureOrder}, so time, tick and sequence form one order across all
- * sources.</p>
+ * packet object the player is sent, before it is encoded, and a
+ * {@link ServerboundTap} that hands each packet the player sends to its
+ * serverbound definition. Argus delivers the scene of its eyes on the server
+ * thread. Every packet passes its definition for its capture context and is
+ * published through one {@link CaptureOrder}, so time, tick and sequence
+ * form one order across all sources.</p>
  *
  * <p>What depends on the Minecraft version comes from {@link CaptureHooks}.</p>
  */
@@ -58,15 +60,11 @@ public final class PaperCaptureBridge implements CaptureBridge {
     private final CaptureStateIndex captureState = new CaptureStateIndex();
     private final CaptureOrder captureOrder;
     private final Argus argus;
+    private final ActorEffects actorEffects;
     private final AtomicReference<State> state = new AtomicReference<>(State.NEW);
     private final AtomicBoolean failureReported = new AtomicBoolean();
     private final Object handlerStateLock = new Object();
     private final CaptureHooks.CaptureCallbacks callbacks = new CaptureHooks.CaptureCallbacks() {
-        @Override
-        public boolean installed() {
-            return PaperCaptureBridge.this.installed();
-        }
-
         @Override
         public boolean recording() {
             return hasActiveRecording();
@@ -99,6 +97,7 @@ public final class PaperCaptureBridge implements CaptureBridge {
         this.hooks = Objects.requireNonNull(hooks, "hooks");
         this.registry = Objects.requireNonNull(hooks.registry(), "registry");
         this.captureOrder = new CaptureOrder(System::nanoTime, hooks::serverTick);
+        this.actorEffects = Objects.requireNonNull(hooks.actorEffects(callbacks), "actorEffects");
         this.argus = new Argus(
                 hooks.argus(),
                 new ArgusPublisher() {
@@ -354,7 +353,7 @@ public final class PaperCaptureBridge implements CaptureBridge {
     }
 
     /**
-     * Installs the clientbound tap and the version's handlers on every player
+     * Installs the clientbound and the serverbound tap on every player
      * connection, present and future. None of them changes, drops or delays
      * a packet.
      *
@@ -391,7 +390,9 @@ public final class PaperCaptureBridge implements CaptureBridge {
                     message -> capture(channel, message),
                     () -> hooks.player(channel).ifPresent(player -> captureState.removeConnection(player.id())),
                     this::fail));
-            hooks.installHandlers(channel, callbacks);
+            ServerboundTap.install(channel.pipeline(), new ServerboundTap(
+                    this::installed, hooks::serverboundIdentifier, hooks.serverboundDefinitions(),
+                    actorEffects, this::fail));
         } catch (Throwable failure) {
             fail(failure);
         }
@@ -408,7 +409,7 @@ public final class PaperCaptureBridge implements CaptureBridge {
                         if (channel.pipeline().get(PipelineNames.CLIENTBOUND_TAP) != null) {
                             channel.pipeline().remove(PipelineNames.CLIENTBOUND_TAP);
                         }
-                        hooks.uninstallHandlers(channel);
+                        ServerboundTap.uninstall(channel.pipeline());
                     } catch (Throwable ignored) {
                         // Handlers left on closing connections pass every packet through.
                     }

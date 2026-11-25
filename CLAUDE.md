@@ -158,7 +158,7 @@ Shared classes in `paper-common` (new package `adapter.paper.channel`,
 | Shared class | Replaces | Role |
 |---|---|---|
 | `ClientboundTap` (done) | PacketEvents listener in `Paper26_2CaptureBridge` | per player channel, before `packet_handler`; hands packet objects to capture |
-| `ServerboundTap` (carried over to phase 2) | `Paper26_2ServerboundReceiver` (81 lines) | per player channel, before `packet_handler` |
+| `ServerboundTap` (done in phase 2) | `Paper26_2ServerboundReceiver` (81 lines) | per player channel, before `packet_handler`; hands received packets to their serverbound definition |
 | `ReplayChannelWriter` (done) | `PacketEventsReplayWriter` | writes encoded replay packets from an anchor behind `compress` |
 | `PaperCaptureBridge` (done) | `Paper26_2CaptureBridge` | taps, capture order, Argus publishing, definitions, failures |
 | `CaptureOrder`, `CaptureStateIndex` (done) | `Paper26_2CaptureOrder`, `Paper26_2AuthoritativeStateIndex` | unchanged, moved |
@@ -171,7 +171,7 @@ Hooks the version module implements:
 
 | Hook | Provides |
 |---|---|
-| `CaptureHooks` (done, `Paper26_2CaptureHooks`) | capture: registry, definitions, Argus platform, server tick, connection identity, unbundling, encoding of sent, observed and state packets, Paper's connection hook, the version's own handlers |
+| `CaptureHooks` (done, `Paper26_2CaptureHooks`) | capture: registry, definitions, Argus platform, server tick, connection identity, unbundling, encoding of sent, observed and state packets, Paper's connection hook, serverbound definitions and identifier, `ActorEffects` |
 | `PlaybackHooks` (done, `Paper26_2PlaybackHooks`) | playback: the viewer's channel and the `ViewerParts` of a viewer: codec, live classification, `ViewerRewriter`, `ViewResetter`, `ViewerScene`, interaction handler |
 | `SnapshotSource` (done, `Paper26_2SnapshotProvider`) | the native packets of a checkpoint for a coverage |
 | `CheckpointCodec` (done, `Paper26_2NativePacketCodec`) | encoding of checkpoint scene and state packets |
@@ -221,6 +221,12 @@ Phase 2 status:
   as a derived query for the scope filter and the recipient-copy merger.
   `RecordingSegmentAppender` picks track and frame world with a `switch`.
   Checked in game (replay `4068e3d8`), committed (`7f3fcbc`).
+- Step 3 implemented: `ServerboundTap` in `adapter.paper.channel` replaces
+  `Paper26_2ServerboundReceiver`; `ActorEffects` (`adapter.paper.actor`) is the
+  shared contract of the actor effects. `CaptureHooks` loses `installHandlers`
+  and `uninstallHandlers` and gains `serverboundDefinitions`,
+  `serverboundIdentifier` and `actorEffects`; the bridge installs both taps.
+  Checked in game (replay `844364e5`), committed.
 
 Fixes found while testing, outside the plan: viewer worlds without blocks
 (`d0c3bc9`), checkpoint-only tracks accepted by the finalizer (`cae1d7f`),

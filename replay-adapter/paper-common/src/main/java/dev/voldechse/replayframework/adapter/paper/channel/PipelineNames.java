@@ -23,6 +23,8 @@ public final class PipelineNames {
 
     /** Sees every clientbound packet object a player is sent. */
     public static final String CLIENTBOUND_TAP = "replay_framework_clientbound";
+    /** Hands every serverbound packet object a player sends to its definition. */
+    public static final String SERVERBOUND_TAP = "replay_framework_serverbound";
     /** Writes encoded replay packets so that only compression, framing and encryption follow. */
     public static final String WRITE_ANCHOR = "replay_framework_write";
 

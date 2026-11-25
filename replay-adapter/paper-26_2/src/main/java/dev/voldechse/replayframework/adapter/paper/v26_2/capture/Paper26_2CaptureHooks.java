@@ -4,14 +4,17 @@ import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.PacketRegistry;
 import dev.voldechse.replayframework.adapter.codec.PacketCodec;
+import dev.voldechse.replayframework.adapter.paper.actor.ActorEffects;
 import dev.voldechse.replayframework.adapter.paper.argus.ArgusPlatform;
 import dev.voldechse.replayframework.adapter.paper.capture.CaptureHooks;
 import dev.voldechse.replayframework.adapter.paper.channel.PipelineNames;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinitionCatalog;
+import dev.voldechse.replayframework.adapter.paper.packet.serverbound.ServerboundPacketDefinitionCatalog;
 import dev.voldechse.replayframework.adapter.paper.v26_2.actor.Paper26_2ActorEffects;
 import dev.voldechse.replayframework.adapter.paper.v26_2.argus.Paper26_2ArgusPlatform;
 import dev.voldechse.replayframework.adapter.paper.v26_2.checkpoint.Paper26_2NativePacketCodec;
 import dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.Paper26_2ClientboundPacketCatalog;
+import dev.voldechse.replayframework.adapter.paper.v26_2.packet.serverbound.Paper26_2ServerboundPacketCatalog;
 import dev.voldechse.replayframework.format.PacketPhase;
 import io.netty.channel.Channel;
 import java.util.List;
@@ -27,7 +30,7 @@ import org.bukkit.entity.Player;
 /**
  * The Paper 26.2 half of capture: the live codec and definitions, the Argus
  * platform, the identity of a connection, Paper's hook for new connections,
- * and the serverbound receiver with its actor effects.
+ * the serverbound definitions and the actor effects.
  */
 public final class Paper26_2CaptureHooks implements CaptureHooks {
 
@@ -37,7 +40,6 @@ public final class Paper26_2CaptureHooks implements CaptureHooks {
     private final PacketRegistry registry;
     private final Paper26_2NativePacketCodec codec;
     private final Paper26_2ArgusPlatform argus = new Paper26_2ArgusPlatform();
-    private volatile Paper26_2ActorEffects actorEffects;
 
     /**
      * @param accessor access to Paper connections
@@ -130,40 +132,23 @@ public final class Paper26_2CaptureHooks implements CaptureHooks {
     }
 
     @Override
-    public void installHandlers(Channel channel, CaptureCallbacks callbacks) {
-        var pipeline = channel.pipeline();
-        if (pipeline.get(Paper26_2ServerboundReceiver.HANDLER_NAME) != null
-                || !(pipeline.get(PipelineNames.PACKET_HANDLER) instanceof Connection connection)) {
-            return;
-        }
-        pipeline.addBefore(
-                PipelineNames.PACKET_HANDLER,
-                Paper26_2ServerboundReceiver.HANDLER_NAME,
-                new Paper26_2ServerboundReceiver(
-                        connection, callbacks::installed, actorEffects(callbacks), callbacks::fail));
+    public ServerboundPacketDefinitionCatalog serverboundDefinitions() {
+        return Paper26_2ServerboundPacketCatalog.catalog();
     }
 
     @Override
-    public void uninstallHandlers(Channel channel) {
-        if (channel.pipeline().get(Paper26_2ServerboundReceiver.HANDLER_NAME) != null) {
-            channel.pipeline().remove(Paper26_2ServerboundReceiver.HANDLER_NAME);
+    public Optional<String> serverboundIdentifier(Channel channel, Object message) {
+        if (message instanceof Packet<?> packet
+                && channel.pipeline().get(PipelineNames.PACKET_HANDLER) instanceof Connection connection
+                && connection.getPacketListener() instanceof ServerGamePacketListenerImpl) {
+            return Optional.of(packet.type().id().toString());
         }
+        return Optional.empty();
     }
 
-    /** The actor effects of the capture, created with its callbacks on first use. */
-    private Paper26_2ActorEffects actorEffects(CaptureCallbacks callbacks) {
-        Paper26_2ActorEffects current = actorEffects;
-        if (current == null) {
-            synchronized (this) {
-                current = actorEffects;
-                if (current == null) {
-                    current = new Paper26_2ActorEffects(
-                            callbacks::recording, callbacks::publishActorEffect, callbacks::fail);
-                    actorEffects = current;
-                }
-            }
-        }
-        return current;
+    @Override
+    public ActorEffects actorEffects(CaptureCallbacks callbacks) {
+        return new Paper26_2ActorEffects(callbacks::recording, callbacks::publishActorEffect, callbacks::fail);
     }
 
     private static Packet<?> nativePacket(Object packet) {

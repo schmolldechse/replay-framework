@@ -2,8 +2,10 @@ package dev.voldechse.replayframework.adapter.paper.capture;
 
 import dev.voldechse.replayframework.adapter.PacketRegistry;
 import dev.voldechse.replayframework.adapter.codec.PacketCodec;
+import dev.voldechse.replayframework.adapter.paper.actor.ActorEffects;
 import dev.voldechse.replayframework.adapter.paper.argus.ArgusPlatform;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinitionCatalog;
+import dev.voldechse.replayframework.adapter.paper.packet.serverbound.ServerboundPacketDefinitionCatalog;
 import io.netty.channel.Channel;
 import java.util.List;
 import java.util.Optional;
@@ -60,14 +62,18 @@ public interface CaptureHooks {
     /** Stops calling the action of {@link #watchConnections}. */
     void stopWatchingConnections();
 
-    /**
-     * Adds the version's own handlers to a connection, such as the receiver
-     * of serverbound packets. Called on the connection's event loop.
-     */
-    void installHandlers(Channel channel, CaptureCallbacks callbacks);
+    /** One definition per serverbound PLAY packet of this version. */
+    ServerboundPacketDefinitionCatalog serverboundDefinitions();
 
-    /** Removes the handlers {@link #installHandlers} added. */
-    void uninstallHandlers(Channel channel);
+    /**
+     * The PLAY packet identifier of a message a connection received, such as
+     * {@code minecraft:use_item_on}. Empty when the message is not a PLAY
+     * packet of this version or the connection is not in game.
+     */
+    Optional<String> serverboundIdentifier(Channel channel, Object message);
+
+    /** Builds the effects of block actions; capture calls it once. */
+    ActorEffects actorEffects(CaptureCallbacks callbacks);
 
     /**
      * The player of a connection.
@@ -78,11 +84,8 @@ public interface CaptureHooks {
     record ConnectionPlayer(UUID id, String name) {
     }
 
-    /** What the version's handlers may ask of capture. */
+    /** What the actor effects may ask of capture. */
     interface CaptureCallbacks {
-
-        /** Whether capture is installed and trusted. */
-        boolean installed();
 
         /** Whether a recording is active, so derived packets are worth building. */
         boolean recording();

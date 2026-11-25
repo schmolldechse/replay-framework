@@ -37,7 +37,7 @@ exposes it to adapter discovery.
 | `packet` | protocol discovery, the native codec and every packet definition, split into `packet.clientbound` and `packet.serverbound` |
 | `argus` | the eye (`Paper26_2ArgusEye`), sampled time and weather (`Paper26_2AmbientSource`), sampled entity state (`Paper26_2SubjectStates`) and the platform queries Argus needs |
 | `actor` | effects the server sends to everyone except the acting player, derived from serverbound packets |
-| `capture` | `Paper26_2CaptureHooks`, the version half of the shared `PaperCaptureBridge`: live codec, definitions, connection identity, Paper's connection hook; the serverbound receiver |
+| `capture` | `Paper26_2CaptureHooks`, the version half of the shared `PaperCaptureBridge`: live codec, definitions, connection identity, Paper's connection hook, the serverbound identifier and the actor effects |
 | `checkpoint` | `Paper26_2SnapshotProvider` and `Paper26_2NativePacketCodec`, the version half of the shared `CheckpointAssembler`: snapshots of a coverage, the capture barrier that separates them from later frames, and their encoding |
 | `playback` | rewriting, the viewer gate, injection, view reset, scene queries and interactions |
 
@@ -56,7 +56,7 @@ flowchart LR
     end
     subgraph netty["Netty event loop, per player"]
         pe["ClientboundTap<br/>packet objects before encoding"]
-        sb["Paper26_2ServerboundReceiver<br/>before packet_handler"]
+        sb["ServerboundTap<br/>before packet_handler"]
     end
     eye --> defs["Clientbound definitions<br/>context, distribution, copies, state"]
     amb --> defs
@@ -78,10 +78,11 @@ flowchart LR
   the frame. Packets whose definition is not observable by eyes are
   tagged `PLAYER_ONLY`; packets that describe their recipient get the player
   as subject.
-- **Serverbound packets** are seen as decoded objects directly before the
-  server's packet handler. The receiver never changes, drops or delays a
-  packet. A serverbound definition decides whether its packet triggers an
-  actor effect; the reads around it are queued on the server thread.
+- **Serverbound packets** are seen as decoded objects by a `ServerboundTap`
+  (shared, in `paper-common`) directly before the server's packet handler.
+  The tap never changes, drops or delays a packet. A serverbound definition
+  decides whether its packet triggers an actor effect; `Paper26_2ActorEffects`
+  queues the reads around it on the server thread.
 
 Every path publishes through one capture-order allocator, so timestamps,
 ticks, sequences and checkpoint barriers form one order.

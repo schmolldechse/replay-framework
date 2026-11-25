@@ -32,7 +32,12 @@ public abstract class ServerboundPacketDefinition {
             throw new IllegalArgumentException("identifier must be a Minecraft packet identifier");
         }
         this.packetId = packetId;
-        this.typeName = TYPE_PREFIX + identifier;
+        this.typeName = typeName(identifier);
+    }
+
+    /** The catalog type name of a serverbound PLAY packet identifier, such as {@code minecraft:use_item_on}. */
+    public static String typeName(String identifier) {
+        return TYPE_PREFIX + Objects.requireNonNull(identifier, "identifier");
     }
 
     /** Returns the expected numeric ID in this version's PLAY serverbound registry. */

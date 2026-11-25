@@ -445,7 +445,7 @@ A version adapter provides:
 | Serverbound definitions | one per PLAY serverbound packet: what it triggers |
 | `ArgusPlatform` | the eye, sampled world and subject state, the online players, the native packets Argus builds |
 | Effect families | one per kind of effect that bypasses its actor |
-| `CaptureHooks` | the live codec, connection identity, unbundling and Paper's connection hook for the shared capture bridge |
+| `CaptureHooks` | the live codec, connection identity, unbundling, Paper's connection hook, the identifier of a received packet and the `ActorEffects` for the shared capture bridge |
 | `SnapshotSource`, `CheckpointCodec` | the detached state of a coverage as native packets, and their encoding |
 | `PlaybackHooks` | per viewer: the codec, the classification of live packets, rewriting, view reset, the scene and the interaction handler |
 

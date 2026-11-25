@@ -2,8 +2,11 @@ package dev.voldechse.replayframework.adapter.paper.v26_2.actor;
 
 import dev.voldechse.replayframework.adapter.paper.actor.ActorAction;
 import dev.voldechse.replayframework.adapter.paper.actor.ActorBlockEffects;
+import dev.voldechse.replayframework.adapter.paper.actor.ActorEffects;
 import dev.voldechse.replayframework.adapter.paper.actor.ActorEffect;
+import dev.voldechse.replayframework.adapter.paper.channel.PipelineNames;
 import dev.voldechse.replayframework.api.recording.BlockPosition;
+import io.netty.channel.Channel;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -13,6 +16,7 @@ import java.util.function.BiConsumer;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -33,7 +37,7 @@ import net.minecraft.world.level.block.state.BlockState;
  * {@code PlayerList.broadcast}. Otherwise that player's connection delivers
  * the real packet and the derived one would be a duplicate.</p>
  */
-public final class Paper26_2ActorEffects {
+public final class Paper26_2ActorEffects implements ActorEffects {
 
     private final ActorBlockEffects<BlockState> families = new ActorBlockEffects<>(List.of(
             new HingedBlockEffect(),
@@ -59,23 +63,19 @@ public final class Paper26_2ActorEffects {
         this.failureHandler = Objects.requireNonNull(failureHandler, "failureHandler");
     }
 
-    /**
-     * Handles one action on the player's network thread. {@code handOver}
-     * passes the packet on to the server, which queues it.
-     */
-    public void around(
-            ServerGamePacketListenerImpl listener,
-            Packet<?> packet,
-            ActorAction action,
-            Runnable handOver) {
-        if (!active.getAsBoolean()) {
+    @Override
+    public void around(Channel channel, Object packet, ActorAction action, Runnable handOver) {
+        if (!active.getAsBoolean()
+                || !(packet instanceof Packet<?> nativePacket)
+                || !(channel.pipeline().get(PipelineNames.PACKET_HANDLER) instanceof Connection connection)
+                || !(connection.getPacketListener() instanceof ServerGamePacketListenerImpl listener)) {
             handOver.run();
             return;
         }
         Probe probe = new Probe(listener, action);
-        QueuedServerTask.queue(listener, packet, () -> guarded(probe::readBefore));
+        QueuedServerTask.queue(listener, nativePacket, () -> guarded(probe::readBefore));
         handOver.run();
-        QueuedServerTask.queue(listener, packet, () -> guarded(probe::readAfterAndPublish));
+        QueuedServerTask.queue(listener, nativePacket, () -> guarded(probe::readAfterAndPublish));
     }
 
     private void guarded(Runnable task) {
