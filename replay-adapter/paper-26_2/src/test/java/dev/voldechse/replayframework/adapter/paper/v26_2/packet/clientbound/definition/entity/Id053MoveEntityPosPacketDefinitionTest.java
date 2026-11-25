@@ -59,10 +59,10 @@ final class Id053MoveEntityPosPacketDefinitionTest {
         assertEquals(0x35, Id053MoveEntityPosPacketDefinition.PACKET_ID);
         assertEquals("minecraft:move_entity_pos", Id053MoveEntityPosPacketDefinition.IDENTIFIER);
         assertEquals(TYPE_NAME, definition.typeName());
-        assertEquals(PacketDisposition.EPHEMERAL, definition.classification().disposition());
+        assertEquals(PacketDisposition.STATEFUL, definition.classification().disposition());
         assertTrue(definition.classification().captureByDefault());
         assertTrue(definition.classification().replayable());
-        assertFalse(definition.classification().checkpointRelevant());
+        assertTrue(definition.classification().checkpointRelevant());
         assertEquals(
                 PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES,
                 definition.classification().playbackScope());
@@ -109,10 +109,10 @@ final class Id053MoveEntityPosPacketDefinitionTest {
                 .find(PacketPhase.PLAY, PacketDescriptor.Direction.CLIENTBOUND, PACKET_ID)
                 .orElseThrow();
         assertEquals(TYPE_NAME, registryDescriptor.typeName());
-        assertEquals(PacketDisposition.EPHEMERAL, registryDescriptor.disposition());
+        assertEquals(PacketDisposition.STATEFUL, registryDescriptor.disposition());
         assertTrue(registryDescriptor.captureByDefault());
         assertTrue(registryDescriptor.replayable());
-        assertFalse(registryDescriptor.checkpointRelevant());
+        assertTrue(registryDescriptor.checkpointRelevant());
         assertEquals(
                 PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES,
                 registryDescriptor.playbackScope());

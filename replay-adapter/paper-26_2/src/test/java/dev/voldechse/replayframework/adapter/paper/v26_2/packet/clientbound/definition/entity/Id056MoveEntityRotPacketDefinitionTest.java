@@ -57,10 +57,10 @@ final class Id056MoveEntityRotPacketDefinitionTest {
         assertEquals(0x38, Id056MoveEntityRotPacketDefinition.PACKET_ID);
         assertEquals("minecraft:move_entity_rot", Id056MoveEntityRotPacketDefinition.IDENTIFIER);
         assertEquals(TYPE_NAME, definition.typeName());
-        assertEquals(PacketDisposition.EPHEMERAL, definition.classification().disposition());
+        assertEquals(PacketDisposition.STATEFUL, definition.classification().disposition());
         assertTrue(definition.classification().captureByDefault());
         assertTrue(definition.classification().replayable());
-        assertFalse(definition.classification().checkpointRelevant());
+        assertTrue(definition.classification().checkpointRelevant());
         assertEquals(
                 PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES,
                 definition.classification().playbackScope());
@@ -84,10 +84,10 @@ final class Id056MoveEntityRotPacketDefinitionTest {
                 .find(PacketPhase.PLAY, PacketDescriptor.Direction.CLIENTBOUND, PACKET_ID)
                 .orElseThrow();
         assertEquals(TYPE_NAME, descriptor.typeName());
-        assertEquals(PacketDisposition.EPHEMERAL, descriptor.disposition());
+        assertEquals(PacketDisposition.STATEFUL, descriptor.disposition());
         assertTrue(descriptor.captureByDefault());
         assertTrue(descriptor.replayable());
-        assertFalse(descriptor.checkpointRelevant());
+        assertTrue(descriptor.checkpointRelevant());
         assertEquals(
                 PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES,
                 descriptor.playbackScope());

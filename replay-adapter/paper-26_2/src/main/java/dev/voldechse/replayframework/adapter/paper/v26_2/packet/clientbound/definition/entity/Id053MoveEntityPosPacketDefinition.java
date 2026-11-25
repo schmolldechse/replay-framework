@@ -26,9 +26,21 @@ final class Id053MoveEntityPosPacketDefinition extends RebuildingPacketDefinitio
         super(
                 PACKET_ID,
                 IDENTIFIER,
-                PacketClassification.ephemeral(
+                PacketClassification.stateful(
                         PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES),
                 ClientboundMoveEntityPacket.Pos.class);
+    }
+
+    /**
+     * A relative step changes where the client places the entity, so it is
+     * state: a seek replays it, otherwise every later step starts from a
+     * wrong position.
+     */
+    @Override
+    public java.util.Optional<
+            dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketCheckpointFamily> checkpointFamily() {
+        return java.util.Optional.of(
+                dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketCheckpointFamily.ENTITY_METADATA);
     }
 
 

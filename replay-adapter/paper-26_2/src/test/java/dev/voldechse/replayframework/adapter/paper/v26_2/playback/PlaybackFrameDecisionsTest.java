@@ -127,6 +127,23 @@ class PlaybackFrameDecisionsTest {
     }
 
     @Test
+    void aSeekReplaysRelativeEntityMovement() {
+        net.minecraft.SharedConstants.tryDetectVersion();
+        net.minecraft.server.Bootstrap.bootStrap();
+        PacketRegistry registry = Paper26_2PacketRegistry.discover();
+        // move_entity_pos, move_entity_pos_rot, move_entity_rot: a dropped step
+        // leaves every later step of the entity at a wrong position.
+        for (int packetId : new int[] {0x35, 0x36, 0x38}) {
+            PacketDescriptor descriptor = registry.find(
+                            PacketPhase.PLAY, PacketDescriptor.Direction.CLIENTBOUND, packetId)
+                    .orElseThrow();
+            assertEquals(PacketDisposition.STATEFUL, descriptor.disposition(), descriptor.typeName());
+            assertTrue(dev.voldechse.replayframework.adapter.paper.playback.PaperPlaybackBridge.shouldReplay(
+                    frame(packetId), PlaybackEmissionMode.RECONSTRUCTION, registry), descriptor.typeName());
+        }
+    }
+
+    @Test
     void neverReplaysRecordedConnectionControl() {
         net.minecraft.SharedConstants.tryDetectVersion();
         net.minecraft.server.Bootstrap.bootStrap();

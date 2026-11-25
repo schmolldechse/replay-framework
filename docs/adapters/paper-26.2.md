@@ -253,10 +253,10 @@ generated from the definitions' declarations.
 | 50 | `minecraft:low_disk_space_warning` | ui | ephemeral | viewer-local | no | - |  |
 | 51 | `minecraft:map_item_data` | world | stateful | viewer-local | no | - |  |
 | 52 | `minecraft:merchant_offers` | ui | stateful | viewer-local | no | - |  |
-| 53 | `minecraft:move_entity_pos` | entity | ephemeral | replayed, IDs rewritten | no | eye, broadcast |  |
-| 54 | `minecraft:move_entity_pos_rot` | entity | ephemeral | replayed, IDs rewritten | no | eye, broadcast |  |
+| 53 | `minecraft:move_entity_pos` | entity | stateful | replayed, IDs rewritten | yes | eye, broadcast | a relative step; seeks replay it |
+| 54 | `minecraft:move_entity_pos_rot` | entity | stateful | replayed, IDs rewritten | yes | eye, broadcast | a relative step; seeks replay it |
 | 55 | `minecraft:move_minecart_along_track` | entity | stateful | replayed, IDs rewritten | yes | eye, broadcast |  |
-| 56 | `minecraft:move_entity_rot` | entity | ephemeral | replayed, IDs rewritten | no | eye, broadcast |  |
+| 56 | `minecraft:move_entity_rot` | entity | stateful | replayed, IDs rewritten | yes | eye, broadcast | a relative step; seeks replay it |
 | 57 | `minecraft:move_vehicle` | entity | ephemeral | viewer-local | no | - |  |
 | 58 | `minecraft:open_book` | ui | ephemeral | viewer-local | no | - |  |
 | 59 | `minecraft:open_screen` | ui | ephemeral | viewer-local | no | - |  |
