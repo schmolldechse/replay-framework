@@ -164,7 +164,7 @@ interfaces, each used by the part of the core that needs it:
 | `ViewerWorld` | the recorded world the viewer watches | `PlaybackTimeline` |
 | `SceneQueries` | entities, players, observer anchors | `SceneTracks`, `PlaybackTimeline` |
 | `StateDecoder` | subject and block state | `StateTracks` |
-| `ViewerInteractions` | the viewer's clicks on entities and blocks | `DefaultPlaybackService` |
+| `ViewerInteractions` | the viewer's clicks on entities and blocks | `SessionAssembly` |
 
 The roles have no default methods, so an adapter states every capability
 explicitly, and a new capability becomes a role of its own.
@@ -175,6 +175,14 @@ is in flight. The runtime then verifies the replay artifact and adapter
 boundary, creates the viewer bridge, and registers the session only after that
 reservation exists. Terminal cleanup releases the session and viewer
 reservation together.
+
+`DefaultPlaybackService` reserves, loads and verifies; a `SessionAssembly`
+builds the session in named steps: prepare and open the scene tracks, open
+the bridge, build the timeline, wire up state tracks and interactions, place
+the viewer, register. Every track is opened by one `TrackOpener`, which
+checks its index, segments and checkpoints before it builds a buffer; the
+scene prepares all its tracks before opening any, and state tracks open on
+demand through the same opener.
 
 The `PlaybackBuffer` asks the prefetch planner for ranges around the timeline
 position. It retains data behind the viewer, preloads data ahead, scales the

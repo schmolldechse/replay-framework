@@ -10,7 +10,7 @@ import dev.voldechse.replayframework.format.SeekPoint;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
-final class DefaultPlaybackServiceSegmentRefsTest {
+final class TrackOpenerSegmentRefsTest {
 
     @Test
     void checkpointAnchorAtSealedBoundaryDoesNotExtendPreviousSegment() {
@@ -24,7 +24,7 @@ final class DefaultPlaybackServiceSegmentRefsTest {
                 point(50L, 1, 1, 10L)));
 
         List<SegmentCache.SegmentRef> segments =
-                DefaultPlaybackService.buildSegmentRefs(manifest, TrackDescriptor.global(0), index);
+                TrackOpener.buildSegmentRefs(manifest, TrackDescriptor.global(0), index);
 
         assertEquals(2, segments.size());
         assertEquals(10L, segments.get(0).startNanos());
@@ -44,7 +44,7 @@ final class DefaultPlaybackServiceSegmentRefsTest {
                 point(25L, 1, 0, 20L)));
 
         SegmentCache.SegmentRef segment =
-                DefaultPlaybackService.buildSegmentRefs(manifest, TrackDescriptor.global(0), index).getFirst();
+                TrackOpener.buildSegmentRefs(manifest, TrackDescriptor.global(0), index).getFirst();
 
         assertEquals(10L, segment.startNanos());
         assertEquals(25L, segment.endNanos());
@@ -59,7 +59,7 @@ final class DefaultPlaybackServiceSegmentRefsTest {
                 point(20L, 0, 0, 10L)));
 
         SegmentCache.SegmentRef segment =
-                DefaultPlaybackService.buildSegmentRefs(manifest, TrackDescriptor.global(0), index).getFirst();
+                TrackOpener.buildSegmentRefs(manifest, TrackDescriptor.global(0), index).getFirst();
 
         assertEquals(10L, segment.startNanos());
         assertEquals(20L, segment.endNanos());
@@ -84,7 +84,7 @@ final class DefaultPlaybackServiceSegmentRefsTest {
                 List.of(TrackDescriptor.global(0)),
                 java.util.stream.Stream.concat(
                         java.util.stream.IntStream.range(0, segmentCount)
-                                .mapToObj(DefaultPlaybackServiceSegmentRefsTest::segmentArtifact),
+                                .mapToObj(TrackOpenerSegmentRefsTest::segmentArtifact),
                         java.util.stream.Stream.of(new ReplayManifest.ArtifactFile(
                                 ReplayManifest.ArtifactType.INDEX, "tracks/0/index.bin", 1L, "0".repeat(64))))
                         .toList());

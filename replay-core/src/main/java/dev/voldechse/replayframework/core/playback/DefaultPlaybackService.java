@@ -1,17 +1,11 @@
 package dev.voldechse.replayframework.core.playback;
 
-import dev.voldechse.replayframework.adapter.playback.ViewerInteractions;
-
 import dev.voldechse.replayframework.adapter.AdapterDescriptor;
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
-import dev.voldechse.replayframework.adapter.PlaybackBridge;
 import dev.voldechse.replayframework.adapter.ReplayAdapter;
-import dev.voldechse.replayframework.adapter.playback.PlaybackIdentityContext;
-import dev.voldechse.replayframework.adapter.playback.ObserverAnchor;
 import dev.voldechse.replayframework.api.id.PlaybackSessionId;
 import dev.voldechse.replayframework.api.id.ReplayId;
 import dev.voldechse.replayframework.api.playback.PlaybackRequest;
-import dev.voldechse.replayframework.api.playback.ObserverPlacement;
 import dev.voldechse.replayframework.api.playback.PlaybackService;
 import dev.voldechse.replayframework.api.playback.PlaybackSession;
 import dev.voldechse.replayframework.api.playback.PlaybackSnapshot;
@@ -21,70 +15,36 @@ import dev.voldechse.replayframework.api.recording.RecordingStatus;
 import dev.voldechse.replayframework.api.recording.ReplayFailureCode;
 import dev.voldechse.replayframework.core.artifact.ReplayArtifactReader;
 import dev.voldechse.replayframework.core.diagnostics.ReplayDiagnostics;
-import dev.voldechse.replayframework.core.playback.buffer.PlaybackBuffer;
 import dev.voldechse.replayframework.core.playback.cache.SegmentCache;
 import dev.voldechse.replayframework.core.port.ReplayRepository;
 import dev.voldechse.replayframework.format.CorruptReplayArtifactException;
 import dev.voldechse.replayframework.format.CorruptReplaySegmentException;
-import dev.voldechse.replayframework.format.ReplayCheckpoint;
 import dev.voldechse.replayframework.format.ReplayCheckpointReader;
-import dev.voldechse.replayframework.format.ReplayIndex;
 import dev.voldechse.replayframework.format.ReplayIndexReader;
 import dev.voldechse.replayframework.format.ReplayManifest;
 import dev.voldechse.replayframework.format.ReplaySegmentReader;
-import dev.voldechse.replayframework.format.RawPacketFrame;
-import dev.voldechse.replayframework.format.SeekPoint;
-import dev.voldechse.replayframework.format.TrackDescriptor;
-import dev.voldechse.replayframework.format.TrackKind;
-
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
 import org.bukkit.entity.Player;
-import org.bukkit.Location;
-import org.bukkit.World;
 
 /** Opens and manages one isolated playback graph per viewer. */
 final class DefaultPlaybackService implements PlaybackService {
 
-    private static final Pattern SEGMENT_PATH =
-            Pattern.compile("segments/([0-9]+)\\.segment");
-    private static final Pattern CHECKPOINT_PATH =
-            Pattern.compile("checkpoints/([0-9]+)\\.checkpoint");
-
     private final ReplayRepository replayRepository;
     private final ReplayArtifactReader artifactReader;
     private final ReplayAdapter adapter;
-    private final SegmentCache sharedSegmentCache;
-    private final ReplayIndexReader indexReader;
-    private final ReplayCheckpointReader checkpointReader;
-    private final ReplaySegmentReader segmentReader;
     private final Executor ioExecutor;
-    private final Executor commandExecutor;
     private final PlaybackCoordinator coordinator;
     private final PlaybackEventDispatcher eventDispatcher;
     private final ReplayDiagnostics diagnostics;
-    private final ObserverPlacementService observerPlacementService;
+    private final SessionAssembly.Services assemblyServices;
 
     DefaultPlaybackService(
             ReplayRepository replayRepository,
@@ -103,17 +63,19 @@ final class DefaultPlaybackService implements PlaybackService {
         this.replayRepository = Objects.requireNonNull(replayRepository, "replayRepository");
         this.artifactReader = Objects.requireNonNull(artifactReader, "artifactReader");
         this.adapter = Objects.requireNonNull(adapter, "adapter");
-        this.sharedSegmentCache = Objects.requireNonNull(sharedSegmentCache, "sharedSegmentCache");
-        this.indexReader = Objects.requireNonNull(indexReader, "indexReader");
-        this.checkpointReader = Objects.requireNonNull(checkpointReader, "checkpointReader");
-        this.segmentReader = Objects.requireNonNull(segmentReader, "segmentReader");
         this.ioExecutor = Objects.requireNonNull(ioExecutor, "ioExecutor");
-        this.commandExecutor = Objects.requireNonNull(commandExecutor, "commandExecutor");
         this.coordinator = Objects.requireNonNull(coordinator, "coordinator");
         this.eventDispatcher = Objects.requireNonNull(eventDispatcher, "eventDispatcher");
         this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics");
-        this.observerPlacementService = Objects.requireNonNull(
-                observerPlacementService, "observerPlacementService");
+        this.assemblyServices = new SessionAssembly.Services(
+                adapter,
+                new TrackOpener(
+                        artifactReader, sharedSegmentCache, indexReader, checkpointReader, segmentReader, ioExecutor),
+                commandExecutor,
+                coordinator,
+                eventDispatcher,
+                diagnostics,
+                observerPlacementService);
     }
 
     @Override
@@ -130,16 +92,15 @@ final class DefaultPlaybackService implements PlaybackService {
             return CompletableFuture.failedFuture(exception);
         }
 
-        OpenResources resources = new OpenResources();
+        SessionAssembly assembly = new SessionAssembly(
+                assemblyServices,
+                sessionId,
+                viewerId,
+                validatedRequest,
+                timelineListener(sessionId, validatedRequest.replayId(), viewerId));
         CompletionStage<PlaybackSession> opening;
         try {
-            opening = loadReplay(validatedRequest)
-                    .thenCompose(verified -> prepareSession(
-                            sessionId,
-                            viewerId,
-                            validatedRequest,
-                            verified,
-                            resources));
+            opening = loadReplay(validatedRequest).thenCompose(assembly::assemble);
         } catch (RuntimeException exception) {
             coordinator.release(sessionId, viewerId);
             return CompletableFuture.failedFuture(exception);
@@ -147,7 +108,7 @@ final class DefaultPlaybackService implements PlaybackService {
 
         return opening.whenComplete((ignored, failure) -> {
             if (failure != null) {
-                resources.closeAfterFailure();
+                assembly.closeAfterFailure();
                 coordinator.release(sessionId, viewerId);
             }
         });
@@ -184,396 +145,6 @@ final class DefaultPlaybackService implements PlaybackService {
                                 return verified;
                             });
                 });
-    }
-
-    private CompletionStage<PlaybackSession> prepareSession(
-            PlaybackSessionId sessionId,
-            UUID viewerId,
-            PlaybackRequest request,
-            ReplayArtifactReader.VerifiedReplay verified,
-            OpenResources resources) {
-        ReplayManifest manifest = verified.manifest();
-        // The scene is played from the tracks with the scene role; state tracks
-        // are read only when a subject's state is asked for.
-        List<CompletableFuture<PreparedArtifacts>> preparing = manifest.tracks().stream()
-                .filter(track -> track.kind().role() == TrackKind.Role.SCENE)
-                .map(track -> fetchAndReadIndex(verified, track)
-                        .thenApply(index -> new PreparedArtifacts(
-                                track,
-                                index,
-                                buildSegmentRefs(manifest, track, index),
-                                buildCheckpointFiles(manifest, track, index)))
-                        .toCompletableFuture())
-                .toList();
-        return CompletableFuture.allOf(preparing.toArray(CompletableFuture[]::new))
-                .thenApply(ignored -> preparing.stream().map(CompletableFuture::join).toList())
-                .thenCompose(prepared -> {
-                    PreparedArtifacts reference = prepared.stream()
-                            .filter(track -> track.track().kind().keyedBy() == TrackKind.KeyedBy.NOTHING)
-                            .findFirst()
-                            .orElseThrow(() -> corrupt("replay has no global track"));
-                    MergedTrackData.Track globalTrack = null;
-                    Map<String, MergedTrackData.Track> worldTracks = new java.util.LinkedHashMap<>();
-                    List<PlaybackBuffer> buffers = new ArrayList<>(prepared.size());
-                    for (PreparedArtifacts track : prepared) {
-                        PlaybackBuffer buffer = new PlaybackBuffer(
-                                verified,
-                                track.segments(),
-                                track.track(),
-                                artifactReader,
-                                sharedSegmentCache,
-                                segmentReader,
-                                request.bufferOptions(),
-                                ioExecutor);
-                        buffers.add(buffer);
-                        Map<SeekPoint, CompletionStage<List<RawPacketFrame>>> cache =
-                                new ConcurrentHashMap<>();
-                        MergedTrackData.Track opened = MergedTrackData.Track.of(
-                                PlaybackTimeline.adapt(
-                                        buffer,
-                                        point -> cachedCheckpoint(cache, verified, track, point)),
-                                track.index());
-                        if (track.track().kind().keyedBy() == TrackKind.KeyedBy.NOTHING) {
-                            globalTrack = opened;
-                        } else {
-                            worldTracks.put(track.track().world().orElseThrow(), opened);
-                        }
-                    }
-                    resources.buffers.set(List.copyOf(buffers));
-
-                    PlaybackBridge bridge = Objects.requireNonNull(
-                            adapter.openPlayback(
-                                    request.viewer(),
-                                    new PlaybackIdentityContext(
-                                            viewerId, sessionId.value())),
-                            "adapter.openPlayback result");
-                    resources.bridge.set(bridge);
-                    SceneTracks scene = new SceneTracks(
-                            globalTrack, worldTracks, reference.index(), manifest.durationNanos(), bridge);
-                    resources.sceneTracks.set(scene);
-
-                    PlaybackTimeline.Listener listener = timelineListener(
-                            sessionId,
-                            request.replayId(),
-                            viewerId);
-                    PlaybackTimeline timeline = new PlaybackTimeline(
-                            Duration.ofNanos(manifest.durationNanos()),
-                            reference.index(),
-                            scene.timeline(),
-                            bridge,
-                            request.bufferOptions(),
-                            commandExecutor,
-                            System::nanoTime,
-                            listener);
-                    bridge.setFailureHandler(timeline::failFromBridge);
-                    resources.timeline.set(timeline);
-                    resources.stateTracks.set(new StateTracks(
-                            manifest.tracks(),
-                            reference.index(),
-                            manifest.durationNanos(),
-                            bridge,
-                            track -> openTrack(verified, request, track)));
-                    StateTracks states = resources.stateTracks.get();
-                    bridge.setInteractionHandler(interaction -> eventDispatcher.entityInteracted(
-                            sessionId, request.replayId(), viewerId,
-                            new ViewerInteractions.EntityInteraction(
-                                    states.withSubject(interaction.entity()),
-                                    interaction.attack(),
-                                    interaction.hand())));
-                    bridge.setBlockInteractionHandler(interaction -> eventDispatcher.blockInteracted(
-                            sessionId, request.replayId(), viewerId, interaction));
-                    SeekPoint initialPoint = reference.index()
-                            .seekCheckpointFloor(Duration.ZERO)
-                            .orElseThrow(() -> corrupt("replay has no initial checkpoint"));
-                    return scene.all().checkpointFrames(initialPoint)
-                            .thenCompose(frames -> placeObserver(request, bridge, frames))
-                            .thenRun(() -> {
-                                // The timeline plays the world the viewer was placed in.
-                                String world = bridge.viewedWorld().orElseGet(() -> {
-                                    String first = worldTracks.keySet().stream().findFirst().orElse(null);
-                                    if (first != null) {
-                                        bridge.viewWorld(first);
-                                    }
-                                    return first;
-                                });
-                                if (world != null) {
-                                    scene.view(world);
-                                }
-                            })
-                            .thenRun(bridge::activateReplayIsolation)
-                            .thenCompose(ignored -> timeline.prepare());
-                })
-                .thenApply(snapshot -> {
-                    validateInitialSnapshot(snapshot);
-                    DefaultPlaybackSession session = new DefaultPlaybackSession(
-                            sessionId,
-                            request.replayId(),
-                            viewerId,
-                            resources.timeline.get(),
-                            coordinator,
-                            resources.stateTracks.get(),
-                            resources.sceneTracks.get());
-                    coordinator.register(session);
-                    diagnostics.playbackStarted(session);
-                    return (PlaybackSession) session;
-                });
-    }
-
-    /** Opens a track that the scene does not read, such as a state track, on demand. */
-    private CompletionStage<MergedTrackData.Track> openTrack(
-            ReplayArtifactReader.VerifiedReplay verified,
-            PlaybackRequest request,
-            TrackDescriptor track) {
-        ReplayManifest manifest = verified.manifest();
-        return fetchAndReadIndex(verified, track).thenApply(index -> {
-            PreparedArtifacts prepared = new PreparedArtifacts(
-                    track,
-                    index,
-                    buildSegmentRefs(manifest, track, index),
-                    buildCheckpointFiles(manifest, track, index));
-            PlaybackBuffer buffer = new PlaybackBuffer(
-                    verified,
-                    prepared.segments(),
-                    track,
-                    artifactReader,
-                    sharedSegmentCache,
-                    segmentReader,
-                    request.bufferOptions(),
-                    ioExecutor);
-            Map<SeekPoint, CompletionStage<List<RawPacketFrame>>> cache = new ConcurrentHashMap<>();
-            return MergedTrackData.Track.of(
-                    PlaybackTimeline.adapt(buffer, point -> cachedCheckpoint(cache, verified, prepared, point)),
-                    index);
-        });
-    }
-
-    private CompletionStage<Void> placeObserver(
-            PlaybackRequest request,
-            PlaybackBridge bridge,
-            List<RawPacketFrame> initialFrames) {
-        ObserverPlacement placement = request.observerPlacement().orElseGet(
-                () -> ObserverPlacement.automatic(request.viewer().getWorld()));
-        List<Location> candidates;
-        if (placement instanceof ObserverPlacement.Fixed fixed) {
-            candidates = List.of(fixed.target());
-        } else if (placement instanceof ObserverPlacement.Automatic automatic) {
-            World world = automatic.targetWorld();
-            List<ObserverAnchor> anchors = bridge.observerAnchors(initialFrames);
-            if (anchors.isEmpty()) {
-                return CompletableFuture.failedFuture(new IllegalStateException(
-                        "Replay contains no safe observer anchor"));
-            }
-            // The viewer watches the recorded world of the best anchor, and
-            // only anchors of that world are candidates for the placement.
-            java.util.Optional<String> viewedWorld = anchors.get(0).world();
-            viewedWorld.ifPresent(bridge::viewWorld);
-            anchors = anchors.stream()
-                    .filter(anchor -> anchor.world().equals(viewedWorld))
-                    .toList();
-            List<Location> derived = new ArrayList<>(anchors.size() * 2);
-            for (ObserverAnchor anchor : anchors) {
-                derived.add(new Location(
-                        world, anchor.x(), anchor.y() + 2.5D, anchor.z(),
-                        anchor.yaw(), anchor.pitch()));
-                derived.add(new Location(
-                        world, anchor.x(), anchor.y(), anchor.z(),
-                        anchor.yaw(), anchor.pitch()));
-            }
-            candidates = List.copyOf(derived);
-        } else {
-            return CompletableFuture.failedFuture(
-                    new IllegalStateException("Unsupported observer placement"));
-        }
-        return observerPlacementService.place(request.viewer(), candidates);
-    }
-
-    private CompletionStage<ReplayIndex> fetchAndReadIndex(
-            ReplayArtifactReader.VerifiedReplay verified,
-            TrackDescriptor track) {
-        ReplayManifest.ArtifactFile indexArtifact = verified.manifest().files(track).stream()
-                .filter(file -> file.type() == ReplayManifest.ArtifactType.INDEX)
-                .findFirst()
-                .orElseThrow(() -> new CompletionException(
-                        new CorruptReplayArtifactException("track has no index artifact")));
-
-        return CompletableFuture.supplyAsync(
-                        () -> createTemporaryFile("replay-index-", ".bin"),
-                        ioExecutor)
-                .thenCompose(target -> artifactReader.fetchVerified(
-                                verified,
-                                indexArtifact,
-                                target)
-                        .thenApplyAsync(fetched -> readIndex(fetched), ioExecutor)
-                        .whenComplete((ignored, failure) -> deleteQuietly(target)));
-    }
-
-    private CompletionStage<List<RawPacketFrame>>
-            fetchAndDecodeCheckpoint(
-                    ReplayArtifactReader.VerifiedReplay verified,
-                    PreparedArtifacts track,
-                    SeekPoint point) {
-        ReplayManifest.ArtifactFile artifact = track.checkpoints().get(point.checkpointOrdinal());
-        if (artifact == null) {
-            return CompletableFuture.failedFuture(new CorruptReplayArtifactException(
-                    "index references missing checkpoint ordinal: " + point.checkpointOrdinal()));
-        }
-        return CompletableFuture.supplyAsync(
-                        () -> createTemporaryFile("replay-checkpoint-", ".bin"),
-                        ioExecutor)
-                .thenCompose(target -> artifactReader.fetchVerified(verified, artifact, target)
-                        .thenApplyAsync(fetched -> readCheckpoint(fetched, track.track(), point), ioExecutor)
-                        .whenComplete((ignored, failure) -> deleteQuietly(target)));
-    }
-
-    private CompletionStage<List<RawPacketFrame>> cachedCheckpoint(
-            Map<SeekPoint, CompletionStage<List<RawPacketFrame>>> cache,
-            ReplayArtifactReader.VerifiedReplay verified,
-            PreparedArtifacts track,
-            SeekPoint point) {
-        CompletableFuture<List<RawPacketFrame>> loading = new CompletableFuture<>();
-        CompletionStage<List<RawPacketFrame>> existing = cache.putIfAbsent(point, loading);
-        if (existing != null) {
-            return existing;
-        }
-
-        fetchAndDecodeCheckpoint(verified, track, point)
-                .whenComplete((frames, failure) -> {
-                    if (failure != null) {
-                        cache.remove(point, loading);
-                        loading.completeExceptionally(failure);
-                    } else {
-                        loading.complete(frames);
-                    }
-                });
-        return loading;
-    }
-
-    private ReplayIndex readIndex(Path source) {
-        try {
-            ReplayIndex index = indexReader.read(source);
-            if (index.points().isEmpty()) {
-                throw new CompletionException(new CorruptReplayArtifactException(
-                        "replay index must contain at least one seek point"));
-            }
-            return index;
-        } catch (IOException exception) {
-            throw new CompletionException(exception);
-        }
-    }
-
-    private List<RawPacketFrame> readCheckpoint(
-            Path source,
-            TrackDescriptor track,
-            SeekPoint point) {
-        try {
-            ReplayCheckpoint checkpoint = checkpointReader.read(source, track);
-            if (checkpoint.ordinal() != point.checkpointOrdinal()
-                    || checkpoint.elapsedNanos() != point.elapsedNanos()) {
-                throw new CompletionException(new CorruptReplayArtifactException(
-                        "checkpoint does not match its seek point"));
-            }
-            return checkpoint.initializationFrames();
-        } catch (IOException exception) {
-            throw new CompletionException(exception);
-        }
-    }
-
-    /**
-     * The segments of one track with their time windows. A track may have no
-     * segments; then its index holds only checkpoint anchors.
-     */
-    static List<SegmentCache.SegmentRef> buildSegmentRefs(
-            ReplayManifest manifest,
-            TrackDescriptor track,
-            ReplayIndex index) {
-        List<ReplayManifest.ArtifactFile> artifacts = manifest.files(track).stream()
-                .filter(file -> file.type() == ReplayManifest.ArtifactType.SEGMENT)
-                .sorted(Comparator.comparing(ReplayManifest.ArtifactFile::path))
-                .toList();
-        if (artifacts.isEmpty()) {
-            for (SeekPoint point : index.points()) {
-                if (point.elapsedNanos() > manifest.durationNanos()
-                        || point.segmentOrdinal() != 0 || point.frameOffset() != 0L) {
-                    throw corrupt("index of a track without segments references a segment");
-                }
-            }
-            return List.of();
-        }
-
-        Map<Integer, ReplayManifest.ArtifactFile> filesByOrdinal = new HashMap<>();
-        for (ReplayManifest.ArtifactFile artifact : artifacts) {
-            int ordinal = parseOrdinal(artifact.trackPath(), SEGMENT_PATH, "segment");
-            if (filesByOrdinal.putIfAbsent(ordinal, artifact) != null) {
-                throw corrupt("duplicate segment ordinal: " + ordinal);
-            }
-        }
-
-        Map<Integer, List<SeekPoint>> framePointsBySegment = new HashMap<>();
-        Set<Integer> seenCheckpointOrdinals = new HashSet<>();
-        for (SeekPoint point : index.points()) {
-            if (point.elapsedNanos() > manifest.durationNanos()) {
-                throw corrupt("index point exceeds replay duration");
-            }
-            if (!filesByOrdinal.containsKey(point.segmentOrdinal())) {
-                throw corrupt("index references a missing segment artifact");
-            }
-            // The first point for each checkpoint ordinal is its seek anchor,
-            // not a frame contained by the referenced segment. An anchor can
-            // intentionally point at the sealed end of the preceding segment.
-            if (seenCheckpointOrdinals.add(point.checkpointOrdinal())) {
-                continue;
-            }
-            framePointsBySegment.computeIfAbsent(
-                            point.segmentOrdinal(), ignored -> new ArrayList<>())
-                    .add(point);
-        }
-
-        List<SegmentCache.SegmentRef> result = new ArrayList<>(filesByOrdinal.size());
-        long previousEnd = 0L;
-        for (Map.Entry<Integer, ReplayManifest.ArtifactFile> entry : filesByOrdinal.entrySet()
-                .stream()
-                .sorted(Map.Entry.comparingByKey())
-                .toList()) {
-            int ordinal = entry.getKey();
-            List<SeekPoint> points = framePointsBySegment.remove(ordinal);
-            if (points == null || points.isEmpty()) {
-                throw corrupt("segment has no frame index point: " + ordinal);
-            }
-            long start = points.stream().mapToLong(SeekPoint::elapsedNanos).min().orElseThrow();
-            long end = points.stream().mapToLong(SeekPoint::elapsedNanos).max().orElseThrow();
-            if (end < start || start < previousEnd) {
-                throw corrupt("segment time windows are not ordered");
-            }
-            result.add(new SegmentCache.SegmentRef(ordinal, entry.getValue(), start, end));
-            previousEnd = end;
-        }
-        if (!framePointsBySegment.isEmpty()) {
-            throw corrupt("index references a missing segment artifact");
-        }
-        return List.copyOf(result);
-    }
-
-    private Map<Integer, ReplayManifest.ArtifactFile> buildCheckpointFiles(
-            ReplayManifest manifest,
-            TrackDescriptor track,
-            ReplayIndex index) {
-        Map<Integer, ReplayManifest.ArtifactFile> result = new HashMap<>();
-        for (ReplayManifest.ArtifactFile artifact : manifest.files(track)) {
-            if (artifact.type() != ReplayManifest.ArtifactType.CHECKPOINT) {
-                continue;
-            }
-            int ordinal = parseOrdinal(artifact.trackPath(), CHECKPOINT_PATH, "checkpoint");
-            if (result.putIfAbsent(ordinal, artifact) != null) {
-                throw corrupt("duplicate checkpoint ordinal: " + ordinal);
-            }
-        }
-        for (SeekPoint point : index.points()) {
-            if (!result.containsKey(point.checkpointOrdinal())) {
-                throw corrupt("index references a missing checkpoint artifact: "
-                        + point.checkpointOrdinal());
-            }
-        }
-        return Map.copyOf(result);
     }
 
     private void validateCatalogAndManifest(
@@ -689,42 +260,8 @@ final class DefaultPlaybackService implements PlaybackService {
         return Optional.of(ReplayFailureCode.INTERNAL_ERROR);
     }
 
-    private static void validateInitialSnapshot(PlaybackSnapshot snapshot) {
-        if (snapshot.status() != PlaybackStatus.PAUSED || !snapshot.position().isZero()) {
-            throw new IllegalStateException("initial playback view is not paused at zero");
-        }
-    }
-
-    private static int parseOrdinal(String path, Pattern pattern, String type) {
-        Matcher matcher = pattern.matcher(path);
-        if (!matcher.matches()) {
-            throw corrupt("invalid " + type + " artifact path: " + path);
-        }
-        try {
-            return Integer.parseInt(matcher.group(1));
-        } catch (NumberFormatException exception) {
-            throw corrupt("" + type + " ordinal is outside the supported range: " + path);
-        }
-    }
-
     private static CompletionException corrupt(String message) {
         return new CompletionException(new CorruptReplayArtifactException(message));
-    }
-
-    private static Path createTemporaryFile(String prefix, String suffix) {
-        try {
-            return Files.createTempFile(prefix, suffix);
-        } catch (IOException exception) {
-            throw new CompletionException(exception);
-        }
-    }
-
-    private static void deleteQuietly(Path path) {
-        try {
-            Files.deleteIfExists(path);
-        } catch (IOException ignored) {
-            // A temporary-file cleanup failure must not replace the playback result.
-        }
     }
 
     private static Throwable unwrap(Throwable failure) {
@@ -741,37 +278,4 @@ final class DefaultPlaybackService implements PlaybackService {
         return Objects.requireNonNull(stage, "completion stage");
     }
 
-    /** The playback artifacts of one track. */
-    private record PreparedArtifacts(
-            TrackDescriptor track,
-            ReplayIndex index,
-            List<SegmentCache.SegmentRef> segments,
-            Map<Integer, ReplayManifest.ArtifactFile> checkpoints) {
-    }
-
-    private static final class OpenResources {
-        private final AtomicReference<List<PlaybackBuffer>> buffers =
-                new AtomicReference<>(List.of());
-        private final AtomicReference<PlaybackBridge> bridge = new AtomicReference<>();
-        private final AtomicReference<StateTracks> stateTracks = new AtomicReference<>();
-        private final AtomicReference<SceneTracks> sceneTracks = new AtomicReference<>();
-        private final AtomicReference<PlaybackTimeline> timeline = new AtomicReference<>();
-
-        private void closeAfterFailure() {
-            PlaybackTimeline currentTimeline = timeline.get();
-            if (currentTimeline != null) {
-                currentTimeline.closeAsync().exceptionally(ignored -> null);
-                return;
-            }
-            buffers.get().forEach(PlaybackBuffer::close);
-            StateTracks currentStates = stateTracks.get();
-            if (currentStates != null) {
-                currentStates.close();
-            }
-            PlaybackBridge currentBridge = bridge.get();
-            if (currentBridge != null) {
-                currentBridge.close();
-            }
-        }
-    }
 }

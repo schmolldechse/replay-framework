@@ -87,8 +87,8 @@ instead of being extension points.
 7. `RecordingCoordinator` (1,093 lines) and `RecordingSegmentAppender` (742)
    mix lifecycle, catalog transitions, Argus, checkpoints, routing, budget and
    failures.
-8. `DefaultPlaybackService.prepareSession` is one block of about 130 lines.
-9. Track opening exists twice in `DefaultPlaybackService`.
+8. (Resolved in phase 3, step 3.) `DefaultPlaybackService.prepareSession` is one block of about 130 lines.
+9. (Resolved in phase 3, step 3.) Track opening exists twice in `DefaultPlaybackService`.
 10. (Resolved in phase 3, step 1.) Dimension-change checkpoints are wired but never emitted (18 references).
 11. (Resolved in phase 3, step 1.) Six compatibility or legacy constructors and paths remain.
 12. (Resolved in phase 3, step 1.) `CaptureOrigin.PLAYER_VIEW` is carried but no recording accepts it.
@@ -256,7 +256,16 @@ Phase 3 status:
   track with the same key. `TrackKeys` (core) is the only mapping from
   `TrackRoute` to track and frame world; the appender keeps its tracks by
   `TrackKey`. Playback selects scene tracks and `StateTracks` by role and
-  looks state tracks up by key. Checked in game (replay `37ed042f`), committed.
+  looks state tracks up by key. Checked in game (replay `37ed042f`), committed (`64f6f31`).
+- Step 3 implemented: `TrackOpener` prepares a track (index, segment refs,
+  checkpoint files) and opens it (buffer, checkpoint cache); the scene
+  prepares all its tracks before opening any, state tracks open on demand
+  through the same opener. `SessionAssembly` builds a session in named steps
+  (prepare and open the scene, open the bridge, build the timeline, wire
+  state and interactions, place the viewer, register) and closes what it
+  opened on failure. `DefaultPlaybackService` drops from 778 to 281 lines:
+  open, load and verify the replay, timeline listener. Checked in game (replay
+  `37ed042f`), committed.
 
 Fixes found while testing, outside the plan: viewer worlds without blocks
 (`d0c3bc9`), checkpoint-only tracks accepted by the finalizer (`cae1d7f`),
