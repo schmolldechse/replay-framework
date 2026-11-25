@@ -9,7 +9,8 @@ import dev.voldechse.replayframework.adapter.paper.v26_2.capture.PaperConnection
 import dev.voldechse.replayframework.adapter.paper.v26_2.checkpoint.Paper26_2CheckpointEncoder;
 import dev.voldechse.replayframework.adapter.paper.v26_2.checkpoint.Paper26_2NativePacketCodec;
 import dev.voldechse.replayframework.adapter.paper.v26_2.checkpoint.Paper26_2SnapshotProvider;
-import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2PlaybackBridge;
+import dev.voldechse.replayframework.adapter.paper.playback.PaperPlaybackBridge;
+import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2PlaybackHooks;
 import java.util.Objects;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ExecutorService;
@@ -60,8 +61,10 @@ public final class Paper26_2AdapterProvider implements PaperAdapterProvider {
                         if (current == null) {
                             throw new IllegalStateException("Paper adapter is not initialized");
                         }
-                        return new Paper26_2PlaybackBridge(accessor, player,
-                                current.descriptor(), current.packetRegistry(), playbackFailureHandler);
+                        return new PaperPlaybackBridge(
+                                new Paper26_2PlaybackHooks(accessor, current.descriptor(), current.packetRegistry()),
+                                player,
+                                playbackFailureHandler);
                     });
             adapterReference.set(adapter);
             return new Handle(adapter, snapshotProvider, nativePacketCodec, checkpointExecutor);

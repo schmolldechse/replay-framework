@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.PacketDisposition;
@@ -52,14 +52,14 @@ final class Paper26_2ReplayPacketRewriterTest {
         PacketDescriptor descriptor = addEntityDescriptor();
         PacketCodec<Object> codec = codec(original);
 
-        Paper26_2ReplayPacketRewriter.RewriteResult result = rewriter.rewrite(
+        dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketRewriteResult result = rewriter.rewrite(
                 new RawPacketFrame(0L, 0L, 0, PacketPhase.PLAY, 1, new byte[] {1}),
                 descriptor,
                 codec);
         ClientboundAddEntityPacket rewritten = assertInstanceOf(
-                ClientboundAddEntityPacket.class, result.packet());
+                ClientboundAddEntityPacket.class, result.packet().orElseThrow());
 
-        assertEquals(Paper26_2ReplayPacketRewriter.RewriteResult.Decision.SEND, result.decision());
+        assertEquals(dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketRewriteResult.Decision.SEND, result.decision());
         assertEquals(rewriter.mapEntityId(17), rewritten.getId());
         assertEquals(rewriter.mapUuid(RECORDED_ID), rewritten.getUUID());
         assertNotEquals(original.getId(), rewritten.getId());
@@ -70,12 +70,12 @@ final class Paper26_2ReplayPacketRewriterTest {
                 17, ClientboundAnimatePacket.MAGIC_CRITICAL_HIT);
         PacketDescriptor animationDescriptor = animateDescriptor();
         PacketCodec<Object> animationCodec = codec(animation);
-        Paper26_2ReplayPacketRewriter.RewriteResult animationResult = rewriter.rewrite(
+        dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketRewriteResult animationResult = rewriter.rewrite(
                 new RawPacketFrame(1L, 1L, 0, PacketPhase.PLAY, 2, new byte[] {1}),
                 animationDescriptor,
                 animationCodec);
         ClientboundAnimatePacket rewrittenAnimation = assertInstanceOf(
-                ClientboundAnimatePacket.class, animationResult.packet());
+                ClientboundAnimatePacket.class, animationResult.packet().orElseThrow());
 
         assertEquals(rewritten.getId(), rewrittenAnimation.getId());
         assertEquals(animation.getAction(), rewrittenAnimation.getAction());
@@ -112,15 +112,15 @@ final class Paper26_2ReplayPacketRewriterTest {
         AtomicInteger decodes = new AtomicInteger();
         PacketCodec<Object> codec = failingViewerLocalCodec(decodes);
 
-        Paper26_2ReplayPacketRewriter.RewriteResult result = rewriter.rewrite(
+        dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketRewriteResult result = rewriter.rewrite(
                 new RawPacketFrame(2L, 2L, 0, PacketPhase.PLAY, 3, new byte[0]),
                 awardStatsDescriptor(),
                 codec);
 
         assertEquals(
-                Paper26_2ReplayPacketRewriter.RewriteResult.Decision.DROP_LOCAL,
+                dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketRewriteResult.Decision.DROP_LOCAL,
                 result.decision());
-        assertNull(result.packet());
+        assertTrue(result.packet().isEmpty());
         assertEquals(
                 "recorded connection state does not belong to the observer",
                 result.reason());

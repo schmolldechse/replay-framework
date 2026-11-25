@@ -158,12 +158,11 @@ Shared classes in `paper-common` (new package `adapter.paper.channel`,
 | `ClientboundTap` (done) | PacketEvents listener in `Paper26_2CaptureBridge` | per player channel, before `packet_handler`; hands packet objects to capture |
 | `ServerboundTap` | `Paper26_2ServerboundReceiver` | per player channel, before `packet_handler` |
 | `ReplayChannelWriter` (done) | `PacketEventsReplayWriter` | writes encoded replay packets from an anchor behind `compress` |
-| `ViewerGate` | `ReplayViewerOutboundGate` | suppresses conflicting live scene packets by definition |
 | `PaperCaptureBridge` (done) | `Paper26_2CaptureBridge` | taps, capture order, Argus publishing, definitions, failures |
 | `CaptureOrder`, `CaptureStateIndex` (done) | `Paper26_2CaptureOrder`, `Paper26_2AuthoritativeStateIndex` | unchanged, moved |
-| `PaperPlaybackBridge` | `Paper26_2PlaybackBridge` | lifecycle and wiring only |
-| `ViewerOutboundQueue` | part of `Paper26_2PlaybackBridge` | batching, per-turn limit, idle waiters, discard |
-| `ViewFilter` | part of `Paper26_2PlaybackBridge` | viewed world, which frames apply |
+| `PaperPlaybackBridge` (done) | `Paper26_2PlaybackBridge` | lifecycle, frame pipeline, world filter, queries |
+| `ViewerOutboundQueue` (done) | part of `Paper26_2PlaybackBridge` | batching, per-turn limit, idle waiters, discard |
+| `ViewerGate` (done) | `ReplayViewerOutboundGate` | classifies live packet objects (D2) |
 | `CheckpointAssembler` | `Paper26_2CheckpointEncoder` | ordering, validation and encoding of checkpoint packets |
 
 Hooks the version module implements:
@@ -171,10 +170,8 @@ Hooks the version module implements:
 | Hook | Provides |
 |---|---|
 | `CaptureHooks` (done, `Paper26_2CaptureHooks`) | capture: registry, definitions, Argus platform, server tick, connection identity, unbundling, encoding of sent, observed and state packets, Paper's connection hook, the version's own handlers |
-| `PaperProtocol` | playback: native packet ↔ definition, encode, decode a frame |
-| `PaperConnections` | playback: the channel and identity of the viewer |
+| `PlaybackHooks` (done, `Paper26_2PlaybackHooks`) | playback: the viewer's channel and the `ViewerParts` of a viewer: codec, live classification, `ViewerRewriter`, `ViewResetter`, `ViewerScene`, interaction handler |
 | `SnapshotSource` | the native packets of a checkpoint for a coverage |
-| `ViewerScene` | entity, player and container queries and state decoding, fed by played frames |
 
 Order of work, each step compiling and tested: (1) hooks and channel
 handlers, PacketEvents removed; (2) shared capture bridge; (3) shared playback
@@ -187,4 +184,11 @@ Status:
   `CaptureStateIndex` in `adapter.paper.capture`; the 26.2 module keeps only
   `Paper26_2CaptureHooks` (180 lines instead of the 560-line bridge). The two
   constructors without a plugin were dead and are gone. Full build green,
-  waiting for the in-game check.
+  committed (`4bf611d`).
+- Step 3 implemented: `PaperPlaybackBridge`, `ViewerOutboundQueue`,
+  `ViewerGate` and the interfaces `PlaybackHooks`, `ViewerParts`,
+  `ViewerRewriter`, `ViewResetter`, `ViewerScene` in `adapter.paper.playback`.
+  The 26.2 module keeps `Paper26_2PlaybackHooks` and `Paper26_2ViewerScene`
+  (310 lines) instead of the 720-line bridge; rewriter, resetter, trackers and
+  decoders implement the interfaces. Checked in game (replay `aab662ec`),
+  committed.

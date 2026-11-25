@@ -19,7 +19,8 @@ import net.minecraft.world.entity.EntityType;
  * Version-local dispatch boundary that routes recorded frames through the
  * packet catalog. It never decodes or encodes blocked control packets.
  */
-public final class Paper26_2ReplayPacketRewriter {
+public final class Paper26_2ReplayPacketRewriter
+        implements dev.voldechse.replayframework.adapter.paper.playback.ViewerRewriter {
 
     private final ReplayIdentityMap identities;
     private final Map<Integer, EntityType<?>> recordedEntityTypes = new HashMap<>();
@@ -34,7 +35,8 @@ public final class Paper26_2ReplayPacketRewriter {
                 Objects.requireNonNull(reservedEntityIds, "reservedEntityIds"));
     }
 
-    RewriteResult rewrite(
+    @Override
+    public PacketRewriteResult rewrite(
             RawPacketFrame frame,
             PacketDescriptor descriptor,
             PacketCodec<Object> codec) {
@@ -45,10 +47,11 @@ public final class Paper26_2ReplayPacketRewriter {
                         descriptor,
                         Objects.requireNonNull(codec, "codec"),
                         this);
-        return toRewriteResult(result);
+        return result;
     }
 
-    PacketCodec.EncodedPacket encode(
+    @Override
+    public PacketCodec.EncodedPacket encode(
             Object rebuiltPacket,
             PacketDescriptor descriptor,
             PacketCodec<Object> codec) {
@@ -72,6 +75,7 @@ public final class Paper26_2ReplayPacketRewriter {
 
     /** Records the Paper entity type needed to interpret type-dependent metadata values. */
     /** Returns the recorded runtime ID behind a replay entity ID, when the replay uses it. */
+    @Override
     public java.util.OptionalInt recordedEntityId(int replayId) {
         return identities.recordedEntityId(replayId);
     }
@@ -90,62 +94,16 @@ public final class Paper26_2ReplayPacketRewriter {
         recordedEntityTypes.remove(recordedId);
     }
 
-    void clear() {
+    @Override
+    public void clear() {
         identities.clear();
         recordedEntityTypes.clear();
     }
 
-    void resetView() {
+    @Override
+    public void resetView() {
         // Keep deterministic ID mappings for this playback session, but forget metadata types
         // because the next checkpoint snapshot rebuilds the viewer's entity set from scratch.
         recordedEntityTypes.clear();
-    }
-
-    private static RewriteResult toRewriteResult(PacketRewriteResult result) {
-        return switch (result.decision()) {
-            case SEND -> RewriteResult.send(
-                    result.packet().orElseThrow(), result.outputPacketId());
-            case DROP_LOCAL -> RewriteResult.dropLocal(result.reason());
-            case FAIL -> RewriteResult.fail(result.reason());
-        };
-    }
-
-    /** Result of the version-bound packet dispatch step. */
-    record RewriteResult(
-            Decision decision,
-            Object packet,
-            Optional<Integer> outputPacketId,
-            String reason) {
-        RewriteResult {
-            Objects.requireNonNull(decision, "decision");
-            Objects.requireNonNull(outputPacketId, "outputPacketId");
-            if (decision == Decision.SEND) {
-                Objects.requireNonNull(packet, "packet");
-            } else if (packet != null) {
-                throw new IllegalArgumentException("non-send rewrite result must not carry a packet");
-            }
-            if (decision != Decision.SEND && outputPacketId.isPresent()) {
-                throw new IllegalArgumentException("non-send rewrite result must not declare output ID");
-            }
-            Objects.requireNonNull(reason, "reason");
-        }
-
-        static RewriteResult fail(String reason) {
-            return new RewriteResult(Decision.FAIL, null, Optional.empty(), reason);
-        }
-
-        static RewriteResult send(Object packet, Optional<Integer> outputPacketId) {
-            return new RewriteResult(Decision.SEND, packet, outputPacketId, "send");
-        }
-
-        static RewriteResult dropLocal(String reason) {
-            return new RewriteResult(Decision.DROP_LOCAL, null, Optional.empty(), reason);
-        }
-
-        enum Decision {
-            SEND,
-            DROP_LOCAL,
-            FAIL
-        }
     }
 }

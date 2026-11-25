@@ -105,7 +105,7 @@ opening the subject.
 flowchart TB
     subgraph outbound["Outbound to the viewer"]
         direction LR
-        live["Live server packets"] --> gate["ReplayViewerOutboundGate<br/>drops conflicting scene packets"]
+        live["Live server packets"] --> gate["ViewerGate<br/>drops conflicting scene packets"]
         gate --> enc["Paper encoder"]
         frame["Replay frame"] --> rw["Paper26_2ReplayPacketRewriter<br/>definition policy, ID rewrite"]
         rw --> writer["ReplayChannelWriter<br/>written behind<br/>compression"]
@@ -122,10 +122,13 @@ flowchart TB
 
 | Class | Responsibility |
 |---|---|
-| `Paper26_2PlaybackBridge` | the session's bridge: batching, bounded outbound processing, world filter, scene and state queries |
+| `PaperPlaybackBridge` (shared) | the session's bridge: lifecycle, the frame pipeline (registry decision, scene, world filter, rewrite, write) and the queries; version parts come from `Paper26_2PlaybackHooks` |
+| `ViewerOutboundQueue` (shared) | runs frames and resets in order on the connection's event loop, at most 128 per turn, with one flush per turn and waiters for an idle queue |
 | `Paper26_2ReplayPacketRewriter` | applies each definition's playback policy and rewrites entity IDs and UUIDs into a session-local identity space |
 | `ReplayChannelWriter` (shared) | writes encoded replay packets from an anchor behind `compress` (or `prepender`), skipping the gate, the clientbound tap and the server's encoder, but keeping compression, framing and encryption |
-| `ReplayViewerOutboundGate` | suppresses live scene packets that would conflict with the replay; passes the viewer's own chunk cache center and radius |
+| `ViewerGate` (shared) | suppresses live scene packets that would conflict with the replay; classifies the packet object by its definition, without encoding it; passes the viewer's own state and user interface |
+| `Paper26_2PlaybackHooks` | the 26.2 parts of a viewer: live codec, classification of live packets by type, rewriter, resetter, scene, interaction handler |
+| `Paper26_2ViewerScene` | the entity tracker, container positions, state decoders and observer anchors of a viewer |
 | `Paper26_2ViewResetter` | removes replay-owned boss bars, tab entries, entities and block cracks on reset and close |
 | `Paper26_2SceneEntityTracker` | keeps type, position, name, health, equipment, effects and flags of every replay entity from the frames played |
 | `Paper26_2SubjectStateDecoder` | decodes a state track's packets into a `SubjectState` |

@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class Paper26_2PlaybackBridgeTest {
+class PlaybackFrameDecisionsTest {
 
     @Test
     void routesViewerLocalTitleClearingOnlyThroughLivePolicyBoundary() {
@@ -41,9 +41,9 @@ class Paper26_2PlaybackBridgeTest {
         assertEquals(
                 PacketDescriptor.PlaybackScope.VIEWER_LOCAL,
                 descriptor.playbackScope());
-        assertTrue(Paper26_2PlaybackBridge.shouldReplay(
+        assertTrue(dev.voldechse.replayframework.adapter.paper.playback.PaperPlaybackBridge.shouldReplay(
                 clearTitles, PlaybackEmissionMode.LIVE, registry));
-        assertFalse(Paper26_2PlaybackBridge.shouldReplay(
+        assertFalse(dev.voldechse.replayframework.adapter.paper.playback.PaperPlaybackBridge.shouldReplay(
                 clearTitles, PlaybackEmissionMode.RECONSTRUCTION, registry));
     }
 
@@ -71,9 +71,9 @@ class Paper26_2PlaybackBridgeTest {
             assertEquals(
                     PacketDescriptor.PlaybackScope.VIEWER_LOCAL,
                     descriptor.playbackScope());
-            assertTrue(Paper26_2PlaybackBridge.shouldReplay(
+            assertTrue(dev.voldechse.replayframework.adapter.paper.playback.PaperPlaybackBridge.shouldReplay(
                     commandPacket, PlaybackEmissionMode.LIVE, registry));
-            assertFalse(Paper26_2PlaybackBridge.shouldReplay(
+            assertFalse(dev.voldechse.replayframework.adapter.paper.playback.PaperPlaybackBridge.shouldReplay(
                     commandPacket, PlaybackEmissionMode.RECONSTRUCTION, registry));
         }
     }
@@ -98,9 +98,9 @@ class Paper26_2PlaybackBridgeTest {
             assertEquals(
                     PacketDescriptor.PlaybackScope.VIEWER_LOCAL,
                     descriptor.playbackScope());
-            assertTrue(Paper26_2PlaybackBridge.shouldReplay(
+            assertTrue(dev.voldechse.replayframework.adapter.paper.playback.PaperPlaybackBridge.shouldReplay(
                     containerPacket, PlaybackEmissionMode.LIVE, registry));
-            assertFalse(Paper26_2PlaybackBridge.shouldReplay(
+            assertFalse(dev.voldechse.replayframework.adapter.paper.playback.PaperPlaybackBridge.shouldReplay(
                     containerPacket, PlaybackEmissionMode.RECONSTRUCTION, registry));
         }
     }
@@ -120,9 +120,9 @@ class Paper26_2PlaybackBridgeTest {
         assertTrue(descriptor.replayable());
         assertTrue(descriptor.checkpointRelevant());
         assertEquals(PacketDescriptor.PlaybackScope.SAFE, descriptor.playbackScope());
-        assertTrue(Paper26_2PlaybackBridge.shouldReplay(
+        assertTrue(dev.voldechse.replayframework.adapter.paper.playback.PaperPlaybackBridge.shouldReplay(
                 chunksBiomes, PlaybackEmissionMode.LIVE, registry));
-        assertTrue(Paper26_2PlaybackBridge.shouldReplay(
+        assertTrue(dev.voldechse.replayframework.adapter.paper.playback.PaperPlaybackBridge.shouldReplay(
                 chunksBiomes, PlaybackEmissionMode.RECONSTRUCTION, registry));
     }
 
@@ -144,9 +144,9 @@ class Paper26_2PlaybackBridgeTest {
             assertFalse(descriptor.replayable());
             assertFalse(descriptor.checkpointRelevant());
             assertEquals(PacketDescriptor.PlaybackScope.UNSAFE, descriptor.playbackScope());
-            assertFalse(Paper26_2PlaybackBridge.shouldReplay(
+            assertFalse(dev.voldechse.replayframework.adapter.paper.playback.PaperPlaybackBridge.shouldReplay(
                     marker, PlaybackEmissionMode.LIVE, registry));
-            assertFalse(Paper26_2PlaybackBridge.shouldReplay(
+            assertFalse(dev.voldechse.replayframework.adapter.paper.playback.PaperPlaybackBridge.shouldReplay(
                     marker, PlaybackEmissionMode.RECONSTRUCTION, registry));
         }
     }
@@ -167,9 +167,9 @@ class Paper26_2PlaybackBridgeTest {
         assertEquals(
                 PacketDescriptor.PlaybackScope.VIEWER_LOCAL,
                 descriptor.playbackScope());
-        assertTrue(Paper26_2PlaybackBridge.shouldReplay(
+        assertTrue(dev.voldechse.replayframework.adapter.paper.playback.PaperPlaybackBridge.shouldReplay(
                 changeDifficulty, PlaybackEmissionMode.LIVE, registry));
-        assertFalse(Paper26_2PlaybackBridge.shouldReplay(
+        assertFalse(dev.voldechse.replayframework.adapter.paper.playback.PaperPlaybackBridge.shouldReplay(
                 changeDifficulty, PlaybackEmissionMode.RECONSTRUCTION, registry));
     }
 
@@ -189,9 +189,9 @@ class Paper26_2PlaybackBridgeTest {
         assertEquals(
                 PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES,
                 descriptor.playbackScope());
-        assertTrue(Paper26_2PlaybackBridge.shouldReplay(
+        assertTrue(dev.voldechse.replayframework.adapter.paper.playback.PaperPlaybackBridge.shouldReplay(
                 bossEvent, PlaybackEmissionMode.LIVE, registry));
-        assertTrue(Paper26_2PlaybackBridge.shouldReplay(
+        assertTrue(dev.voldechse.replayframework.adapter.paper.playback.PaperPlaybackBridge.shouldReplay(
                 bossEvent, PlaybackEmissionMode.RECONSTRUCTION, registry));
     }
 
@@ -208,9 +208,9 @@ class Paper26_2PlaybackBridgeTest {
         assertEquals("play.clientbound.minecraft:block_update", descriptor.typeName());
         assertTrue(descriptor.replayable());
         assertTrue(descriptor.checkpointRelevant());
-        assertTrue(Paper26_2PlaybackBridge.shouldReplay(
+        assertTrue(dev.voldechse.replayframework.adapter.paper.playback.PaperPlaybackBridge.shouldReplay(
                 blockUpdate, PlaybackEmissionMode.LIVE, registry));
-        assertTrue(Paper26_2PlaybackBridge.shouldReplay(
+        assertTrue(dev.voldechse.replayframework.adapter.paper.playback.PaperPlaybackBridge.shouldReplay(
                 blockUpdate, PlaybackEmissionMode.RECONSTRUCTION, registry));
     }
 
@@ -227,9 +227,9 @@ class Paper26_2PlaybackBridgeTest {
         assertEquals("play.clientbound.minecraft:block_event", descriptor.typeName());
         assertTrue(descriptor.replayable());
         assertFalse(descriptor.checkpointRelevant());
-        assertTrue(Paper26_2PlaybackBridge.shouldReplay(
+        assertTrue(dev.voldechse.replayframework.adapter.paper.playback.PaperPlaybackBridge.shouldReplay(
                 blockEvent, PlaybackEmissionMode.LIVE, registry));
-        assertFalse(Paper26_2PlaybackBridge.shouldReplay(
+        assertFalse(dev.voldechse.replayframework.adapter.paper.playback.PaperPlaybackBridge.shouldReplay(
                 blockEvent, PlaybackEmissionMode.RECONSTRUCTION, registry));
     }
 
@@ -246,9 +246,9 @@ class Paper26_2PlaybackBridgeTest {
         assertEquals("play.clientbound.minecraft:block_entity_data", descriptor.typeName());
         assertTrue(descriptor.replayable());
         assertTrue(descriptor.checkpointRelevant());
-        assertTrue(Paper26_2PlaybackBridge.shouldReplay(
+        assertTrue(dev.voldechse.replayframework.adapter.paper.playback.PaperPlaybackBridge.shouldReplay(
                 blockEntityData, PlaybackEmissionMode.LIVE, registry));
-        assertTrue(Paper26_2PlaybackBridge.shouldReplay(
+        assertTrue(dev.voldechse.replayframework.adapter.paper.playback.PaperPlaybackBridge.shouldReplay(
                 blockEntityData, PlaybackEmissionMode.RECONSTRUCTION, registry));
     }
 
@@ -265,9 +265,9 @@ class Paper26_2PlaybackBridgeTest {
         assertEquals("play.clientbound.minecraft:block_destruction", descriptor.typeName());
         assertTrue(descriptor.replayable());
         assertFalse(descriptor.checkpointRelevant());
-        assertTrue(Paper26_2PlaybackBridge.shouldReplay(
+        assertTrue(dev.voldechse.replayframework.adapter.paper.playback.PaperPlaybackBridge.shouldReplay(
                 blockDestruction, PlaybackEmissionMode.LIVE, registry));
-        assertFalse(Paper26_2PlaybackBridge.shouldReplay(
+        assertFalse(dev.voldechse.replayframework.adapter.paper.playback.PaperPlaybackBridge.shouldReplay(
                 blockDestruction, PlaybackEmissionMode.RECONSTRUCTION, registry));
     }
 
@@ -283,9 +283,9 @@ class Paper26_2PlaybackBridgeTest {
 
         assertEquals("play.clientbound.minecraft:block_changed_ack", descriptor.typeName());
         assertFalse(descriptor.replayable());
-        assertFalse(Paper26_2PlaybackBridge.shouldReplay(
+        assertFalse(dev.voldechse.replayframework.adapter.paper.playback.PaperPlaybackBridge.shouldReplay(
                 acknowledgement, PlaybackEmissionMode.LIVE, registry));
-        assertFalse(Paper26_2PlaybackBridge.shouldReplay(
+        assertFalse(dev.voldechse.replayframework.adapter.paper.playback.PaperPlaybackBridge.shouldReplay(
                 acknowledgement, PlaybackEmissionMode.RECONSTRUCTION, registry));
     }
 
@@ -297,11 +297,11 @@ class Paper26_2PlaybackBridgeTest {
         RawPacketFrame durable = frame(7);
         RawPacketFrame transientFrame = frame(8);
 
-        assertTrue(Paper26_2PlaybackBridge.shouldReplay(
+        assertTrue(dev.voldechse.replayframework.adapter.paper.playback.PaperPlaybackBridge.shouldReplay(
                 durable, PlaybackEmissionMode.RECONSTRUCTION, registry));
-        assertFalse(Paper26_2PlaybackBridge.shouldReplay(
+        assertFalse(dev.voldechse.replayframework.adapter.paper.playback.PaperPlaybackBridge.shouldReplay(
                 transientFrame, PlaybackEmissionMode.RECONSTRUCTION, registry));
-        assertTrue(Paper26_2PlaybackBridge.shouldReplay(
+        assertTrue(dev.voldechse.replayframework.adapter.paper.playback.PaperPlaybackBridge.shouldReplay(
                 transientFrame, PlaybackEmissionMode.LIVE, registry));
     }
 
@@ -351,7 +351,7 @@ class Paper26_2PlaybackBridgeTest {
                 new RawPacketFrame(0L, 0L, 2, PacketPhase.PLAY, 7, new byte[] {1}),
                 new RawPacketFrame(0L, 0L, 3, PacketPhase.PLAY, 7, new byte[] {2}));
 
-        List<ObserverAnchor> anchors = Paper26_2PlaybackBridge.observerAnchors(
+        List<ObserverAnchor> anchors = Paper26_2ViewerScene.observerAnchors(
                 frames, registry, codec);
 
         assertEquals(2, anchors.size());

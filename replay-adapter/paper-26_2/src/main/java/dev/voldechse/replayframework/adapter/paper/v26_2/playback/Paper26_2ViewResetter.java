@@ -39,7 +39,7 @@ import net.minecraft.world.scores.DisplaySlot;
  * Paper-26.2 packets. The writer is owned by the bridge and validates each
  * generated packet against the active transport registry before sending it.
  */
-final class Paper26_2ViewResetter {
+final class Paper26_2ViewResetter implements dev.voldechse.replayframework.adapter.paper.playback.ViewResetter {
 
     private final PacketRegistry registry;
     private final Consumer<Object> writer;
@@ -57,7 +57,8 @@ final class Paper26_2ViewResetter {
     }
 
     /** Observes one successfully decoded and planned replay packet. */
-    void observe(Object packet) {
+    @Override
+    public void observe(Object packet) {
         Objects.requireNonNull(packet, "packet");
 
         if (packet instanceof net.minecraft.network.protocol.game.ClientboundBlockDestructionPacket crack) {
@@ -147,7 +148,8 @@ final class Paper26_2ViewResetter {
      * Sends a deterministic clear sequence. State is cleared only after all
      * writes have been accepted by the bridge writer.
      */
-    void reset() {
+    @Override
+    public void reset() {
         List<Object> packets = new ArrayList<>();
         addBlockCrackRemovals(packets);
         addEntityRemoval(packets);
@@ -191,7 +193,8 @@ final class Paper26_2ViewResetter {
      * before closing would lose the live chunks at the same positions. The
      * world change the integration performs replaces them anyway.</p>
      */
-    void detach() {
+    @Override
+    public void detach() {
         List<Object> packets = new ArrayList<>();
         addBlockCrackRemovals(packets);
         addEntityRemoval(packets);
