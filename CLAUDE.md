@@ -220,8 +220,12 @@ Phase 2 status:
   `blockState`; a later route replaces an earlier one. `worldWide()` remains
   as a derived query for the scope filter and the recipient-copy merger.
   `RecordingSegmentAppender` picks track and frame world with a `switch`.
-  Checked in game (replay `4068e3d8`), committed.
+  Checked in game (replay `4068e3d8`), committed (`7f3fcbc`).
 
-Fixes found while testing phase 1, outside the plan: viewer worlds without
-blocks (`d0c3bc9`), checkpoint-only tracks accepted by the finalizer
-(`cae1d7f`), relative movement replayed during seeks (`165d817`).
+Fixes found while testing, outside the plan: viewer worlds without blocks
+(`d0c3bc9`), checkpoint-only tracks accepted by the finalizer (`cae1d7f`),
+relative movement replayed during seeks (`165d817`), capture tap installed on
+join for connections opened during server start (phase 2).
+
+Feature requests found while testing are GitHub issues, for example team
+replay (#15), planned after the modularization and the 26.3 adapter.

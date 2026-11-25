@@ -28,6 +28,10 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.UnaryOperator;
 import net.kyori.adventure.key.Key;
 import org.bukkit.Bukkit;
+import org.bukkit.event.EventPriority;
+import org.bukkit.event.HandlerList;
+import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
@@ -80,6 +84,9 @@ public final class PaperCaptureBridge implements CaptureBridge {
     };
 
     private volatile BukkitTask argusTask;
+    /** Installs the handlers on connections that opened before Paper's connection hook was watched. */
+    private final Listener joinListener = new Listener() {
+    };
     private volatile CaptureBridge.PacketSink sink;
     private volatile CaptureBridge.FailureHandler failureHandler;
 
@@ -350,12 +357,30 @@ public final class PaperCaptureBridge implements CaptureBridge {
      * Installs the clientbound tap and the version's handlers on every player
      * connection, present and future. None of them changes, drops or delays
      * a packet.
+     *
+     * <p>Three paths cover every connection: the players online now, the
+     * connections Paper opens from now on, and every player who joins. The
+     * last catches connections that opened before the hook was watched but
+     * were still logging in, such as clients reconnecting while the server
+     * starts. Installing twice on one channel does nothing.</p>
      */
     private void installChannelHandlers() {
         hooks.watchConnections(this::installChannelHandlers);
+        Bukkit.getPluginManager().registerEvent(
+                PlayerJoinEvent.class, joinListener, EventPriority.MONITOR,
+                (listener, event) -> installChannelHandlers(((PlayerJoinEvent) event).getPlayer()),
+                owner, false);
         for (Player player : Bukkit.getOnlinePlayers()) {
+            installChannelHandlers(player);
+        }
+    }
+
+    private void installChannelHandlers(Player player) {
+        try {
             Channel channel = hooks.channel(player);
             channel.eventLoop().execute(() -> installChannelHandlers(channel));
+        } catch (Throwable failure) {
+            fail(failure);
         }
     }
 
@@ -374,6 +399,7 @@ public final class PaperCaptureBridge implements CaptureBridge {
 
     private void uninstallChannelHandlers() {
         hooks.stopWatchingConnections();
+        HandlerList.unregisterAll(joinListener);
         try {
             for (Player player : Bukkit.getOnlinePlayers()) {
                 Channel channel = hooks.channel(player);
