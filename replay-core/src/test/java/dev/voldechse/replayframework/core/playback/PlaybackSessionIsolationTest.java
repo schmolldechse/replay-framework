@@ -507,7 +507,9 @@ final class PlaybackSessionIsolationTest {
                 Runnable::run,
                 Runnable::run,
                 new PlaybackCoordinator(),
-                dispatcher);
+                dispatcher,
+                new dev.voldechse.replayframework.core.diagnostics.ReplayDiagnostics(),
+                (viewer, candidates) -> CompletableFuture.completedFuture(null));
     }
 
     private static org.bukkit.entity.Player viewer(UUID viewerId) {

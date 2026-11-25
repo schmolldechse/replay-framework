@@ -60,8 +60,8 @@ public interface CheckpointEncoder {
             long recordingStartCaptureTimeNanos) {
 
         /**
-         * Compatibility constructor for initial checkpoints and external
-         * adapters that do not yet report an actual capture barrier.
+         * Creates a request before the recording has a start time, as for the
+         * initial checkpoint, whose capture defines that start.
          */
         public CheckpointRequest(
                 RecordingScope scope,
@@ -179,8 +179,6 @@ public interface CheckpointEncoder {
         /** Initial state before the first captured delta. */
         INITIAL,
         /** Periodic state used to bound seek reconstruction. */
-        PERIODIC,
-        /** State required after a dimension transition. */
-        DIMENSION_CHANGE
+        PERIODIC
     }
 }

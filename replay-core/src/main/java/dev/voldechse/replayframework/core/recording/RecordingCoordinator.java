@@ -1,7 +1,6 @@
 package dev.voldechse.replayframework.core.recording;
 
 import com.google.gson.JsonObject;
-import com.google.inject.Inject;
 import dev.voldechse.replayframework.adapter.AdapterDescriptor;
 import dev.voldechse.replayframework.adapter.CheckpointEncoder;
 import dev.voldechse.replayframework.adapter.ReplayAdapter;
@@ -64,78 +63,6 @@ public final class RecordingCoordinator {
     private final AtomicBoolean closed = new AtomicBoolean();
     private final AtomicBoolean adapterFailed = new AtomicBoolean();
 
-    @Inject
-    RecordingCoordinator(
-            ReplayAdapter adapter,
-            CaptureRouter captureRouter,
-            ReplayRepository replayRepository,
-            ScopeResolver scopeResolver,
-            RecordingTarget recordingTarget,
-            FinalizationHandler finalizationHandler,
-            RecordingLeaseManager leaseManager,
-            Executor initializationExecutor,
-            ReplayDiagnostics diagnostics) {
-        this(
-                adapter,
-                captureRouter,
-                replayRepository,
-                scopeResolver,
-                recordingTarget,
-                finalizationHandler,
-                leaseManager,
-                initializationExecutor,
-                ignored -> {
-                },
-                diagnostics);
-    }
-
-    /** Compatibility constructor for isolated compositions without events. */
-    RecordingCoordinator(
-            ReplayAdapter adapter,
-            CaptureRouter captureRouter,
-            ReplayRepository replayRepository,
-            ScopeResolver scopeResolver,
-            RecordingTarget recordingTarget,
-            FinalizationHandler finalizationHandler,
-            RecordingLeaseManager leaseManager,
-            Executor initializationExecutor) {
-        this(
-                adapter,
-                captureRouter,
-                replayRepository,
-                scopeResolver,
-                recordingTarget,
-                finalizationHandler,
-                leaseManager,
-                initializationExecutor,
-                ignored -> {
-                },
-                new ReplayDiagnostics());
-    }
-
-    RecordingCoordinator(
-            ReplayAdapter adapter,
-            CaptureRouter captureRouter,
-            ReplayRepository replayRepository,
-            ScopeResolver scopeResolver,
-            RecordingTarget recordingTarget,
-            FinalizationHandler finalizationHandler,
-            RecordingLeaseManager leaseManager,
-            Executor initializationExecutor,
-            Consumer<ReplayEventPublisher.ReplayEvent> eventSink) {
-        this(
-                adapter,
-                captureRouter,
-                replayRepository,
-                scopeResolver,
-                recordingTarget,
-                finalizationHandler,
-                leaseManager,
-                initializationExecutor,
-                eventSink,
-                new ReplayDiagnostics());
-    }
-
     RecordingCoordinator(
             ReplayAdapter adapter,
             CaptureRouter captureRouter,
@@ -158,29 +85,6 @@ public final class RecordingCoordinator {
                 initializationExecutor, "initializationExecutor");
         this.eventSink = Objects.requireNonNull(eventSink, "eventSink");
         this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics");
-    }
-
-    /** Compatibility constructor for isolated pre-lease test compositions. */
-    RecordingCoordinator(
-            ReplayAdapter adapter,
-            CaptureRouter captureRouter,
-            ReplayRepository replayRepository,
-            ScopeResolver scopeResolver,
-            RecordingTarget recordingTarget,
-            FinalizationHandler finalizationHandler,
-            Executor initializationExecutor) {
-        this.adapter = Objects.requireNonNull(adapter, "adapter");
-        this.captureRouter = Objects.requireNonNull(captureRouter, "captureRouter");
-        this.replayRepository = Objects.requireNonNull(replayRepository, "replayRepository");
-        this.scopeResolver = Objects.requireNonNull(scopeResolver, "scopeResolver");
-        this.recordingTarget = Objects.requireNonNull(recordingTarget, "recordingTarget");
-        this.finalizationHandler = Objects.requireNonNull(finalizationHandler, "finalizationHandler");
-        this.leaseManager = null;
-        this.initializationExecutor = Objects.requireNonNull(
-                initializationExecutor, "initializationExecutor");
-        this.eventSink = ignored -> {
-        };
-        this.diagnostics = new ReplayDiagnostics();
     }
 
     /** Starts one isolated recording without blocking the caller. */
@@ -474,29 +378,24 @@ public final class RecordingCoordinator {
                     "server shutdown", new IllegalStateException("recording runtime is stopping"));
             return;
         }
-        if (leaseManager != null) {
-            final CompletionStage<dev.voldechse.replayframework.core.port.LeaseRepository.LeaseRow>
-                    leaseStage;
-            try {
-                leaseStage = Objects.requireNonNull(
-                        leaseManager.acquire(replayId, this::onLeaseLost),
-                        "lease manager acquire result");
-            } catch (Throwable failure) {
-                failInitialization(replayId, result, ReplayFailureCode.DATABASE_ERROR,
-                        "recording lease", failure);
-                return;
-            }
-            leaseStage.whenCompleteAsync((ignored, leaseFailure) -> {
-                if (leaseFailure != null) {
-                    failInitialization(replayId, result, ReplayFailureCode.DATABASE_ERROR,
-                            "recording lease", unwrap(leaseFailure));
-                    return;
-                }
-                initializeAfterLease(request, sessionId, replayId, result);
-            }, initializationExecutor);
+        final CompletionStage<dev.voldechse.replayframework.core.port.LeaseRepository.LeaseRow> leaseStage;
+        try {
+            leaseStage = Objects.requireNonNull(
+                    leaseManager.acquire(replayId, this::onLeaseLost),
+                    "lease manager acquire result");
+        } catch (Throwable failure) {
+            failInitialization(replayId, result, ReplayFailureCode.DATABASE_ERROR,
+                    "recording lease", failure);
             return;
         }
-        initializeAfterLease(request, sessionId, replayId, result);
+        leaseStage.whenCompleteAsync((ignored, leaseFailure) -> {
+            if (leaseFailure != null) {
+                failInitialization(replayId, result, ReplayFailureCode.DATABASE_ERROR,
+                        "recording lease", unwrap(leaseFailure));
+                return;
+            }
+            initializeAfterLease(request, sessionId, replayId, result);
+        }, initializationExecutor);
     }
 
     private void initializeAfterLease(
@@ -704,13 +603,6 @@ public final class RecordingCoordinator {
     }
 
     private void installAppender(RecordingRequest request, DefaultRecordingSession session) {
-        if (recordingTarget.stagingDirectoryFactory() == null) {
-            // The compatibility target does not provide a staging workspace.
-            // A production composition must supply a validated staging
-            // factory; without it this coordinator deliberately does not
-            // fabricate an artifact path.
-            return;
-        }
         Path workspace = Objects.requireNonNull(
                 recordingTarget.stagingDirectoryFactory().apply(session.replayId()),
                 "stagingDirectoryFactory returned null");
@@ -732,7 +624,6 @@ public final class RecordingCoordinator {
                 session.initialCheckpoint(),
                 request.budget(),
                 scheduler,
-                adapter.checkpointSignals(),
                 session::requestBudgetStop,
                 (code, cause) -> onAppenderFailure(session, code, cause),
                 artifacts -> onAppenderSealed(session, artifacts));
@@ -976,9 +867,6 @@ public final class RecordingCoordinator {
     }
 
     private void releaseLeaseQuietly(ReplayId replayId) {
-        if (leaseManager == null) {
-            return;
-        }
         try {
             leaseManager.release(replayId).whenComplete((ignored, failure) -> {
                 // Failure persistence is handled by the owning terminal path.
@@ -1070,16 +958,10 @@ public final class RecordingCoordinator {
             ReplayStorageBackend storageBackend,
             Function<ReplayId, String> storageKeyFactory,
             Function<ReplayId, Path> stagingDirectoryFactory) {
-        /** Compatibility composition without a staging workspace. */
-        RecordingTarget(
-                ReplayStorageBackend storageBackend,
-                Function<ReplayId, String> storageKeyFactory) {
-            this(storageBackend, storageKeyFactory, null);
-        }
-
         RecordingTarget {
             Objects.requireNonNull(storageBackend, "storageBackend");
             Objects.requireNonNull(storageKeyFactory, "storageKeyFactory");
+            Objects.requireNonNull(stagingDirectoryFactory, "stagingDirectoryFactory");
         }
     }
 

@@ -97,53 +97,6 @@ final class DefaultPlaybackService implements PlaybackService {
             Executor ioExecutor,
             Executor commandExecutor,
             PlaybackCoordinator coordinator,
-            PlaybackEventDispatcher eventDispatcher) {
-        this(
-                replayRepository,
-                artifactReader,
-                adapter,
-                sharedSegmentCache,
-                indexReader,
-                checkpointReader,
-                segmentReader,
-                ioExecutor,
-                commandExecutor,
-                coordinator,
-                eventDispatcher,
-                new ReplayDiagnostics(),
-                (viewer, candidates) -> CompletableFuture.completedFuture(null));
-    }
-
-    DefaultPlaybackService(
-            ReplayRepository replayRepository,
-            ReplayArtifactReader artifactReader,
-            ReplayAdapter adapter,
-            SegmentCache sharedSegmentCache,
-            ReplayIndexReader indexReader,
-            ReplayCheckpointReader checkpointReader,
-            ReplaySegmentReader segmentReader,
-            Executor ioExecutor,
-            Executor commandExecutor,
-            PlaybackCoordinator coordinator,
-            PlaybackEventDispatcher eventDispatcher,
-            ReplayDiagnostics diagnostics) {
-        this(replayRepository, artifactReader, adapter, sharedSegmentCache, indexReader,
-                checkpointReader, segmentReader, ioExecutor, commandExecutor, coordinator,
-                eventDispatcher, diagnostics,
-                (viewer, candidates) -> CompletableFuture.completedFuture(null));
-    }
-
-    DefaultPlaybackService(
-            ReplayRepository replayRepository,
-            ReplayArtifactReader artifactReader,
-            ReplayAdapter adapter,
-            SegmentCache sharedSegmentCache,
-            ReplayIndexReader indexReader,
-            ReplayCheckpointReader checkpointReader,
-            ReplaySegmentReader segmentReader,
-            Executor ioExecutor,
-            Executor commandExecutor,
-            PlaybackCoordinator coordinator,
             PlaybackEventDispatcher eventDispatcher,
             ReplayDiagnostics diagnostics,
             ObserverPlacementService observerPlacementService) {

@@ -89,9 +89,9 @@ instead of being extension points.
    failures.
 8. `DefaultPlaybackService.prepareSession` is one block of about 130 lines.
 9. Track opening exists twice in `DefaultPlaybackService`.
-10. Dimension-change checkpoints are wired but never emitted (18 references).
-11. Six compatibility or legacy constructors and paths remain.
-12. `CaptureOrigin.PLAYER_VIEW` is carried but no recording accepts it.
+10. (Resolved in phase 3, step 1.) Dimension-change checkpoints are wired but never emitted (18 references).
+11. (Resolved in phase 3, step 1.) Six compatibility or legacy constructors and paths remain.
+12. (Resolved in phase 3, step 1.) `CaptureOrigin.PLAYER_VIEW` is carried but no recording accepts it.
 
 ### Plan
 
@@ -232,7 +232,24 @@ Phase 2 status:
   only turns packets into changes (metadata IDs, movement wire format, item
   and effect conversion) and replaces `Paper26_2SceneEntityTracker` and
   `Paper26_2SceneBlocks`. State decoders and observer anchors stay in
-  `Paper26_2ViewerScene`. Checked in game (replay `55089ed8`), committed.
+  `Paper26_2ViewerScene`. Checked in game (replay `55089ed8`), committed (`00cabf1`).
+
+Phase 3 design (2026-11-25), four steps: (1) dead paths, findings 10 to 12;
+(2) track kinds carry key, role and uniqueness, with `TrackKeys` mapping a
+`TrackRoute` to its track, finding 5; (3) `TrackOpener` and a
+`SessionAssembly` for playback, findings 8 and 9; (4) `TrackSet` and
+`CheckpointBarrierWriter` out of the appender, `RecordingInitialization`,
+`RecordingFailures` and `SceneWatches` out of the coordinator, finding 7.
+
+Phase 3 status:
+- Step 1 implemented: `CheckpointSignalSource`, `CheckpointKind.DIMENSION_CHANGE`
+  and the appender's signal queue are gone. `CaptureOrigin` has `OBSERVER` and
+  `PLAYER_ONLY`; the capture bridge no longer publishes connection packets an
+  eye receives. Compatibility constructors are gone from the coordinator,
+  playback service, appender, `RecordingTarget` (staging is required),
+  `CapturedPacket`, `CapturePacket` and `CaptureContext.unknown()`; the
+  coordinator always takes a lease. Tests use `TestContexts` (adapter API
+  test fixtures) and `TestLeases`. Checked in game (replay `483dba2d`), committed.
 
 Fixes found while testing, outside the plan: viewer worlds without blocks
 (`d0c3bc9`), checkpoint-only tracks accepted by the finalizer (`cae1d7f`),

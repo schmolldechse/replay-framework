@@ -2,7 +2,6 @@ package dev.voldechse.replayframework.adapter.paper.capture;
 
 import dev.voldechse.replayframework.adapter.CaptureBridge;
 import dev.voldechse.replayframework.adapter.CaptureContext;
-import dev.voldechse.replayframework.adapter.CaptureOrigin;
 import dev.voldechse.replayframework.adapter.CaptureSubject;
 import dev.voldechse.replayframework.adapter.CheckpointEncoder;
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
@@ -228,9 +227,6 @@ public final class PaperCaptureBridge implements CaptureBridge {
                 if (definition.worldWide()) {
                     context = context.asWorldWide();
                 }
-                if (!definition.distribution().observable()) {
-                    context = context.withOrigin(CaptureOrigin.PLAYER_ONLY);
-                }
                 if (definition.recipientState().describesRecipient(message)) {
                     // The recipient's own state, such as its health. It
                     // belongs to the recipient's state track.
@@ -238,6 +234,10 @@ public final class PaperCaptureBridge implements CaptureBridge {
                             TrackSubject.player(connectionId), connectionName));
                 }
                 if (definition.suppressesRecipientState(message, captureState, point.serverTick())) {
+                    publish = false;
+                } else if (definition.distribution().observable()) {
+                    // The scene comes from the virtual observers; a connection
+                    // only adds what no observer receives.
                     publish = false;
                 } else if (definition.recordedFromPlayers()) {
                     // Each recording merges the copies other recipients
@@ -323,8 +323,7 @@ public final class PaperCaptureBridge implements CaptureBridge {
         captureOrder.publish(point -> currentSink.accept(new CaptureBridge.CapturePacket(
                 point.captureTimeNanos(), point.serverTick(), point.sequence(),
                 PacketPhase.PLAY, encoded.packetId(), encoded.payload(),
-                definition.captureContext(packet, descriptor, actorConnectionId, captureState, point.serverTick())
-                        .withOrigin(CaptureOrigin.PLAYER_ONLY))));
+                definition.captureContext(packet, descriptor, actorConnectionId, captureState, point.serverTick()))));
     }
 
     private PacketDescriptor descriptor(int packetId) {

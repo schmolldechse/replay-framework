@@ -331,7 +331,10 @@ final class ReplayFinalizerTest {
                             ignored -> workspace),
                     finalizer,
                     leaseManager,
-                    Runnable::run);
+                    Runnable::run,
+                    event -> {
+                    },
+                    new dev.voldechse.replayframework.core.diagnostics.ReplayDiagnostics());
             coordinatorRef.set(coordinator);
         }
 

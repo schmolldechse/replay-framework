@@ -54,7 +54,7 @@ class AbstractReplayAdapterTest {
 
     private ReplayAdapter adapter(String fingerprint, Function<Player, PlaybackBridge> factory) {
         return new AbstractReplayAdapter(new AdapterDescriptor("fixture", 1, 3, fingerprint),
-                registry, capture, checkpoints, CheckpointSignalSource.noop(), factory) {};
+                registry, capture, checkpoints, factory) {};
     }
 
     private static Player viewer() {

@@ -218,9 +218,9 @@ public final class RecordingRuntimeModule extends AbstractModule {
     }
 
     /**
-     * A recording takes its scene from one source: virtual observers when the
-     * adapter places them for its scope, player views otherwise. Packets that
-     * only players receive belong to every recording.
+     * A recording takes its scene from the virtual observers the adapter
+     * places for its scope. Packets no observer receives belong to every
+     * recording.
      */
     static boolean acceptsOrigin(
             boolean observed,
@@ -228,7 +228,6 @@ public final class RecordingRuntimeModule extends AbstractModule {
         return switch (packet.context().origin()) {
             case PLAYER_ONLY -> true;
             case OBSERVER -> observed;
-            case PLAYER_VIEW -> !observed;
         };
     }
 

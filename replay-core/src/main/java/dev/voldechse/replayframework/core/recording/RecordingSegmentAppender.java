@@ -4,7 +4,6 @@ import dev.voldechse.replayframework.adapter.TrackRoute;
 
 import dev.voldechse.replayframework.adapter.CaptureSubject;
 import dev.voldechse.replayframework.adapter.CheckpointEncoder;
-import dev.voldechse.replayframework.adapter.CheckpointSignalSource;
 import dev.voldechse.replayframework.api.recording.ReplayBudget;
 import dev.voldechse.replayframework.api.recording.ReplayCompletionReason;
 import dev.voldechse.replayframework.api.recording.ReplayFailureCode;
@@ -22,9 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Queue;
 import java.util.concurrent.CompletionException;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -44,20 +41,10 @@ final class RecordingSegmentAppender implements AutoCloseable {
     private final ReplayBudget budget;
     private final RecordingBudgetTracker budgetTracker;
     private final CheckpointScheduler checkpointScheduler;
-    private final CheckpointSignalSource checkpointSignals;
     private final Consumer<ReplayCompletionReason> budgetStop;
     private final BiConsumer<ReplayFailureCode, Throwable> failure;
     private final Consumer<RecordingArtifacts> completion;
-    private final Queue<DimensionSignal> dimensionSignals = new ConcurrentLinkedQueue<>();
-    private final CheckpointSignalSource.CheckpointSignalListener signalListener =
-            (captureTimeNanos, serverTick) -> {
-                if (serverTick < 0L) {
-                    return;
-                }
-                dimensionSignals.add(new DimensionSignal(captureTimeNanos, serverTick));
-            };
     private final AtomicBoolean loopStarted = new AtomicBoolean();
-    private final AtomicBoolean signalInstalled = new AtomicBoolean();
     private final AtomicBoolean failureReported = new AtomicBoolean();
     private final AtomicBoolean completionReported = new AtomicBoolean();
     /**
@@ -86,7 +73,6 @@ final class RecordingSegmentAppender implements AutoCloseable {
             ReplayCheckpoint initialCheckpoint,
             ReplayBudget budget,
             CheckpointScheduler checkpointScheduler,
-            CheckpointSignalSource checkpointSignals,
             Consumer<ReplayCompletionReason> budgetStop,
             BiConsumer<ReplayFailureCode, Throwable> failure,
             Consumer<RecordingArtifacts> completion) {
@@ -99,36 +85,9 @@ final class RecordingSegmentAppender implements AutoCloseable {
         this.budgetTracker = new RecordingBudgetTracker(budget);
         this.checkpointScheduler = Objects.requireNonNull(
                 checkpointScheduler, "checkpointScheduler");
-        this.checkpointSignals = Objects.requireNonNull(checkpointSignals, "checkpointSignals");
         this.budgetStop = Objects.requireNonNull(budgetStop, "budgetStop");
         this.failure = Objects.requireNonNull(failure, "failure");
         this.completion = Objects.requireNonNull(completion, "completion");
-    }
-
-    RecordingSegmentAppender(
-            Path workspace,
-            String adapterId,
-            long recordingStartCaptureTimeNanos,
-            SessionPacketQueue queue,
-            ReplayCheckpoint initialCheckpoint,
-            ReplayBudget budget,
-            CheckpointScheduler checkpointScheduler,
-            CheckpointSignalSource checkpointSignals,
-            Consumer<ReplayCompletionReason> budgetStop,
-            BiConsumer<ReplayFailureCode, Throwable> failure) {
-        this(
-                workspace,
-                adapterId,
-                recordingStartCaptureTimeNanos,
-                queue,
-                initialCheckpoint,
-                budget,
-                checkpointScheduler,
-                checkpointSignals,
-                budgetStop,
-                failure,
-                artifacts -> {
-                });
     }
 
     /** Starts this appender on exactly one virtual thread. */
@@ -136,7 +95,6 @@ final class RecordingSegmentAppender implements AutoCloseable {
         if (!loopStarted.compareAndSet(false, true)) {
             throw new IllegalStateException("recording appender was already started");
         }
-        installSignalListener();
         return Thread.startVirtualThread(this::runWriterLoopInternal);
     }
 
@@ -145,7 +103,6 @@ final class RecordingSegmentAppender implements AutoCloseable {
         if (!loopStarted.compareAndSet(false, true)) {
             throw new IllegalStateException("recording appender was already started");
         }
-        installSignalListener();
         runWriterLoopInternal();
     }
 
@@ -154,7 +111,6 @@ final class RecordingSegmentAppender implements AutoCloseable {
         try {
             initializeArtifacts();
             while (true) {
-                processDimensionSignals();
                 Optional<CapturedPacket> next;
                 if (deferredPacket != null) {
                     next = Optional.of(deferredPacket);
@@ -167,7 +123,6 @@ final class RecordingSegmentAppender implements AutoCloseable {
                 }
                 processPacket(next.orElseThrow());
             }
-            processDimensionSignals();
             seal();
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
@@ -216,7 +171,6 @@ final class RecordingSegmentAppender implements AutoCloseable {
         Optional<CheckpointEncoder.CheckpointRequest> periodic =
                 checkpointScheduler.dueForElapsed(lastElapsedNanos, lastServerTick);
         periodic.ifPresent(this::writeCheckpointRequestUnchecked);
-        processDimensionSignals();
     }
 
     /** Appends one ordered delta without recursively scheduling a checkpoint. */
@@ -360,25 +314,6 @@ final class RecordingSegmentAppender implements AutoCloseable {
         activeCheckpointOrdinal = checkpoint.ordinal();
     }
 
-    private void processDimensionSignals() throws IOException {
-        DimensionSignal signal;
-        while ((signal = dimensionSignals.poll()) != null) {
-            long elapsedNanos;
-            try {
-                elapsedNanos = Math.subtractExact(
-                        signal.captureTimeNanos(), recordingStartCaptureTimeNanos);
-            } catch (ArithmeticException overflow) {
-                throw new CorruptWriterException(
-                        new IllegalArgumentException("dimension signal time cannot be rebased", overflow));
-            }
-            if (elapsedNanos < 0L) {
-                throw new IllegalArgumentException("dimension signal precedes recording start");
-            }
-            checkpointScheduler.dueForDimensionChange(elapsedNanos, signal.serverTick())
-                    .ifPresent(this::writeCheckpointRequestUnchecked);
-        }
-    }
-
     private void writeCheckpointRequestUnchecked(CheckpointEncoder.CheckpointRequest request) {
         try {
             writeCheckpointRequest(request);
@@ -414,7 +349,6 @@ final class RecordingSegmentAppender implements AutoCloseable {
                     new IllegalArgumentException("checkpoint capture precedes its request"));
         }
         drainPacketsThrough(capture.point());
-        discardDimensionSignalsThrough(capture.point());
         List<RawPacketFrame> barrierFrames = new ArrayList<>(capture.initializationFrames());
         capture.subjects().forEach(state -> barrierFrames.addAll(state.frames()));
         capture.blockStates().forEach(blocks -> barrierFrames.addAll(blocks.frames()));
@@ -465,19 +399,6 @@ final class RecordingSegmentAppender implements AutoCloseable {
             }
             appendPacket(packet);
         }
-    }
-
-    private void discardDimensionSignalsThrough(CheckpointEncoder.CapturePoint point) {
-        List<DimensionSignal> later = new ArrayList<>();
-        DimensionSignal signal;
-        while ((signal = dimensionSignals.poll()) != null) {
-            if (signal.captureTimeNanos() > point.captureTimeNanos()
-                    || (signal.captureTimeNanos() == point.captureTimeNanos()
-                    && signal.serverTick() > point.serverTick())) {
-                later.add(signal);
-            }
-        }
-        dimensionSignals.addAll(later);
     }
 
     private static boolean isAfter(
@@ -560,8 +481,6 @@ final class RecordingSegmentAppender implements AutoCloseable {
             return;
         }
         tracks.values().forEach(RecordingSegmentAppender::finishSegment);
-        checkpointSignals.uninstall(signalListener);
-        signalInstalled.set(false);
         state = State.SEALED;
         sealedArtifacts = snapshotArtifacts(budgetTracker.completionReason());
         if (completionReported.compareAndSet(false, true)) {
@@ -604,12 +523,6 @@ final class RecordingSegmentAppender implements AutoCloseable {
             return;
         }
         state = State.FAILED;
-        try {
-            checkpointSignals.uninstall(signalListener);
-            signalInstalled.set(false);
-        } catch (Throwable ignored) {
-            // The original writer failure remains authoritative.
-        }
         tracks.values().forEach(track -> track.abort(cause));
         if (failureReported.compareAndSet(false, true)) {
             try {
@@ -660,17 +573,6 @@ final class RecordingSegmentAppender implements AutoCloseable {
         }
     }
 
-    private void installSignalListener() {
-        if (signalInstalled.compareAndSet(false, true)) {
-            try {
-                checkpointSignals.install(signalListener);
-            } catch (Throwable failure) {
-                signalInstalled.set(false);
-                throw failure;
-            }
-        }
-    }
-
     private static String requireAdapterId(String adapterId) {
         Objects.requireNonNull(adapterId, "adapterId");
         if (adapterId.isBlank() || adapterId.contains("/") || adapterId.contains("\\")) {
@@ -688,9 +590,6 @@ final class RecordingSegmentAppender implements AutoCloseable {
         SEALED,
         /** A technical failure prevents a clean finalization handoff. */
         FAILED
-    }
-
-    private record DimensionSignal(long captureTimeNanos, long serverTick) {
     }
 
     /**

@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.voldechse.replayframework.adapter.CaptureContext;
-import dev.voldechse.replayframework.adapter.CaptureOrigin;
 import dev.voldechse.replayframework.adapter.PacketDisposition;
 import dev.voldechse.replayframework.api.recording.BlockPosition;
 import dev.voldechse.replayframework.api.recording.CuboidRegion;
@@ -26,17 +25,15 @@ class RecordingScopeFilterTest {
             .build();
 
     @Test
-    void anObservedRecordingTakesItsSceneFromObserversOnly() {
-        assertTrue(RecordingRuntimeModule.acceptsOrigin(true, packet(CaptureOrigin.OBSERVER)));
-        assertFalse(RecordingRuntimeModule.acceptsOrigin(true, packet(CaptureOrigin.PLAYER_VIEW)));
-        assertTrue(RecordingRuntimeModule.acceptsOrigin(true, packet(CaptureOrigin.PLAYER_ONLY)));
+    void anObservedRecordingTakesItsSceneFromObservers() {
+        assertTrue(RecordingRuntimeModule.acceptsOrigin(true, packet(observed())));
+        assertTrue(RecordingRuntimeModule.acceptsOrigin(true, packet(context(OVERWORLD, null))));
     }
 
     @Test
-    void anyOtherRecordingTakesItsSceneFromPlayerViewsOnly() {
-        assertFalse(RecordingRuntimeModule.acceptsOrigin(false, packet(CaptureOrigin.OBSERVER)));
-        assertTrue(RecordingRuntimeModule.acceptsOrigin(false, packet(CaptureOrigin.PLAYER_VIEW)));
-        assertTrue(RecordingRuntimeModule.acceptsOrigin(false, packet(CaptureOrigin.PLAYER_ONLY)));
+    void aRecordingWithoutObserversTakesOnlyPlayerOnlyPackets() {
+        assertFalse(RecordingRuntimeModule.acceptsOrigin(false, packet(observed())));
+        assertTrue(RecordingRuntimeModule.acceptsOrigin(false, packet(context(OVERWORLD, null))));
     }
 
     @Test
@@ -78,8 +75,8 @@ class RecordingScopeFilterTest {
                 Optional.empty());
     }
 
-    private static CapturedPacket packet(CaptureOrigin origin) {
-        return packet(context(OVERWORLD, null).withOrigin(origin));
+    private static CaptureContext observed() {
+        return context(OVERWORLD, null).observedBy(java.util.UUID.randomUUID());
     }
 
     private static CapturedPacket packet(CaptureContext context) {

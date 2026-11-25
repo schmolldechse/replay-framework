@@ -77,9 +77,10 @@ one source, so no scene change is recorded twice.
 | own state | `PLAYER_ONLY` | the recipient's own health and experience, kept in its state track |
 | actor effects | `PLAYER_ONLY` | effects the server sends to everyone except the acting player, derived where no other player received them |
 
-Packets that describe one player's own view, such as its chunk cache center
-or a position correction, carry the origin `PLAYER_VIEW`. Every scope is
-observed by Argus, so no recording accepts them.
+A player connection publishes only packets no eye can receive. Scene packets
+it receives, and packets that describe one player's own view, such as its
+chunk cache center or a position correction, are dropped in the capture
+bridge, because every scope is observed by Argus.
 
 ## The eye
 

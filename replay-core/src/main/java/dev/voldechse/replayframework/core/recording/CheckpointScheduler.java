@@ -74,20 +74,6 @@ final class CheckpointScheduler {
                 elapsedNanos, serverTick, CheckpointEncoder.CheckpointKind.PERIODIC));
     }
 
-    /** Creates an immediate request for an adapter-verified dimension change. */
-    Optional<CheckpointEncoder.CheckpointRequest> dueForDimensionChange(
-            long elapsedNanos,
-            long serverTick) {
-        validateObservedPoint(elapsedNanos, serverTick);
-        Point point = new Point(elapsedNanos, serverTick);
-        if (isAlreadyPendingOrWritten(point)) {
-            return Optional.empty();
-        }
-        pendingPoint = point;
-        return Optional.of(requestSource.create(
-                elapsedNanos, serverTick, CheckpointEncoder.CheckpointKind.DIMENSION_CHANGE));
-    }
-
     /** Encodes through the adapter port; the caller controls the execution thread. */
     CompletionStage<CheckpointEncoder.CheckpointCapture> capture(
             CheckpointEncoder.CheckpointRequest request) {

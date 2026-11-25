@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import dev.voldechse.replayframework.adapter.TestContexts;
 import dev.voldechse.replayframework.core.capture.CapturedPacket;
 import dev.voldechse.replayframework.format.PacketPhase;
 import java.util.ArrayList;
@@ -122,7 +123,8 @@ final class SessionPacketQueueTest {
                 0,
                 PacketPhase.PLAY,
                 1,
-                payload);
+                payload,
+                TestContexts.plain());
     }
 
     private static void await(CountDownLatch latch) {

@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import dev.voldechse.replayframework.adapter.TestContexts;
 import dev.voldechse.replayframework.adapter.CaptureBridge;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.PacketDisposition;
@@ -150,6 +151,7 @@ final class CaptureRouterTest {
                 0,
                 PacketPhase.PLAY,
                 packetId,
-                payload);
+                payload,
+                TestContexts.plain());
     }
 }

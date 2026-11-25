@@ -4,13 +4,10 @@ import dev.voldechse.replayframework.adapter.AdapterDescriptor;
 import dev.voldechse.replayframework.adapter.AbstractReplayAdapter;
 import dev.voldechse.replayframework.adapter.CaptureBridge;
 import dev.voldechse.replayframework.adapter.CheckpointEncoder;
-import dev.voldechse.replayframework.adapter.CheckpointSignalSource;
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
 import dev.voldechse.replayframework.adapter.PacketRegistry;
 import dev.voldechse.replayframework.adapter.PlaybackBridge;
-import java.util.Objects;
 import java.util.function.Function;
-import java.util.concurrent.CopyOnWriteArrayList;
 import org.bukkit.entity.Player;
 
 /**
@@ -40,26 +37,16 @@ public final class Paper26_2ReplayAdapter extends AbstractReplayAdapter {
             CaptureBridge captureBridge,
             CheckpointEncoder checkpointEncoder,
             Function<Player, PlaybackBridge> playbackFactory) {
-        this(captureBridge, checkpointEncoder, playbackFactory, new Paper26_2CheckpointSignals());
-    }
-
-    /** Creates a verified adapter with an explicit semantic signal source. */
-    public Paper26_2ReplayAdapter(
-            CaptureBridge captureBridge,
-            CheckpointEncoder checkpointEncoder,
-            Function<Player, PlaybackBridge> playbackFactory,
-            CheckpointSignalSource checkpointSignals) {
-        this(discover(), captureBridge, checkpointEncoder, playbackFactory, checkpointSignals);
+        this(discover(), captureBridge, checkpointEncoder, playbackFactory);
     }
 
     private Paper26_2ReplayAdapter(
             Components components,
             CaptureBridge captureBridge,
             CheckpointEncoder checkpointEncoder,
-            Function<Player, PlaybackBridge> playbackFactory,
-            CheckpointSignalSource checkpointSignals) {
+            Function<Player, PlaybackBridge> playbackFactory) {
         super(components.descriptor(), components.registry(), captureBridge,
-                checkpointEncoder, checkpointSignals, playbackFactory);
+                checkpointEncoder, playbackFactory);
     }
 
     @Override
@@ -84,35 +71,4 @@ public final class Paper26_2ReplayAdapter extends AbstractReplayAdapter {
 
     private record Components(AdapterDescriptor descriptor, PacketRegistry registry) {}
 
-    /** Adapter-local signal source used by the 26.2 capture hooks. */
-    static final class Paper26_2CheckpointSignals implements CheckpointSignalSource.Emitter {
-        private final CopyOnWriteArrayList<CheckpointSignalListener> listeners =
-                new CopyOnWriteArrayList<>();
-
-        @Override
-        public void install(CheckpointSignalListener candidate) {
-            Objects.requireNonNull(candidate, "listener");
-            if (!listeners.contains(candidate)) {
-                // The adapter source is a fan-out because overlapping replay
-                // sessions each own an independent scheduler/listener.
-                listeners.add(candidate);
-            }
-        }
-
-        @Override
-        public void uninstall(CheckpointSignalListener candidate) {
-            Objects.requireNonNull(candidate, "listener");
-            listeners.remove(candidate);
-        }
-
-        @Override
-        public void emitDimensionChange(long captureTimeNanos, long serverTick) {
-            if (serverTick < 0L) {
-                throw new IllegalArgumentException("serverTick must not be negative");
-            }
-            for (CheckpointSignalListener current : listeners) {
-                current.onDimensionChange(captureTimeNanos, serverTick);
-            }
-        }
-    }
 }

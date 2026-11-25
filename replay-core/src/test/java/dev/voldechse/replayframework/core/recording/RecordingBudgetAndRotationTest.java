@@ -1,10 +1,10 @@
 package dev.voldechse.replayframework.core.recording;
 
+import dev.voldechse.replayframework.adapter.TestContexts;
 import dev.voldechse.replayframework.api.recording.ReplayBudget;
 import dev.voldechse.replayframework.api.recording.ReplayCompletionReason;
 import dev.voldechse.replayframework.api.recording.ReplayFailureCode;
 import dev.voldechse.replayframework.adapter.CheckpointEncoder;
-import dev.voldechse.replayframework.adapter.CheckpointSignalSource;
 import dev.voldechse.replayframework.core.capture.CapturedPacket;
 import dev.voldechse.replayframework.format.PacketPhase;
 import dev.voldechse.replayframework.format.RawPacketFrame;
@@ -150,8 +150,7 @@ final class RecordingBudgetAndRotationTest {
                 queue,
                 new ReplayCheckpoint(0, 0L, List.of()),
                 ReplayBudget.builder().maxSegmentBytes(1).build(),
-                scheduler,
-                CheckpointSignalSource.noop(),
+                scheduler,
                 reason -> {
                 },
                 (code, cause) -> {
@@ -182,11 +181,11 @@ final class RecordingBudgetAndRotationTest {
             throws Exception {
         SessionPacketQueue queue = new SessionPacketQueue(1024);
         queue.enqueue(new CapturedPacket(
-                10L, 10L, 0, PacketPhase.PLAY, 1, new byte[] {1}));
+                10L, 10L, 0, PacketPhase.PLAY, 1, new byte[] {1}, TestContexts.plain()));
         queue.enqueue(new CapturedPacket(
-                12L, 12L, 0, PacketPhase.PLAY, 1, new byte[] {2}));
+                12L, 12L, 0, PacketPhase.PLAY, 1, new byte[] {2}, TestContexts.plain()));
         queue.enqueue(new CapturedPacket(
-                18L, 18L, 0, PacketPhase.PLAY, 1, new byte[] {3}));
+                18L, 18L, 0, PacketPhase.PLAY, 1, new byte[] {3}, TestContexts.plain()));
         queue.closeForEnqueue();
 
         CheckpointEncoder encoder = new CheckpointEncoder() {
@@ -222,8 +221,7 @@ final class RecordingBudgetAndRotationTest {
                 queue,
                 new ReplayCheckpoint(0, 0L, List.of()),
                 ReplayBudget.builder().maxSegmentBytes(1024).build(),
-                scheduler,
-                CheckpointSignalSource.noop(),
+                scheduler,
                 reason -> {
                 },
                 (code, cause) -> {
@@ -321,8 +319,7 @@ final class RecordingBudgetAndRotationTest {
                 queue,
                 new ReplayCheckpoint(0, 0L, List.of()),
                 budget,
-                scheduler,
-                CheckpointSignalSource.noop(),
+                scheduler,
                 budgetStop,
                 failure,
                 artifacts -> {
@@ -332,7 +329,7 @@ final class RecordingBudgetAndRotationTest {
     private static CapturedPacket packet(long captureTimeNanos, int sequence, byte[] payload) {
         return new CapturedPacket(
                 captureTimeNanos, sequence, sequence,
-                PacketPhase.PLAY, 1, payload);
+                PacketPhase.PLAY, 1, payload, TestContexts.plain());
     }
 
     private static RawPacketFrame frame(long elapsedNanos, byte[] payload) {

@@ -35,7 +35,6 @@ class CaptureContextTest {
     @Test
     void otherChangesKeepTheRoute() {
         CaptureContext context = context(Optional.of(OVERWORLD)).asBlockState()
-                .withOrigin(CaptureOrigin.PLAYER_ONLY)
                 .observedBy(UUID.randomUUID())
                 .asRecipientCopy(new RecipientCopy(UUID.randomUUID(), "event"));
 

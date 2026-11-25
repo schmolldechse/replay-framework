@@ -21,21 +21,6 @@ public record CapturedPacket(
         byte[] payload,
         CaptureContext context) {
 
-    /**
-     * Keeps existing core fixtures source-compatible while carrying an
-     * explicitly unknown adapter context.
-     */
-    public CapturedPacket(
-            long captureTimeNanos,
-            long serverTick,
-            int sequence,
-            PacketPhase phase,
-            int packetId,
-            byte[] payload) {
-        this(captureTimeNanos, serverTick, sequence, phase, packetId,
-                payload, CaptureContext.unknown());
-    }
-
     /** Validates packet metadata and takes ownership of a defensive payload copy. */
     public CapturedPacket {
         if (serverTick < 0L) {

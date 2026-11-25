@@ -37,7 +37,11 @@ public record CaptureContext(
         Optional<RecipientCopy> recipientCopy,
         TrackRoute route) {
 
-    /** Creates a context for scene state observed through a player view. */
+    /**
+     * Creates a context for a packet a player's connection received. Its
+     * origin is {@link CaptureOrigin#PLAYER_ONLY} until {@link #observedBy}
+     * marks it as seen by a virtual observer.
+     */
     public CaptureContext(
             Optional<PacketDisposition> disposition,
             Optional<Key> world,
@@ -45,13 +49,12 @@ public record CaptureContext(
             Optional<String> normalizedChat,
             Optional<Key> customPayloadChannel) {
         this(disposition, world, position, normalizedChat, customPayloadChannel,
-                CaptureOrigin.PLAYER_VIEW, Optional.empty(), Optional.empty(), TrackRoute.SCENE);
+                CaptureOrigin.PLAYER_ONLY, Optional.empty(), Optional.empty(), TrackRoute.SCENE);
     }
 
     /**
-     * Convenience constructor for adapter code with a verified disposition.
-     * Passing {@code null} is reserved for the same explicitly unknown
-     * disposition represented by {@link #unknown()}.
+     * Convenience constructor for adapter code with a verified disposition;
+     * {@code null} leaves the disposition unknown.
      */
     public CaptureContext(
             PacketDisposition disposition,
@@ -81,26 +84,6 @@ public record CaptureContext(
     /** Whether the packet concerns its whole world instead of a place in it. */
     public boolean worldWide() {
         return route instanceof TrackRoute.WorldWide;
-    }
-
-    /**
-     * Returns a context for legacy fixtures or adapters that only provide raw
-     * packet bytes. Every semantic value remains unknown by design.
-     */
-    public static CaptureContext unknown() {
-        return new CaptureContext(
-                Optional.empty(),
-                Optional.empty(),
-                Optional.empty(),
-                Optional.empty(),
-                Optional.empty());
-    }
-
-    /** Returns this context as observed through another source. */
-    public CaptureContext withOrigin(CaptureOrigin nextOrigin) {
-        return new CaptureContext(
-                disposition, world, position, normalizedChat, customPayloadChannel,
-                nextOrigin, observation, recipientCopy, route);
     }
 
     /** Returns this context for a packet that concerns its whole world. */

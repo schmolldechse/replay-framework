@@ -81,22 +81,6 @@ public interface CaptureBridge {
             byte[] payload,
             CaptureContext context) {
 
-        /**
-         * Keeps older adapter fixtures source-compatible while explicitly
-         * marking their semantic context as unknown. This constructor is not
-         * allowed to infer packet meaning from raw payload bytes.
-         */
-        public CapturePacket(
-                long captureTimeNanos,
-                long serverTick,
-                int sequence,
-                PacketPhase phase,
-                int packetId,
-                byte[] payload) {
-            this(captureTimeNanos, serverTick, sequence, phase, packetId,
-                    payload, CaptureContext.unknown());
-        }
-
         /** Validates and defensively copies the captured packet data. */
         public CapturePacket {
             if (serverTick < 0L) {

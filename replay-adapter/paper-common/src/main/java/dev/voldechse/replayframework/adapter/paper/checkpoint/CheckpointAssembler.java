@@ -135,12 +135,6 @@ public final class CheckpointAssembler implements CheckpointEncoder {
 
     private CompletionStage<CheckpointSnapshot> snapshot(CheckpointRequest request) {
         Objects.requireNonNull(request, "request");
-        if (request.kind() != CheckpointKind.INITIAL
-                && request.kind() != CheckpointKind.PERIODIC
-                && request.kind() != CheckpointKind.DIMENSION_CHANGE) {
-            return CompletableFuture.failedFuture(new IllegalArgumentException(
-                    "unsupported checkpoint kind: " + request.kind()));
-        }
         try {
             validateGeneratorMatrix();
             return Objects.requireNonNull(snapshots.snapshot(request), "snapshot source returned null stage");

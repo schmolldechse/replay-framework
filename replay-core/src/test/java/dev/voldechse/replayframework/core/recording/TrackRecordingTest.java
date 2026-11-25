@@ -6,7 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import dev.voldechse.replayframework.adapter.CaptureContext;
 import dev.voldechse.replayframework.adapter.CaptureSubject;
 import dev.voldechse.replayframework.adapter.CheckpointEncoder;
-import dev.voldechse.replayframework.adapter.CheckpointSignalSource;
 import dev.voldechse.replayframework.api.recording.RecordingScope;
 import dev.voldechse.replayframework.api.recording.ReplayBudget;
 import dev.voldechse.replayframework.core.capture.CapturedPacket;
@@ -190,7 +189,6 @@ class TrackRecordingTest {
                 initial,
                 ReplayBudget.builder().maxSegmentBytes(1024).build(),
                 scheduler,
-                CheckpointSignalSource.noop(),
                 reason -> {
                 },
                 (code, cause) -> {

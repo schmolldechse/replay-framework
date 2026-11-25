@@ -37,9 +37,10 @@ Serverbound packets are never recorded. Every serverbound packet has its own
 definition that decides whether it triggers anything; most trigger nothing
 because whatever they change reaches the recording through an eye.
 
-Packets a player's own view receives, such as its chunk cache center or its
-own position correction, describe that view, not the scene. They carry the
-origin `PLAYER_VIEW`, and no recording accepts them.
+Packets a player's connection receives that an eye receives as well, such as
+chunks or entity movement, are not published: the scene comes from the eyes
+only. Neither are packets that describe one player's own view, such as its
+chunk cache center or its own position correction.
 
 ## Effects that bypass their actor
 
