@@ -8,7 +8,7 @@ import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketCapt
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RebuildingPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ValueRewriteResult;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
-import dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.Paper26_2CaptureContexts;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.CaptureContexts;
 import java.util.Objects;
 import java.util.Set;
 import net.kyori.adventure.key.Key;
@@ -72,7 +72,7 @@ final class Id125TeleportEntityPacketDefinition extends RebuildingPacketDefiniti
             return base;
         }
         state.entityPosition(connectionId, value.entityId(), world, x, y, z);
-        return Paper26_2CaptureContexts.atPosition(base, Key.key(world), x, y, z);
+        return CaptureContexts.atPosition(base, Key.key(world), x, y, z);
     }
 
     @Override

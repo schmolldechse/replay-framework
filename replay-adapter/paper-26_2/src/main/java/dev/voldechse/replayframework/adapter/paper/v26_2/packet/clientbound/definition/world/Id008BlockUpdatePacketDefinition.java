@@ -7,7 +7,7 @@ import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketClas
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RebuildingPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ValueRewriteResult;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
-import dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.Paper26_2CaptureContexts;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.CaptureContexts;
 import java.util.Objects;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket;
@@ -55,7 +55,7 @@ final class Id008BlockUpdatePacketDefinition extends RebuildingPacketDefinition<
             long serverTick) {
         CaptureContext base = super.captureContext(
                 decodedPacket, descriptor, connectionId, state, serverTick);
-        return Paper26_2CaptureContexts.atBlockPosition(
+        return CaptureContexts.atBlockPosition(
                 base, toApiPosition(ClientboundBlockUpdatePacket.class.cast(decodedPacket).getPos()));
     }
 

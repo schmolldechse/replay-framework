@@ -26,19 +26,25 @@ The name is derived mechanically:
 5. Convert every segment to UpperCamelCase.
 6. Append `PacketDefinition`.
 
-Examples:
+Examples (the IDs come from one adapter's pinned registry; another version
+may assign other IDs):
 
-| Version | ID | Identifier | Class |
-|---|---:|---|---|
-| 26.2 | 0 | `minecraft:bundle_delimiter` | `Id000BundleDelimiterPacketDefinition` |
-| 26.2 | 1 | `minecraft:add_entity` | `Id001AddEntityPacketDefinition` |
-| 26.2 | 37 | `minecraft:forget_level_chunk` | `Id037ForgetLevelChunkPacketDefinition` |
+| ID | Identifier | Class |
+|---:|---|---|
+| 0 | `minecraft:bundle_delimiter` | `Id000BundleDelimiterPacketDefinition` |
+| 1 | `minecraft:add_entity` | `Id001AddEntityPacketDefinition` |
+| 37 | `minecraft:forget_level_chunk` | `Id037ForgetLevelChunkPacketDefinition` |
 
 The class name does not contain a Paper version because the version package
 already owns that context. The numeric ID is version-local, so the same
 identifier may have a different class name when its ID moves between versions.
 Every definition also exposes the numeric ID; adapter discovery validates it
 against the live Paper registry instead of treating the name as documentation.
+
+Every version adapter implements every packet of its version itself, with
+its own definition class, even when the packet did not change between
+versions. Definitions are never shared between adapters; only the
+Minecraft-free base classes in `paper-common` are.
 
 Concrete definitions are `final` and package-private. Their filenames match
 their class names exactly. The suffixes `Handler`, `Impl`, `Processor` and
@@ -59,6 +65,7 @@ Shared NMS-free abstractions live in:
 replay-adapter/paper-common/src/main/java/
 └── dev/voldechse/replayframework/adapter/paper/packet/
     ├── clientbound/
+    │   ├── CaptureContexts.java
     │   ├── ClientboundPacketDefinition.java
     │   ├── ClientboundPacketDefinitionCatalog.java
     │   └── definition/
@@ -68,20 +75,22 @@ replay-adapter/paper-common/src/main/java/
         └── ServerboundReaction.java
 ```
 
-Every version adapter uses this split.
+Every version adapter uses this split. Next to `packet`, the package
+`adapter/paper/protocol/` holds `ProtocolSnapshot` and `PaperPacketRegistry`,
+which validate an adapter's catalog against the live registries.
 
 Each version adapter exposes `packet` as a sibling of the runtime consumers:
 
 ```text
-replay-adapter/paper-26_2/src/main/java/
-└── dev/voldechse/replayframework/adapter/paper/v26_2/
+replay-adapter/paper-<version>/src/main/java/
+└── dev/voldechse/replayframework/adapter/paper/v<version>/
     ├── actor/
     ├── argus/
     ├── capture/
     ├── checkpoint/
     ├── packet/
     │   ├── serverbound/
-    │   │   ├── Paper26_2ServerboundPacketCatalog.java
+    │   │   ├── Paper<version>ServerboundPacketCatalog.java
     │   │   └── definition/
     │   │       ├── connection/
     │   │       ├── diagnostic/
@@ -92,7 +101,7 @@ replay-adapter/paper-26_2/src/main/java/
     │   │       ├── chat/
     │   │       └── ui/
     │   └── clientbound/
-    │       ├── Paper26_2ClientboundPacketCatalog.java
+    │       ├── Paper<version>ClientboundPacketCatalog.java
     │       └── definition/
     │           ├── connection/
     │           ├── diagnostic/
@@ -106,7 +115,8 @@ replay-adapter/paper-26_2/src/main/java/
     └── playback/
 ```
 
-The Java package of a definition is therefore:
+`<version>` is the Minecraft version with `_` instead of `.`, for example
+`paper-26_2` and `v26_2`. The Java package of a definition is therefore:
 
 ```text
 dev.voldechse.replayframework.adapter.paper.<version>.packet.<direction>.definition.<domain>
@@ -130,8 +140,8 @@ gains capture-specific metadata.
 | `ui` | titles, action bar, screens, containers, cooldowns, recipe books, dialogs, tab list, advancements, links and waypoints |
 | `effect` | animations, particles, sounds, explosions, boss bars and other ordered scene effects |
 
-Serverbound definitions use the same domains where they apply; the 26.2
-serverbound registry has no `scoreboard` or `effect` packets.
+Serverbound definitions use the same domains where they apply; a serverbound
+registry usually has no `scoreboard` or `effect` packets.
 
 Each `definition.<domain>` package contains one public aggregator named after
 the domain, for example `EntityPacketDefinitions` for clientbound and

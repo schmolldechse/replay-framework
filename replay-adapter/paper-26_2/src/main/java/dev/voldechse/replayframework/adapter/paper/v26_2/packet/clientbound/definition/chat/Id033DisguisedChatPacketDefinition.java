@@ -42,7 +42,7 @@ final class Id033DisguisedChatPacketDefinition
                 decodedPacket, descriptor, connectionId, state, serverTick);
         String text = ClientboundDisguisedChatPacket.class.cast(decodedPacket)
                 .message().getString();
-        return dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.Paper26_2CaptureContexts
+        return dev.voldechse.replayframework.adapter.paper.packet.clientbound.CaptureContexts
                 .withChat(base, text);
     }
 

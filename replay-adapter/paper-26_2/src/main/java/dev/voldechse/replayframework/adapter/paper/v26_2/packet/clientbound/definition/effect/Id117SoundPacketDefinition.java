@@ -174,7 +174,7 @@ final class Id117SoundPacketDefinition extends ClientboundPacketDefinition<Paper
         var base = super.captureContext(
                 decodedPacket, descriptor, connectionId, state, serverTick);
         var packet = net.minecraft.network.protocol.game.ClientboundSoundPacket.class.cast(decodedPacket);
-        return dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.Paper26_2CaptureContexts.atBlockPosition(
+        return dev.voldechse.replayframework.adapter.paper.packet.clientbound.CaptureContexts.atBlockPosition(
                 base,
                 new dev.voldechse.replayframework.api.recording.BlockPosition(
                         (int) Math.floor(packet.getX()), (int) Math.floor(packet.getY()), (int) Math.floor(packet.getZ())));

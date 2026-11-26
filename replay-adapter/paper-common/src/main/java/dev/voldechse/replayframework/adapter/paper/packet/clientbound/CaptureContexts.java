@@ -1,7 +1,6 @@
-package dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound;
+package dev.voldechse.replayframework.adapter.paper.packet.clientbound;
 
 import dev.voldechse.replayframework.adapter.CaptureContext;
-import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketCaptureState;
 import dev.voldechse.replayframework.api.recording.BlockPosition;
 import java.util.Objects;
 import java.util.Optional;
@@ -9,9 +8,9 @@ import java.util.UUID;
 import net.kyori.adventure.key.Key;
 
 /** Small helpers for packet definitions to add only protocol-proven context. */
-public final class Paper26_2CaptureContexts {
+public final class CaptureContexts {
 
-    private Paper26_2CaptureContexts() {}
+    private CaptureContexts() {}
 
     public static CaptureContext atPosition(
             CaptureContext base,

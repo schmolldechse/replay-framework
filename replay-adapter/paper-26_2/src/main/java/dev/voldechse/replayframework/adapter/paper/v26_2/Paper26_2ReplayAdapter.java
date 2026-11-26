@@ -1,5 +1,6 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2;
 
+import dev.voldechse.replayframework.adapter.paper.protocol.ProtocolSnapshot;
 import dev.voldechse.replayframework.adapter.AdapterDescriptor;
 import dev.voldechse.replayframework.adapter.AbstractReplayAdapter;
 import dev.voldechse.replayframework.adapter.CaptureBridge;
@@ -58,7 +59,7 @@ public final class Paper26_2ReplayAdapter extends AbstractReplayAdapter {
     }
 
     private static Components discover() {
-        Paper26_2ProtocolIntrospector.ProtocolSnapshot snapshot =
+        ProtocolSnapshot snapshot =
                 new Paper26_2ProtocolIntrospector().inspect();
         if (!MINECRAFT_VERSION.equals(snapshot.minecraftVersion())) {
             throw new IncompatibleAdapterException(

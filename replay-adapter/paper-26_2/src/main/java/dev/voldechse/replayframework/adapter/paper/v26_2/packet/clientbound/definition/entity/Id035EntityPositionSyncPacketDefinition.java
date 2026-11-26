@@ -7,7 +7,7 @@ import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketClas
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketCaptureState;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RebuildingPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ValueRewriteResult;
-import dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.Paper26_2CaptureContexts;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.CaptureContexts;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
 import java.util.Objects;
 import java.util.Optional;
@@ -70,7 +70,7 @@ final class Id035EntityPositionSyncPacketDefinition extends RebuildingPacketDefi
                 value.values().position().x,
                 value.values().position().y,
                 value.values().position().z));
-        return world.<CaptureContext>map(key -> Paper26_2CaptureContexts.atPosition(
+        return world.<CaptureContext>map(key -> CaptureContexts.atPosition(
                         base, Key.key(key),
                         value.values().position().x,
                         value.values().position().y,

@@ -84,7 +84,7 @@ bridge, because every scope is observed by Argus.
 
 ## The eye
 
-`Paper26_2ArgusEye` creates a `ServerPlayer` that is never added to its
+A version adapter's `ArgusEye` creates a `ServerPlayer` that is never added to its
 level and never added to the player list. It is registered with exactly two
 server systems:
 
@@ -378,19 +378,8 @@ loses the chunks it left until the next seek.
 
 ## Measurements
 
-Paper 26.2 build 135, no player online unless noted.
-
-| Check | Result |
-|---|---|
-| Chunks at view distance 6 | 213 `level_chunk_with_light` within 100 ticks, no client acknowledgement needed |
-| Spawned cow | `add_entity`, metadata, attributes, then continuous movement |
-| `Bukkit.getOnlinePlayers()`, `World.getPlayers()`, level players, player count | all 0 |
-| One watch with several eyes | each chunk and entity published once |
-| Two overlapping watches | each has a complete scene; closing one leaves the other untouched |
-| 30 wandering animals over 62 seconds, replayed like a client | 1800 relative steps, 148 absolute checks, largest difference 0.27 blocks, no step for an unknown entity |
-| 400 x 400 region | lattice loaded 1077 chunks without duplicates |
-| Storm started | rain start and rain level packets from the sampled source |
-| After closing an eye | no further packets |
+Measurements depend on the server version and build; each
+[adapter document](adapters/README.md) lists its own.
 
 ## Limits
 
@@ -421,7 +410,7 @@ Everything except the eye itself is shared by all adapters.
 | `SubjectSample`, `SubjectStates` | `paper-common` | sampled subject state |
 | `ArgusPlatform`, `ArgusEye`, `AmbientSource` | `paper-common` | the interfaces one Minecraft version implements |
 | `PaperCaptureBridge`, `CaptureOrder`, `CaptureStateIndex`, `CaptureHooks` | `paper-common` | publishes the scene, player-only packets and state through the packet definitions, in one capture order |
-| `Paper26_2ArgusPlatform`, `Paper26_2ArgusEye`, `Paper26_2AmbientSource`, `Paper26_2SubjectStates`, `Paper26_2CaptureHooks` | `paper-26_2` | the 26.2 implementation |
+| `Paper<version>ArgusPlatform`, `Paper<version>ArgusEye`, `Paper<version>AmbientSource`, `Paper<version>SubjectStates`, `Paper<version>CaptureHooks` | `paper-<version>` | the implementation of one Minecraft version |
 
 The core opens a watch when a recording becomes active and closes it when
 the recording leaves the capture route. Eyes open on the next server tick.
@@ -451,5 +440,6 @@ A version adapter provides:
 | `PlaybackHooks` | per viewer: the codec, the classification of live packets, rewriting, view reset, the scene and the interaction handler |
 | `SceneDecoder` | the changes a replayed packet makes to the shared `SceneModel` of entities, players and containers |
 
-The [Paper 26.2 adapter](adapters/paper-26.2.md) is the reference
-implementation.
+The [adapter index](adapters/README.md) lists the adapters that implement
+this contract. Each adapter implements every part itself; adapters share no
+code with each other, only `paper-common`.

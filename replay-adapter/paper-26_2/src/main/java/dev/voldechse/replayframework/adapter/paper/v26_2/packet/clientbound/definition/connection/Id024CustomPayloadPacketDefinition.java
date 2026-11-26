@@ -45,7 +45,7 @@ final class Id024CustomPayloadPacketDefinition
                 net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket.class
                         .cast(decodedPacket);
         net.minecraft.resources.Identifier identifier = packet.payload().type().id();
-        return dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.Paper26_2CaptureContexts
+        return dev.voldechse.replayframework.adapter.paper.packet.clientbound.CaptureContexts
                 .withCustomPayloadChannel(base,
                         net.kyori.adventure.key.Key.key(identifier.toString()));
     }

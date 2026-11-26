@@ -7,7 +7,7 @@ import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketCapt
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RebuildingPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ValueRewriteResult;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
-import dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.Paper26_2CaptureContexts;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.CaptureContexts;
 import io.netty.buffer.Unpooled;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.protocol.game.ClientboundMoveEntityPacket;
@@ -57,7 +57,7 @@ final class Id053MoveEntityPosPacketDefinition extends RebuildingPacketDefinitio
         Value value = read(ClientboundMoveEntityPacket.Pos.class.cast(decodedPacket));
         state.moveEntity(connectionId, value.entityId(), value.deltaX() / 4096.0,
                 value.deltaY() / 4096.0, value.deltaZ() / 4096.0);
-        return Paper26_2CaptureContexts.atEntity(base, state, connectionId, value.entityId());
+        return CaptureContexts.atEntity(base, state, connectionId, value.entityId());
     }
 
     @Override

@@ -8,7 +8,7 @@ import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketCapt
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RebuildingPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ValueRewriteResult;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
-import dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.Paper26_2CaptureContexts;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.CaptureContexts;
 import io.netty.buffer.Unpooled;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.protocol.game.ClientboundEntityEventPacket;
@@ -52,7 +52,7 @@ final class Id034EntityEventPacketDefinition extends RebuildingPacketDefinition<
             long serverTick) {
         CaptureContext base = super.captureContext(
                 decodedPacket, descriptor, connectionId, state, serverTick);
-        return Paper26_2CaptureContexts.atEntity(
+        return CaptureContexts.atEntity(
                 base, state, connectionId,
                 read(ClientboundEntityEventPacket.class.cast(decodedPacket)).entityId());
     }

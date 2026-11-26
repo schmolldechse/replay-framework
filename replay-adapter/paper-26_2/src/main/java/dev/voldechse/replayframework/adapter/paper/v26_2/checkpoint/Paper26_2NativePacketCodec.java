@@ -1,5 +1,6 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.checkpoint;
 
+import dev.voldechse.replayframework.adapter.paper.protocol.PaperPacketRegistry;
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.PacketDisposition;
@@ -33,13 +34,13 @@ import net.minecraft.server.MinecraftServer;
 public final class Paper26_2NativePacketCodec
         implements CheckpointCodec, AutoCloseable {
 
-    private final Paper26_2PacketRegistry registry;
+    private final PaperPacketRegistry registry;
     private final ProtocolInfo<?> protocolInfo;
     private final Object lock = new Object();
     private boolean closed;
 
     private Paper26_2NativePacketCodec(
-            Paper26_2PacketRegistry registry,
+            PaperPacketRegistry registry,
             ProtocolInfo<?> protocolInfo) {
         this.registry = Objects.requireNonNull(registry, "registry");
         this.protocolInfo = Objects.requireNonNull(protocolInfo, "protocolInfo");
@@ -53,7 +54,7 @@ public final class Paper26_2NativePacketCodec
      * @param registry verified Paper packet registry
      * @return independent native packet codec
      */
-    public static Paper26_2NativePacketCodec create(Paper26_2PacketRegistry registry) {
+    public static Paper26_2NativePacketCodec create(PaperPacketRegistry registry) {
         Objects.requireNonNull(registry, "registry");
         try {
             MinecraftServer server = MinecraftServer.getServer();
@@ -78,7 +79,7 @@ public final class Paper26_2NativePacketCodec
 
     /** Creates a codec with an already-bound protocol for adapter-local tests. */
     static Paper26_2NativePacketCodec forTesting(
-            Paper26_2PacketRegistry registry,
+            PaperPacketRegistry registry,
             ProtocolInfo<?> protocolInfo) {
         return new Paper26_2NativePacketCodec(registry, protocolInfo);
     }

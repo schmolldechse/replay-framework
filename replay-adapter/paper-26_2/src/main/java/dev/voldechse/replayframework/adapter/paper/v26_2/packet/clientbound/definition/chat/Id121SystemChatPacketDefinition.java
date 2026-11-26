@@ -41,7 +41,7 @@ final class Id121SystemChatPacketDefinition
                 decodedPacket, descriptor, connectionId, state, serverTick);
         String text = ClientboundSystemChatPacket.class.cast(decodedPacket)
                 .content().getString();
-        return dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.Paper26_2CaptureContexts
+        return dev.voldechse.replayframework.adapter.paper.packet.clientbound.CaptureContexts
                 .withChat(base, text);
     }
 

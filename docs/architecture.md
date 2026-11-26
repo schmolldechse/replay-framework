@@ -14,7 +14,7 @@ flowchart TD
     runtime --> core["replay-core<br/>Recording, playback, metadata, catalog"]
     runtime --> adapterApi["replay-adapter:api<br/>Shared adapter contract"]
     adapterApi --> paperCommon["paper-common<br/>Argus, definition contracts,<br/>capture, playback, checkpoints"]
-    paperCommon --> adapter262["paper-26_2<br/>Definitions, codecs, eye,<br/>snapshots, version hooks"]
+    paperCommon --> adapterVersion["paper-&lt;version&gt;<br/>one module per Minecraft version:<br/>definitions, codecs, eye,<br/>snapshots, version hooks"]
     runtime --> format["replay-format<br/>Tracks, segments, indexes, checkpoints, manifests"]
     runtime --> storage["replay-storage:*<br/>Local, S3, SFTP artifacts"]
     runtime --> database["replay-database:postgresql<br/>Catalog, leases, metadata revisions"]
@@ -45,9 +45,14 @@ packet definitions, the codec of its protocol and its access to the server.
 | `capture` | `PaperCaptureBridge`: taps, capture order, Argus publishing, state routing, failures | `CaptureHooks`: codec, connection identity, Paper's connection hook, serverbound identifier, actor effects |
 | `playback` | `PaperPlaybackBridge`, `ViewerOutboundQueue`, `ViewerGate`: lifecycle, frame pipeline, world filter, batching, live isolation | `PlaybackHooks` with `ViewerParts`: codec, rewriter, view reset, scene; `SceneDecoder` for the shared `SceneModel` |
 | `checkpoint` | `CheckpointAssembler`: order, validation and numbering of checkpoint packets | `SnapshotSource` and `CheckpointCodec` |
-| `packet` | definition base classes, catalogs, recipient copies and state | the definitions themselves |
+| `packet` | definition base classes, catalogs, recipient copies and state, capture context helpers | the definitions themselves |
+| `protocol` | `ProtocolSnapshot` and `PaperPacketRegistry`: validates the live clientbound registries against the adapter's catalog (every PLAY packet has exactly one definition with the live ID) and builds the packet registry | reading the live registries into a `ProtocolSnapshot`; the Minecraft version, codec key prefix and catalog |
 
-The [Paper 26.2 adapter](adapters/paper-26.2.md) describes the version half.
+Each version module implements every packet of its version itself: its own
+definition class per packet, its own hooks and its own tests. Version modules
+share no code with each other, only `paper-common`. The
+[adapter index](adapters/README.md) lists the version modules and describes
+what an adapter implements; each adapter has its own document.
 
 ## Recording data flow
 
@@ -243,7 +248,8 @@ they own while handling their own Paper plugin shutdown.
 
 - The framework records raw Minecraft network packets, not a standardized video
   or cross-version replay format.
-- Only Paper 26.2 has an adapter (build 135). Further versions are added as
+- Only Minecraft versions with an adapter are supported (see the
+  [adapter index](adapters/README.md)). Further versions are added as
   separate adapters on the shared version contract.
 - There is no HTTP or REST API.
 - There is no framework-owned GUI, hotbar, command tree, resource pack, or

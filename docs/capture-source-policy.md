@@ -97,9 +97,11 @@ counts.
 Every definition of a packet recorded from player connections declares how
 its copies are recognized (`RecipientCopies`). There is no default; the
 catalog rejects a definition without a declaration, because only the
-packet's server code tells which kind applies:
+packet's server code tells which kind applies. The examples name packets by
+identifier; which kind a packet has is decided per adapter and listed in its
+[adapter document](adapters/README.md):
 
-| Kind | Meaning | 26.2 examples |
+| Kind | Meaning | Examples |
 |---|---|---|
 | `identicalPayload` | equal bytes for every recipient, often one packet object | sounds, particles, block events, local level events, boss bar, tab list, border |
 | `keyedBy` | built per recipient with recipient-specific fields; the identity holds only the fields that describe the event | explosion without knockback, global level event without its projected position, player chat without its recipient index |
@@ -134,11 +136,11 @@ player's state.
 Every definition declares whether its packet describes its recipient
 (`RecipientState`):
 
-| Declaration | Meaning | 26.2 examples |
+| Declaration | Meaning | Examples |
 |---|---|---|
 | `none` | the packet does not describe its recipient | default |
 | `always` | every copy describes the recipient | `set_health`, `set_experience` |
-| `when(...)` | only copies that match a condition do | none in 26.2 |
+| `when(...)` | only copies that match a condition do | none so far |
 
 A packet that describes its recipient names the recipient as its subject.
 The core then writes it to that player's state track instead of the scene;

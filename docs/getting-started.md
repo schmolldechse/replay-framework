@@ -8,8 +8,9 @@ plugins only use the `ReplayFramework` service after it has been published.
 
 Prepare a Paper server with the following components:
 
-- Paper **26.2** running on **Java 26**. The pinned build is Paper 26.2
-  build 135.
+- Paper on **Java 26**, in a Minecraft version that has an adapter. The
+  [adapter index](adapters/README.md) lists the supported versions and
+  their pinned builds.
 - A reachable PostgreSQL database. The framework uses it for the replay
   catalog, lifecycle state, leases, and metadata revisions.
 - One artifact storage choice: Local filesystem, Amazon S3, or SFTP.

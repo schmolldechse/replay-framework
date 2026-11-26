@@ -45,11 +45,13 @@ included example plugin shows one way to build them.
 
 ## Support boundary
 
-The runtime supports **Paper 26.2** (build 135) on **Java 26**. A replay
-contains raw protocol packets and is tied to the adapter, protocol version
-and packet registry that produced it; it is not a portable video or a
-cross-version format. Further Minecraft versions are supported by adding an
-adapter that implements the
+The runtime runs on **Java 26** and supports every Paper version that has a
+version adapter; the [adapter index](docs/adapters/README.md) lists them with
+their pinned builds. At startup the runtime picks the adapter whose Minecraft
+version matches the server. A replay contains raw protocol packets and is
+tied to the adapter, protocol version and packet registry that produced it;
+it is not a portable video and does not play on another Minecraft version.
+Further versions are supported by adding an adapter that implements the
 [version contract](docs/virtual-observer.md#version-contract).
 
 The runtime needs no other server plugin. It requires a PostgreSQL database,
@@ -76,7 +78,7 @@ How it is built:
 | [Recording tracks](docs/recording-tracks.md) | track kinds, subjects, checkpoints, file format and the state API |
 | [Capture source policy](docs/capture-source-policy.md) | which packet comes from which source, and how copies are merged |
 | [Packet definition layout](docs/packet-definition-layout.md) | naming and placement of per-packet definitions |
-| [Paper 26.2 adapter](docs/adapters/paper-26.2.md) | the reference adapter and the policy of every packet |
+| [Version adapters](docs/adapters/README.md) | the supported versions, what an adapter implements, and one document per adapter with the policy of every packet |
 
 ## Public API at a glance
 
@@ -134,7 +136,9 @@ server plugin. Build the example integration with:
 .\gradlew.bat :replay-example-plugin:jar
 ```
 
-The `runServer` task starts a local Paper 26.2 development server.
+The `runServer` task starts a local Paper development server; choose the
+version with `-PminecraftVersion=<version>` (see the
+[adapter index](docs/adapters/README.md)).
 
 | Module | Responsibility |
 | --- | --- |
@@ -143,7 +147,7 @@ The `runServer` task starts a local Paper 26.2 development server.
 | `replay-core` | recording, tracks, playback, artifact, metadata and catalog orchestration |
 | `replay-adapter:api` | contract between the core and a version adapter |
 | `replay-adapter:paper-common` | version-independent Paper parts: Argus, definition catalogs, recipient copies and state, and the shared capture, playback and checkpoint bridges |
-| `replay-adapter:paper-26_2` | Paper 26.2 packet definitions, codecs, eye, world snapshots and the hooks the shared bridges call |
+| `replay-adapter:paper-<version>` | one module per Minecraft version: its packet definitions, codecs, eye, world snapshots and the hooks the shared bridges call ([index](docs/adapters/README.md)) |
 | `replay-format` | track, segment, checkpoint, index and manifest codecs |
 | `replay-storage:*` | Local, S3 and SFTP artifact storage |
 | `replay-database:postgresql` | PostgreSQL repositories, Flyway migrations and metadata persistence |

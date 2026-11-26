@@ -1,5 +1,6 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2.checkpoint;
 
+import dev.voldechse.replayframework.adapter.paper.protocol.PaperPacketRegistry;
 import dev.voldechse.replayframework.adapter.paper.checkpoint.CheckpointSnapshot;
 import dev.voldechse.replayframework.adapter.paper.checkpoint.EncodedPacket;
 import dev.voldechse.replayframework.adapter.paper.checkpoint.PacketBlueprint;
@@ -35,7 +36,7 @@ final class Paper26_2NativePacketCodecTest {
 
     @Test
     void encodesCheckpointRelevantBorderCenterState() {
-        Paper26_2PacketRegistry registry = Paper26_2PacketRegistry.discover();
+        PaperPacketRegistry registry = Paper26_2PacketRegistry.discover();
         PacketBlueprint blueprint = new PacketBlueprint(
                 "play.clientbound.minecraft:set_border_center",
                 PacketCheckpointFamily.GLOBAL_STATE,
@@ -70,7 +71,7 @@ final class Paper26_2NativePacketCodecTest {
 
     @Test
     void encodesImplementedEntityPositionSyncState() {
-        Paper26_2PacketRegistry registry = Paper26_2PacketRegistry.discover();
+        PaperPacketRegistry registry = Paper26_2PacketRegistry.discover();
         Paper26_2NativePacketCodec codec = Paper26_2NativePacketCodec.forTesting(
                 registry,
                 GameProtocols.CLIENTBOUND_TEMPLATE.bind(
@@ -96,7 +97,7 @@ final class Paper26_2NativePacketCodecTest {
 
     @Test
     void encodesSampledArmSwingAsEphemeralAnimateAndRejectsControlPackets() {
-        Paper26_2PacketRegistry registry = Paper26_2PacketRegistry.discover();
+        PaperPacketRegistry registry = Paper26_2PacketRegistry.discover();
         Paper26_2NativePacketCodec codec = Paper26_2NativePacketCodec.forTesting(
                 registry,
                 GameProtocols.CLIENTBOUND_TEMPLATE.bind(
@@ -128,7 +129,7 @@ final class Paper26_2NativePacketCodecTest {
 
     @Test
     void rejectsDescriptorMismatchAndClosedCodec() {
-        Paper26_2PacketRegistry registry = Paper26_2PacketRegistry.discover();
+        PaperPacketRegistry registry = Paper26_2PacketRegistry.discover();
         Paper26_2NativePacketCodec codec = Paper26_2NativePacketCodec.forTesting(
                 registry,
                 GameProtocols.CLIENTBOUND_TEMPLATE.bind(
@@ -148,7 +149,7 @@ final class Paper26_2NativePacketCodecTest {
 
     @Test
     void acceptsEveryCheckpointRelevantDescriptorFromTheLiveRegistry() {
-        Paper26_2PacketRegistry registry = Paper26_2PacketRegistry.discover();
+        PaperPacketRegistry registry = Paper26_2PacketRegistry.discover();
 
         new CheckpointAssembler(
                 registry,

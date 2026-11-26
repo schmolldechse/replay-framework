@@ -1,5 +1,8 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2;
 
+import dev.voldechse.replayframework.adapter.paper.protocol.PaperPacketRegistry;
+import dev.voldechse.replayframework.adapter.paper.protocol.ProtocolSnapshot;
+import dev.voldechse.replayframework.adapter.paper.protocol.ProtocolPacket;
 import dev.voldechse.replayframework.adapter.StubPlaybackBridge;
 
 import dev.voldechse.replayframework.adapter.CaptureBridge;
@@ -35,9 +38,9 @@ final class Paper26_2PacketRegistryTest {
 
     @Test
     void everyPaperClientboundPacketHasExactlyOneDescriptor() {
-        Paper26_2ProtocolIntrospector.ProtocolSnapshot snapshot =
+        ProtocolSnapshot snapshot =
                 new Paper26_2ProtocolIntrospector().inspect();
-        Paper26_2PacketRegistry registry = Paper26_2PacketRegistry.fromSnapshot(snapshot);
+        PaperPacketRegistry registry = Paper26_2PacketRegistry.fromSnapshot(snapshot);
 
         Set<PacketKey> expectedKeys = snapshot.clientboundPackets().stream()
                 .map(PacketKey::from)
@@ -49,13 +52,13 @@ final class Paper26_2PacketRegistryTest {
         assertEquals(expectedKeys, actualKeys);
         assertEquals(snapshot.clientboundPackets().size(), registry.descriptors().size());
 
-        Map<PacketKey, Paper26_2ProtocolIntrospector.PacketType> expectedByKey =
+        Map<PacketKey, ProtocolPacket> expectedByKey =
                 snapshot.clientboundPackets().stream()
                         .collect(java.util.stream.Collectors.toUnmodifiableMap(
                                 PacketKey::from,
                                 packetType -> packetType));
         for (PacketDescriptor descriptor : registry.descriptors()) {
-            Paper26_2ProtocolIntrospector.PacketType packetType = expectedByKey.get(PacketKey.from(descriptor));
+            ProtocolPacket packetType = expectedByKey.get(PacketKey.from(descriptor));
             assertNotNull(packetType);
             assertEquals(packetType.typeName(), descriptor.typeName());
             assertEquals(packetType.codecKey(), descriptor.codecKey());
@@ -64,11 +67,11 @@ final class Paper26_2PacketRegistryTest {
 
     @Test
     void unknownPlayPacketTypeFailsTheCompleteCatalogInvariant() {
-        Paper26_2ProtocolIntrospector.ProtocolSnapshot snapshot =
+        ProtocolSnapshot snapshot =
                 new Paper26_2ProtocolIntrospector().inspect();
-        List<Paper26_2ProtocolIntrospector.PacketType> packets =
+        List<ProtocolPacket> packets =
                 new ArrayList<>(snapshot.clientboundPackets());
-        packets.add(new Paper26_2ProtocolIntrospector.PacketType(
+        packets.add(new ProtocolPacket(
                 PacketPhase.PLAY,
                 PacketDescriptor.Direction.CLIENTBOUND,
                 "play.clientbound.synthetic.unknown",
@@ -77,19 +80,19 @@ final class Paper26_2PacketRegistryTest {
 
         assertThrows(IncompatibleAdapterException.class, () ->
                 Paper26_2PacketRegistry.fromSnapshot(
-                        new Paper26_2ProtocolIntrospector.ProtocolSnapshot(
+                        new ProtocolSnapshot(
                                 snapshot.minecraftVersion(), snapshot.protocolVersion(), packets)));
     }
 
     @Test
     void rejectsExplicitDefinitionWhenTheLivePacketIdDiffers() {
-        Paper26_2ProtocolIntrospector.ProtocolSnapshot snapshot =
+        ProtocolSnapshot snapshot =
                 new Paper26_2ProtocolIntrospector().inspect();
-        List<Paper26_2ProtocolIntrospector.PacketType> packets =
+        List<ProtocolPacket> packets =
                 snapshot.clientboundPackets().stream()
                         .map(packet -> packet.typeName().equals(
                                         "play.clientbound.minecraft:bundle_delimiter")
-                                ? new Paper26_2ProtocolIntrospector.PacketType(
+                                ? new ProtocolPacket(
                                         packet.phase(),
                                         packet.direction(),
                                         packet.typeName(),
@@ -100,7 +103,7 @@ final class Paper26_2PacketRegistryTest {
 
         assertThrows(IncompatibleAdapterException.class, () ->
                 Paper26_2PacketRegistry.fromSnapshot(
-                        new Paper26_2ProtocolIntrospector.ProtocolSnapshot(
+                        new ProtocolSnapshot(
                                 snapshot.minecraftVersion(),
                                 snapshot.protocolVersion(),
                                 packets)));
@@ -108,9 +111,9 @@ final class Paper26_2PacketRegistryTest {
 
     @Test
     void controlAndUnsupportedPacketsAreCapturedButNeverReplayed() {
-        Paper26_2ProtocolIntrospector.ProtocolSnapshot snapshot =
+        ProtocolSnapshot snapshot =
                 new Paper26_2ProtocolIntrospector().inspect();
-        Paper26_2PacketRegistry registry = Paper26_2PacketRegistry.fromSnapshot(snapshot);
+        PaperPacketRegistry registry = Paper26_2PacketRegistry.fromSnapshot(snapshot);
 
         List<PacketDescriptor> blocked = registry.descriptors().stream()
                 .filter(descriptor -> descriptor.disposition() == PacketDisposition.CONTROL
@@ -131,15 +134,15 @@ final class Paper26_2PacketRegistryTest {
 
     @Test
     void registryFingerprintIsStableForEquivalentInputOrder() {
-        Paper26_2ProtocolIntrospector.ProtocolSnapshot snapshot =
+        ProtocolSnapshot snapshot =
                 new Paper26_2ProtocolIntrospector().inspect();
-        Paper26_2PacketRegistry first = Paper26_2PacketRegistry.fromSnapshot(snapshot);
+        PaperPacketRegistry first = Paper26_2PacketRegistry.fromSnapshot(snapshot);
 
-        List<Paper26_2ProtocolIntrospector.PacketType> reversed =
+        List<ProtocolPacket> reversed =
                 new ArrayList<>(snapshot.clientboundPackets());
         java.util.Collections.reverse(reversed);
-        Paper26_2PacketRegistry second = Paper26_2PacketRegistry.fromSnapshot(
-                new Paper26_2ProtocolIntrospector.ProtocolSnapshot(
+        PaperPacketRegistry second = Paper26_2PacketRegistry.fromSnapshot(
+                new ProtocolSnapshot(
                         snapshot.minecraftVersion(), snapshot.protocolVersion(), reversed));
 
         assertEquals(first.fingerprint(), second.fingerprint());
@@ -147,9 +150,9 @@ final class Paper26_2PacketRegistryTest {
 
     @Test
     void paperAdapterCarriesExactDescriptorAndFingerprint() {
-        Paper26_2ProtocolIntrospector.ProtocolSnapshot snapshot =
+        ProtocolSnapshot snapshot =
                 new Paper26_2ProtocolIntrospector().inspect();
-        Paper26_2PacketRegistry registry = Paper26_2PacketRegistry.fromSnapshot(snapshot);
+        PaperPacketRegistry registry = Paper26_2PacketRegistry.fromSnapshot(snapshot);
         CaptureBridge captureBridge = noOpCaptureBridge();
         CheckpointEncoder checkpointEncoder = request -> CompletableFuture.failedFuture(
                 new AssertionError("test checkpoint encoder must not be invoked"));
@@ -211,7 +214,7 @@ final class Paper26_2PacketRegistryTest {
             PacketDescriptor.Direction direction,
             int packetId) {
 
-        private static PacketKey from(Paper26_2ProtocolIntrospector.PacketType packetType) {
+        private static PacketKey from(ProtocolPacket packetType) {
             return new PacketKey(packetType.phase(), packetType.direction(), packetType.packetId());
         }
 

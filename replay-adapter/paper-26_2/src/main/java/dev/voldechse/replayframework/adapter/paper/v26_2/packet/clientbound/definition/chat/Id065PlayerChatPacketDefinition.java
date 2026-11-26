@@ -57,7 +57,7 @@ final class Id065PlayerChatPacketDefinition
             String filtered = packet.filterMask().apply(packet.body().content());
             text = filtered == null ? "" : filtered;
         }
-        return dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.Paper26_2CaptureContexts
+        return dev.voldechse.replayframework.adapter.paper.packet.clientbound.CaptureContexts
                 .withChat(base, text);
     }
 

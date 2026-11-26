@@ -132,7 +132,7 @@ final class Id116SoundEntityPacketDefinition extends RebuildingPacketDefinition<
         var base = super.captureContext(
                 decodedPacket, descriptor, connectionId, state, serverTick);
         var packet = net.minecraft.network.protocol.game.ClientboundSoundEntityPacket.class.cast(decodedPacket);
-        return dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.Paper26_2CaptureContexts.atEntity(base, state, connectionId, packet.getId());
+        return dev.voldechse.replayframework.adapter.paper.packet.clientbound.CaptureContexts.atEntity(base, state, connectionId, packet.getId());
     }
 
     /** One packet object for every recipient in range. */

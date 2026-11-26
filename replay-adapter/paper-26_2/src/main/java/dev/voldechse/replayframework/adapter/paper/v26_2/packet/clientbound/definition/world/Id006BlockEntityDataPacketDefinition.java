@@ -6,7 +6,7 @@ import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketClas
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RebuildingPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ValueRewriteResult;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
-import dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.Paper26_2CaptureContexts;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.CaptureContexts;
 import java.util.Objects;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -53,7 +53,7 @@ final class Id006BlockEntityDataPacketDefinition extends RebuildingPacketDefinit
             long serverTick) {
         CaptureContext base = super.captureContext(
                 decodedPacket, descriptor, connectionId, state, serverTick);
-        return Paper26_2CaptureContexts.atBlockPosition(
+        return CaptureContexts.atBlockPosition(
                 base, new dev.voldechse.replayframework.api.recording.BlockPosition(
                         ClientboundBlockEntityDataPacket.class.cast(decodedPacket).getPos().getX(),
                         ClientboundBlockEntityDataPacket.class.cast(decodedPacket).getPos().getY(),

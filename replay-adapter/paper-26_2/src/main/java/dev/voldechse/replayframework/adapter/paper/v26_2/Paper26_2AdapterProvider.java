@@ -1,5 +1,6 @@
 package dev.voldechse.replayframework.adapter.paper.v26_2;
 
+import dev.voldechse.replayframework.adapter.paper.protocol.PaperPacketRegistry;
 import dev.voldechse.replayframework.adapter.PaperAdapterHandle;
 import dev.voldechse.replayframework.adapter.PaperAdapterProvider;
 import dev.voldechse.replayframework.adapter.ReplayAdapter;
@@ -35,7 +36,7 @@ public final class Paper26_2AdapterProvider implements PaperAdapterProvider {
         Objects.requireNonNull(plugin, "plugin");
         Objects.requireNonNull(playbackFailureHandler, "playbackFailureHandler");
         PaperConnectionAccessor accessor = new PaperConnectionAccessor();
-        Paper26_2PacketRegistry registry = Paper26_2PacketRegistry.discover();
+        PaperPacketRegistry registry = Paper26_2PacketRegistry.discover();
         Paper26_2SnapshotProvider snapshotProvider = null;
         Paper26_2NativePacketCodec nativePacketCodec = null;
         ExecutorService checkpointExecutor = null;

@@ -34,7 +34,7 @@ exposes it to adapter discovery.
 
 | Package | Owns |
 |---|---|
-| `packet` | protocol discovery, the native codec and every packet definition, split into `packet.clientbound` and `packet.serverbound` |
+| `packet` | protocol discovery (`Paper26_2ProtocolIntrospector` reads the live registries into the shared `ProtocolSnapshot`; `Paper26_2PacketRegistry` validates it with the shared `PaperPacketRegistry` against the 26.2 catalog), the native codec and every packet definition, split into `packet.clientbound` and `packet.serverbound` |
 | `argus` | the eye (`Paper26_2ArgusEye`), sampled time and weather (`Paper26_2AmbientSource`), sampled entity state (`Paper26_2SubjectStates`) and the platform queries Argus needs |
 | `actor` | effects the server sends to everyone except the acting player, derived from serverbound packets |
 | `capture` | `Paper26_2CaptureHooks`, the version half of the shared `PaperCaptureBridge`: live codec, definitions, connection identity, Paper's connection hook, the serverbound identifier and the actor effects |
@@ -172,6 +172,22 @@ platform behavior, effect families, checkpoints, rewriting, the outbound
 gate, view reset, the scene entity tracker, the subject state decoder and
 entity interactions. Tests run against the pinned Paper development bundle,
 so IDs, codecs and native types match the version used for compilation.
+
+## Argus measurements
+
+Paper 26.2 build 135, no player online unless noted.
+
+| Check | Result |
+|---|---|
+| Chunks at view distance 6 | 213 `level_chunk_with_light` within 100 ticks, no client acknowledgement needed |
+| Spawned cow | `add_entity`, metadata, attributes, then continuous movement |
+| `Bukkit.getOnlinePlayers()`, `World.getPlayers()`, level players, player count | all 0 |
+| One watch with several eyes | each chunk and entity published once |
+| Two overlapping watches | each has a complete scene; closing one leaves the other untouched |
+| 30 wandering animals over 62 seconds, replayed like a client | 1800 relative steps, 148 absolute checks, largest difference 0.27 blocks, no step for an unknown entity |
+| 400 x 400 region | lattice loaded 1077 chunks without duplicates |
+| Storm started | rain start and rain level packets from the sampled source |
+| After closing an eye | no further packets |
 
 ## Protocol inventory
 

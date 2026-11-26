@@ -7,7 +7,7 @@ import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketClas
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketCaptureState;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RebuildingPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ValueRewriteResult;
-import dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.Paper26_2CaptureContexts;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.CaptureContexts;
 import dev.voldechse.replayframework.adapter.paper.v26_2.playback.Paper26_2ReplayPacketRewriter;
 import java.util.Objects;
 import java.util.Set;
@@ -78,7 +78,7 @@ final class Id001AddEntityPacketDefinition extends RebuildingPacketDefinition<
         Optional<Key> world = base.world();
         world.ifPresent(key -> state.entityPosition(
                 connectionId, value.entityId(), key.toString(), value.x(), value.y(), value.z()));
-        return world.<CaptureContext>map(key -> Paper26_2CaptureContexts.atPosition(
+        return world.<CaptureContext>map(key -> CaptureContexts.atPosition(
                         base, key, value.x(), value.y(), value.z()))
                 .orElse(base);
     }

@@ -81,7 +81,7 @@ independently under the recording's `ReplayBudget`.
 A subject is anything with state of its own. It is identified by kind and
 UUID; the label in the manifest is for display only.
 
-| Subject kind | Identity | State recorded in 26.2 |
+| Subject kind | Identity | State recorded |
 |---|---|---|
 | `PLAYER` | profile UUID | inventory with armor and off hand, hotbar and selected slot, health, food and saturation, experience |
 | `ENTITY` | entity UUID | the inventory of villagers, wandering traders, piglins and allays; the content of chest and hopper minecarts and chest boats; the chest of donkeys, mules and llamas |
@@ -102,9 +102,9 @@ packets the server sends a client that views the subject, so a state track
 is packet-based like every other track.
 
 - **Observed.** The server always sends a player its health, food and
-  experience. In 26.2 the player's own `set_health` and `set_experience`
-  describe their recipient and go to its state track.
-- **Sampled.** `Paper26_2SubjectStates` reads the state on the server thread
+  experience. The player's own `set_health` and `set_experience` describe
+  their recipient and go to its state track.
+- **Sampled.** The adapter's `SubjectStates` (Argus) reads the state on the server thread
   and emits packets when its signature changed:
   - a player's inventory and selected slot **every tick**, as
     `container_set_slot` for each changed slot of window 0 and
@@ -143,7 +143,7 @@ block.
 - **Double chests.** Each half is recorded on its own and names its other
   half and its side in its data, so playback returns both as one container
   of 54 slots, the right half first, as the game shows it.
-- **Reading.** `Paper26_2BlockStates` reads every chunk of the watch's
+- **Reading.** The adapter's `BlockStates` (Argus) reads every chunk of the watch's
   coverage once per `ObserverOptions.stateSampleInterval`. The chunks are
   spread over the ticks of the interval, so a storage hall costs a little
   every tick instead of a lot at once. A container is published when it is
@@ -215,7 +215,7 @@ the tracks, and lists every file with its type, size and SHA-256 digest:
 ```json
 {
   "replayId": "0219de34-7e9f-47df-84e7-b85035cb7f43",
-  "adapterId": "paper-26.2",
+  "adapterId": "paper-<version>",
   "protocolVersion": 776,
   "registryFingerprint": "d0fc878c...",
   "formatRevision": 5,
@@ -317,7 +317,7 @@ Both are answered from the scene packets already played and need no I/O.
 
 ### Interactions
 
-When a viewer right-clicks or attacks a replay entity, the 26.2 bridge
+When a viewer right-clicks or attacks a replay entity, the playback bridge
 reads the viewer's serverbound `interact` or `attack` packet before the
 server's packet handler, consumes it, and publishes an event:
 
@@ -348,7 +348,7 @@ container at the position at the current playback position.
 
 A viewer's right-click on a recorded container of the scene produces a
 `PlaybackBlockInteracted` event with world, position and block entity type.
-The 26.2 bridge learns where containers are from the chunk and block update
+The playback bridge learns where containers are from the chunk and block update
 packets it plays, and consumes the viewer's `use_item_on` packet for such a
 block before the server's packet handler; clicks on other blocks pass.
 

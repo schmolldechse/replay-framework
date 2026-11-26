@@ -192,7 +192,7 @@ final class Id036ExplodePacketDefinition extends RebuildingPacketDefinition<
         var base = super.captureContext(
                 decodedPacket, descriptor, connectionId, state, serverTick);
         var packet = net.minecraft.network.protocol.game.ClientboundExplodePacket.class.cast(decodedPacket);
-        return dev.voldechse.replayframework.adapter.paper.v26_2.packet.clientbound.Paper26_2CaptureContexts.atBlockPosition(
+        return dev.voldechse.replayframework.adapter.paper.packet.clientbound.CaptureContexts.atBlockPosition(
                 base,
                 new dev.voldechse.replayframework.api.recording.BlockPosition(
                         (int) Math.floor(packet.center().x), (int) Math.floor(packet.center().y), (int) Math.floor(packet.center().z)));
