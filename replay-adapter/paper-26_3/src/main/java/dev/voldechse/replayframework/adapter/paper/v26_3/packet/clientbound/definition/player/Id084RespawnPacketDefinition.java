@@ -1,0 +1,57 @@
+package dev.voldechse.replayframework.adapter.paper.v26_3.packet.clientbound.definition.player;
+
+import dev.voldechse.replayframework.adapter.PacketDescriptor;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketClassification;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketCaptureState;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinition;
+import dev.voldechse.replayframework.adapter.paper.v26_3.playback.Paper26_3ReplayPacketRewriter;
+import dev.voldechse.replayframework.adapter.CaptureContext;
+import java.util.UUID;
+import net.kyori.adventure.key.Key;
+import net.minecraft.network.protocol.game.ClientboundRespawnPacket;
+
+/**
+ * Replay policy for {@code minecraft:respawn}.
+ *
+ * <p>The packet changes the receiving player's world and local spawn state,
+ * including dimension, game modes, death location, portal cooldown and the
+ * attribute/entity-data retention mask. Forwarding it would respawn or
+ * relocate the observer and alter their session state. It is therefore
+ * recorded but dropped under the viewer-local playback policy.</p>
+ *
+ * <p>The packet carries no entity ID; it always targets the receiving
+ * player's own entity. Unless {@link ClientboundRespawnPacket#KEEP_ENTITY_DATA}
+ * is set, the client discards that entity and builds a new one, which is the
+ * case for a respawn after death. Capture marks the connection so that the
+ * following {@code minecraft:player_position} can replace the scene entity in
+ * the neutral stream. A respawn that keeps entity data, such as a dimension
+ * change, does not request that replacement.</p>
+ */
+final class Id084RespawnPacketDefinition
+        extends ClientboundPacketDefinition<Paper26_3ReplayPacketRewriter> {
+
+    static final int PACKET_ID = 0x54;
+    static final String IDENTIFIER = "minecraft:respawn";
+
+    Id084RespawnPacketDefinition() {
+        super(
+                PACKET_ID,
+                IDENTIFIER,
+                PacketClassification.stateful(
+                        PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
+    }
+
+    @Override
+    public CaptureContext captureContext(
+            Object decodedPacket,
+            PacketDescriptor descriptor,
+            UUID connectionId,
+            PacketCaptureState state,
+            long serverTick) {
+        ClientboundRespawnPacket packet = ClientboundRespawnPacket.class.cast(decodedPacket);
+        Key world = Key.key(packet.commonPlayerSpawnInfo().dimension().identifier().toString());
+        state.world(connectionId, world.toString());
+        return super.captureContext(decodedPacket, descriptor, connectionId, state, serverTick);
+    }
+
+}
