@@ -305,8 +305,9 @@ new packets, so they are part of phase 2, not a later phase.
   (26.3 `PARTICLES_DESTROY_BLOCK` is 2014, without sound); `BIT_SET` is a byte
   array; enum IDs fall back instead of failing; `animate` actions renumbered;
   previous game type is an optional VarInt. The scene decoder's literal entity
-  data IDs (`SHARED_FLAGS = 0`, `CUSTOM_NAME = 2`, missed in phase 0) are now
-  checked against the server by a test in 26.3. 2e: 1198 tests in
+  data IDs (`SHARED_FLAGS = 0`, `CUSTOM_NAME = 2`, missed in phase 0) are
+  checked against the server by `readsTheDataIdsOfTheEntityClass` in both
+  adapters (taken over from 26.2; a duplicate added in phase 2 goes in 3a). 2e: 1198 tests in
   `paper-26_3`, all green. 2f: runtime depends on both adapters; `runServer`
   pins the dev bundle's build for 26.2 and 26.3. 2g:
   `docs/adapters/paper-26.3.md` (generated from the 26.2 document with 26.3
@@ -323,6 +324,45 @@ new packets, so they are part of phase 2, not a later phase.
   `51224375-3b90-4636-acfd-676c8dacb4c3` (server stopped; finalized), still
   `paper-26.2` with the unchanged fingerprint `d0fc878c...`. A server stop
   during a 26.3 recording was not part of this check.
+- Phase 3: plan approved 2026-11-27. 3a: duplicate entity data test removed
+  from `paper-26_3` (1197 tests). 3b: Argus measured on 26.3 build 263 by a
+  scratchpad probe plugin (own `Argus` over `Paper26_3ArgusPlatform`, logins
+  refused); results in `docs/adapters/paper-26.3.md`. A first run was void
+  because two clients reconnected. The largest movement difference (0.78
+  blocks against 0.27 on 26.2) is not drift: 26.3 sends movement every 3 ticks
+  as stepped deltas, and an `entity_position_sync` replaces a relative step
+  for its interval; `VecDelta.Stepped.decode` (bytecode) confirms that steps
+  are summed with a moving base, as `Paper26_3MovementDeltas` does. Full
+  build green 2026-11-27 (2712 tests). 3c: in-game regression passed
+  2026-11-27, every replay finalized with a manifest, no errors in the server
+  logs: 26.3 `16166b0f-536e-4ece-b9a5-ac97ab07f838` (full scenario, 123 s) and
+  `40464c49-e41c-422c-aafd-5b0c2fe8a01f` (server stopped, 57 s), both
+  `paper-26.3`, protocol 777, fingerprint `f224626f...`; 26.2
+  `fac41eec-9333-46ee-b005-12a03b474e0f` (142 s) and
+  `2a770941-fd0a-427d-947c-59209a225d19` (server stopped, 81 s), both
+  `paper-26.2`, protocol 776, fingerprint `d0fc878c...`.
+
+## Phase 3 plan (approved 2026-11-27)
+
+Goal: both adapters are checked against each other's scenario, the 26.3
+document is complete, and the brief records the end state. The 26.3 document
+and the index are already done in phase 2 (2g).
+
+| Step | Content |
+|---|---|
+| 3a | **Entity data IDs.** Correction of the phase 2 status: `Paper26_2SceneDecoderTest.readsTheDataIdsOfTheEntityClass` already checks `SHARED_FLAGS` and `CUSTOM_NAME` against `Entity` (since `00cabf1`), and the take-over brought it to 26.3. Phase 2 added a second test of the same thing to 26.3 (`metadataIdsMatchTheEntityDataOfThisVersion`); it is removed. No main code changes. |
+| 3b | **Argus on 26.3.** A temporary probe plugin in the scratchpad (not in the repository) runs the nine checks of the 26.2 table on `runServer -PminecraftVersion=26.3` with no player online: chunks at view distance 6, a spawned cow, the player queries, one watch with several eyes, two overlapping watches, 30 wandering animals over about 60 seconds replayed like a client (stepped `VecDelta` summed), a 400 x 400 region, a storm, a closed eye. Results go into `docs/adapters/paper-26.3.md` with build 263; the probe JAR is removed from `run/plugins` afterwards. |
+| 3c | **Regression in game** on 26.3, then 26.2 (below). |
+| 3d | **End state:** status here, one commit for 3a and 3b on the user's word. |
+
+### In-game regression
+
+On each version: record with a world change, a container (chest, furnace),
+mobs and a second entity type (item frame or armor stand), block breaking and
+placing; play back, seek back and forth, two viewers at once; then start a
+second recording and stop the server while it runs. Expected: the stopped
+recording is finalized with a manifest and plays back up to the stop. 26.3 first
+(the stop was not covered in phase 2), then 26.2 with the same scenario.
 
 ## Phase 2 plan (approved 2026-11-27, done)
 

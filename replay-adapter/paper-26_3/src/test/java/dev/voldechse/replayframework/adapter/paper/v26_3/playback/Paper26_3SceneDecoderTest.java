@@ -45,20 +45,6 @@ class Paper26_3SceneDecoderTest {
     }
 
     @Test
-    void metadataIdsMatchTheEntityDataOfThisVersion() throws ReflectiveOperationException {
-        // The scene decoder names two Entity data IDs by number because their
-        // accessors are not public; they must match the running server.
-        assertEquals(entityDataId("DATA_SHARED_FLAGS_ID"), Paper26_3SceneDecoder.SHARED_FLAGS);
-        assertEquals(entityDataId("DATA_CUSTOM_NAME"), Paper26_3SceneDecoder.CUSTOM_NAME);
-    }
-
-    private static int entityDataId(String field) throws ReflectiveOperationException {
-        java.lang.reflect.Field accessor = net.minecraft.world.entity.Entity.class.getDeclaredField(field);
-        accessor.setAccessible(true);
-        return ((net.minecraft.network.syncher.EntityDataAccessor<?>) accessor.get(null)).id();
-    }
-
-    @Test
     void followsSteppedMovementByTheSumOfItsSteps() {
         observe("player_info_update", 0, info(ALEX, "Alex"), Optional.empty());
         observe("add_entity", 7, spawn(7, ALEX, 0, 64, 0), Optional.of("minecraft:overworld"));

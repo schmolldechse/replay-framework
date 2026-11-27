@@ -198,7 +198,20 @@ so IDs, codecs and native types match the version used for compilation.
 
 ## Argus measurements
 
-Not measured on 26.3 yet.
+Paper 26.3 build 263, no player online (logins refused during the
+measurement), measured 2026-11-27.
+
+| Check | Result |
+|---|---|
+| Chunks at view distance 6 | 213 `level_chunk_with_light` within 100 ticks, all distinct, no client acknowledgement needed |
+| Spawned cow | `add_entity`, metadata, `entity_position_sync`, motion, attributes, then movement |
+| `Bukkit.getOnlinePlayers()`, `World.getPlayers()`, level players, player count | all 0 |
+| One watch with several eyes | 240 x 240 region, 9 eyes: each of 517 chunks and 205 entities published once |
+| Two overlapping watches | each has a complete scene; closing one leaves the other untouched (no chunk lost, no forget or remove) |
+| 30 wandering animals over 62 seconds, replayed like a client | 979 relative steps, all as stepped `VecDelta`, 119 absolute checks, no step for an unknown entity. 80 checks differ by less than 0.01 blocks; the largest difference, 0.78 blocks, is the movement of one send interval: the server sends movement every 3 ticks, and an `entity_position_sync` takes the place of a relative step for that interval (here a fall of 0.77 blocks). No difference accumulates |
+| 400 x 400 region | lattice of 25 eyes loaded 1077 chunks without duplicates |
+| Storm started | rain start and rain level packets from the sampled source |
+| After closing an eye | no further packets |
 
 ## Protocol inventory
 
