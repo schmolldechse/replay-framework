@@ -11,6 +11,7 @@ supported.
 | Minecraft | Module | Pinned Paper build | Document |
 |---|---|---|---|
 | 26.2 | `replay-adapter:paper-26_2` | `26.2.build.135-stable` | [Paper 26.2 adapter](paper-26.2.md) |
+| 26.3 | `replay-adapter:paper-26_3` | `26.3.build.263-stable` | [Paper 26.3 adapter](paper-26.3.md) |
 
 Start a development server of one version with
 `runServer -PminecraftVersion=<version>`.
