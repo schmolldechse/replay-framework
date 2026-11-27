@@ -2,9 +2,3 @@ name: ReplayFramework
 version: '${frameworkVersion}'
 main: dev.voldechse.replayframework.runtime.ReplayPaperPlugin
 api-version: '26.2'
-dependencies:
-  server:
-    packetevents:
-      required: true
-      load: BEFORE
-      join-classpath: true

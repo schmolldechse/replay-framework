@@ -1,9 +1,15 @@
 package dev.voldechse.replayframework.adapter.paper.v26_3.checkpoint;
 
+import dev.voldechse.replayframework.adapter.paper.protocol.PaperPacketRegistry;
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.PacketDisposition;
+import dev.voldechse.replayframework.adapter.paper.checkpoint.CheckpointCodec;
+import dev.voldechse.replayframework.adapter.paper.checkpoint.EncodedPacket;
+import dev.voldechse.replayframework.adapter.paper.checkpoint.PacketBlueprint;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinition;
 import dev.voldechse.replayframework.adapter.paper.v26_3.Paper26_3PacketRegistry;
+import dev.voldechse.replayframework.adapter.paper.v26_3.packet.clientbound.Paper26_3ClientboundPacketCatalog;
 import dev.voldechse.replayframework.format.PacketPhase;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -26,15 +32,15 @@ import net.minecraft.server.MinecraftServer;
  * contract.</p>
  */
 public final class Paper26_3NativePacketCodec
-        implements Paper26_3CheckpointEncoder.NativePacketCodec, AutoCloseable {
+        implements CheckpointCodec, AutoCloseable {
 
-    private final Paper26_3PacketRegistry registry;
+    private final PaperPacketRegistry registry;
     private final ProtocolInfo<?> protocolInfo;
     private final Object lock = new Object();
     private boolean closed;
 
     private Paper26_3NativePacketCodec(
-            Paper26_3PacketRegistry registry,
+            PaperPacketRegistry registry,
             ProtocolInfo<?> protocolInfo) {
         this.registry = Objects.requireNonNull(registry, "registry");
         this.protocolInfo = Objects.requireNonNull(protocolInfo, "protocolInfo");
@@ -48,7 +54,7 @@ public final class Paper26_3NativePacketCodec
      * @param registry verified Paper packet registry
      * @return independent native packet codec
      */
-    public static Paper26_3NativePacketCodec create(Paper26_3PacketRegistry registry) {
+    public static Paper26_3NativePacketCodec create(PaperPacketRegistry registry) {
         Objects.requireNonNull(registry, "registry");
         try {
             MinecraftServer server = MinecraftServer.getServer();
@@ -73,18 +79,19 @@ public final class Paper26_3NativePacketCodec
 
     /** Creates a codec with an already-bound protocol for adapter-local tests. */
     static Paper26_3NativePacketCodec forTesting(
-            Paper26_3PacketRegistry registry,
+            PaperPacketRegistry registry,
             ProtocolInfo<?> protocolInfo) {
         return new Paper26_3NativePacketCodec(registry, protocolInfo);
     }
 
     @Override
-    public Paper26_3CheckpointEncoder.EncodedPacket encode(
-            Paper26_3CheckpointEncoder.PacketBlueprint blueprint) {
+    public EncodedPacket encode(PacketBlueprint blueprint) {
         Objects.requireNonNull(blueprint, "blueprint");
         synchronized (lock) {
             ensureOpen();
-            Packet<?> packet = blueprint.nativePacket();
+            if (!(blueprint.nativePacket() instanceof Packet<?> packet)) {
+                throw incompatible("checkpoint blueprint does not hold a Minecraft packet", null);
+            }
             if (packet.type() == null || packet.type().flow() != PacketFlow.CLIENTBOUND) {
                 throw incompatible("Paper checkpoint packet is not clientbound", null);
             }
@@ -109,7 +116,7 @@ public final class Paper26_3NativePacketCodec
 
                 byte[] payload = new byte[buffer.readableBytes()];
                 buffer.readBytes(payload);
-                return new Paper26_3CheckpointEncoder.EncodedPacket(
+                return new EncodedPacket(
                         descriptor.typeName(),
                         PacketPhase.PLAY,
                         PacketDescriptor.Direction.CLIENTBOUND,
@@ -126,6 +133,16 @@ public final class Paper26_3NativePacketCodec
                 buffer.release();
             }
         }
+    }
+
+    /** Encodes a packet of a subject's or a block's state for a checkpoint. */
+    @Override
+    public StatePacket encodeStatePacket(Object nativePacket) {
+        if (!(nativePacket instanceof Packet<?> packet)) {
+            throw incompatible("checkpoint state is not a Minecraft packet", null);
+        }
+        EncodedStatePacket encoded = encodeState(packet);
+        return new StatePacket(encoded.packetId(), encoded.payload());
     }
 
     /** Encodes one adapter-generated PLAY state packet for neutral capture. */
@@ -147,10 +164,14 @@ public final class Paper26_3NativePacketCodec
                         .orElseThrow(() -> incompatible(
                                 "synthetic state packet ID is not registered: " + packetId,
                                 null));
+                // Sampled self-entity state is STATEFUL (position, head rotation,
+                // equipment); the sampled arm swing is the EPHEMERAL animate packet.
                 if (!descriptor.replayable()
-                        || descriptor.disposition() != PacketDisposition.STATEFUL) {
+                        || (descriptor.disposition() != PacketDisposition.STATEFUL
+                                && descriptor.disposition() != PacketDisposition.EPHEMERAL)) {
                     throw incompatible(
-                            "synthetic packet is not replayable state: " + descriptor.typeName(),
+                            "synthetic packet is not replayable entity state: "
+                                    + descriptor.typeName(),
                             null);
                 }
                 byte[] payload = new byte[buffer.readableBytes()];
@@ -160,6 +181,46 @@ public final class Paper26_3NativePacketCodec
                 throw exception;
             } catch (RuntimeException | LinkageError exception) {
                 throw incompatible("Paper 26.3 synthetic state encoding failed", exception);
+            } finally {
+                buffer.release();
+            }
+        }
+    }
+
+    /**
+     * Encodes a packet a virtual observer received.
+     *
+     * @return the wire data, or empty when the registry never captures this packet
+     */
+    public java.util.Optional<EncodedStatePacket> encodeObserved(Packet<?> packet) {
+        Objects.requireNonNull(packet, "packet");
+        synchronized (lock) {
+            ensureOpen();
+            if (packet.type() == null || packet.type().flow() != PacketFlow.CLIENTBOUND) {
+                throw incompatible("Paper observed packet is not clientbound", null);
+            }
+            ByteBuf buffer = Unpooled.buffer();
+            try {
+                encodeNative(protocolInfo, buffer, packet);
+                int packetId = readVarInt(buffer);
+                PacketDescriptor descriptor = registry.find(
+                                PacketPhase.PLAY,
+                                PacketDescriptor.Direction.CLIENTBOUND,
+                                packetId)
+                        .orElseThrow(() -> incompatible(
+                                "observed packet ID is not registered: " + packetId,
+                                null));
+                if (!registry.captureAllowed(
+                        PacketPhase.PLAY, PacketDescriptor.Direction.CLIENTBOUND, packetId)) {
+                    return java.util.Optional.empty();
+                }
+                byte[] payload = new byte[buffer.readableBytes()];
+                buffer.readBytes(payload);
+                return java.util.Optional.of(new EncodedStatePacket(packetId, payload, descriptor));
+            } catch (IncompatibleAdapterException exception) {
+                throw exception;
+            } catch (RuntimeException | LinkageError exception) {
+                throw incompatible("Paper 26.3 observed packet encoding failed", exception);
             } finally {
                 buffer.release();
             }
@@ -202,7 +263,7 @@ public final class Paper26_3NativePacketCodec
     }
 
     private void validateDescriptor(
-            Paper26_3CheckpointEncoder.PacketBlueprint blueprint,
+            PacketBlueprint blueprint,
             String packetTypeName,
             PacketDescriptor descriptor) {
         if (!packetTypeName.equals(descriptor.typeName())
@@ -218,7 +279,9 @@ public final class Paper26_3NativePacketCodec
             throw incompatible(
                     "native checkpoint packet is not replayable: " + descriptor.typeName(), null);
         }
-        if (Paper26_3CheckpointEncoder.familyFor(descriptor.typeName()) != blueprint.family()) {
+        if (Paper26_3ClientboundPacketCatalog.catalog().find(descriptor.typeName())
+                .flatMap(ClientboundPacketDefinition::checkpointFamily)
+                .orElse(null) != blueprint.family()) {
             throw incompatible("native checkpoint packet family mismatch", null);
         }
     }

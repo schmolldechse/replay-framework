@@ -1,0 +1,36 @@
+package dev.voldechse.replayframework.adapter.paper.v26_3.packet.clientbound.definition.player;
+
+import dev.voldechse.replayframework.adapter.PacketDescriptor;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RecipientState;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketClassification;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinition;
+import dev.voldechse.replayframework.adapter.paper.v26_3.playback.Paper26_3ReplayPacketRewriter;
+
+/**
+ * Viewer-local contract for {@code minecraft:set_experience}.
+ *
+ * <p>The progress float, level VarInt, and total-experience VarInt describe
+ * the receiving player's own experience HUD. They remain recording data but
+ * must not overwrite the neutral observer's progress or level. The common
+ * packet policy drops this packet before decoding its fields.</p>
+ */
+final class Id105SetExperiencePacketDefinition
+        extends ClientboundPacketDefinition<Paper26_3ReplayPacketRewriter> {
+
+    static final int PACKET_ID = 0x69;
+    static final String IDENTIFIER = "minecraft:set_experience";
+
+    Id105SetExperiencePacketDefinition() {
+        super(
+                PACKET_ID,
+                IDENTIFIER,
+                PacketClassification.stateful(
+                        PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
+    }
+
+    /** The recipient's experience. */
+    @Override
+    public RecipientState recipientState() {
+        return RecipientState.always();
+    }
+}

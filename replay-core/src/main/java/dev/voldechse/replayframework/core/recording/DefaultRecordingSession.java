@@ -49,6 +49,7 @@ final class DefaultRecordingSession implements RecordingSession, CaptureSink {
     private final AtomicLong checkpointCount = new AtomicLong(1L);
     private final AtomicLong recordingStartNanos = new AtomicLong();
     private final AtomicLong sealedDurationNanos = new AtomicLong(-1L);
+    private final RecipientCopyMerger recipientCopies = new RecipientCopyMerger();
 
     DefaultRecordingSession(
             RecordingSessionId id,
@@ -144,8 +145,25 @@ final class DefaultRecordingSession implements RecordingSession, CaptureSink {
         Objects.requireNonNull(packet, "packet");
         return status.get() == RecordingStatus.RECORDING
                 && !queue.closed()
-                && resolvedScope.accepts(packet);
+                && ownsObservation(packet)
+                && resolvedScope.accepts(packet)
+                // Last: only copies this recording accepts count as seen.
+                && recipientCopies.record(packet);
     }
+
+    /** Names the scene observation whose packets belong to this recording. */
+    void observation(java.util.UUID observationId) {
+        this.observationId = Objects.requireNonNull(observationId, "observationId");
+    }
+
+    /** Observer packets are private to the recording that placed the observers. */
+    private boolean ownsObservation(CapturedPacket packet) {
+        return packet.context().observation()
+                .map(observation -> observation.equals(observationId))
+                .orElse(true);
+    }
+
+    private volatile java.util.UUID observationId;
 
     @Override
     public void enqueue(CapturedPacket packet) {

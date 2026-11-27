@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.google.gson.JsonObject;
+import dev.voldechse.replayframework.core.diagnostics.ReplayDiagnostics;
 import dev.voldechse.replayframework.adapter.AdapterDescriptor;
 import dev.voldechse.replayframework.adapter.CaptureBridge;
 import dev.voldechse.replayframework.adapter.CaptureContext;
@@ -32,6 +33,10 @@ import dev.voldechse.replayframework.core.capture.CaptureRouter;
 import dev.voldechse.replayframework.core.capture.CapturedPacket;
 import dev.voldechse.replayframework.format.PacketPhase;
 import dev.voldechse.replayframework.format.ReplayCheckpoint;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -47,6 +52,18 @@ import org.bukkit.entity.Player;
 import org.junit.jupiter.api.Test;
 
 final class RecordingCoordinatorTest {
+
+    private static final Path STAGING = createStagingRoot();
+
+    private static Path createStagingRoot() {
+        try {
+            Path root = Files.createTempDirectory("recording-coordinator-test");
+            root.toFile().deleteOnExit();
+            return root;
+        } catch (IOException failure) {
+            throw new UncheckedIOException(failure);
+        }
+    }
 
     @Test
     void startActivatesOnlyAfterRecordingTransition() {
@@ -165,6 +182,8 @@ final class RecordingCoordinatorTest {
         CompletionStage<RecordingSession> second = session.stop();
 
         assertSame(first, second);
+        // The writer seals the recording on its own thread before it is finalized.
+        first.toCompletableFuture().orTimeout(10, java.util.concurrent.TimeUnit.SECONDS).join();
         assertEquals(1, finalizations.get());
         assertEquals(RecordingStatus.FINALIZING, session.status());
     }
@@ -226,9 +245,23 @@ final class RecordingCoordinatorTest {
                 scopeResolver,
                 new RecordingCoordinator.RecordingTarget(
                         ReplayStorageBackend.LOCAL,
-                        ReplayId::toString),
+                        ReplayId::toString,
+                        RecordingCoordinatorTest::staging),
                 finalizationHandler,
-                Runnable::run);
+                TestLeases.manager(),
+                Runnable::run,
+                event -> {
+                },
+                new ReplayDiagnostics());
+    }
+
+    /** A fresh staging directory per replay, so overlapping sessions never share files. */
+    private static Path staging(ReplayId replayId) {
+        try {
+            return Files.createDirectories(STAGING.resolve(replayId.toString()));
+        } catch (IOException failure) {
+            throw new UncheckedIOException(failure);
+        }
     }
 
     private static RecordingRequest request(long queueBytes) {

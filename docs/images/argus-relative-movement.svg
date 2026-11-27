@@ -1,0 +1,117 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 500" width="1000" height="500" role="img" aria-labelledby="t d">
+<title id="t">Why a region recording is bounded by its eyes</title>
+<desc id="d">An entity moves from x 100 to 101.6 in four relative steps of 0.4 blocks. Filtering packets by position drops the third step while the entity is above the region; the client then shows the entity 0.4 blocks behind its real position, and every later step keeps the error. With the eyes as the boundary every step is kept and the client matches the server.</desc>
+<style>
+  svg { --bg:#ffffff; --panel:#f6f8fa; --fg:#1f2328; --muted:#59636e; --grid:#d1d9e0;
+        --blue:#0969da; --blue-fill:#ddf4ff; --red:#cf222e; --red-fill:#ffebe9;
+        --green:#1a7f37; --green-fill:#dafbe1; --amber:#9a6700; --amber-fill:#fff8c5; }
+  @media (prefers-color-scheme: dark) {
+    svg { --bg:#0d1117; --panel:#151b23; --fg:#f0f6fc; --muted:#9198a1; --grid:#3d444d;
+          --blue:#4493f8; --blue-fill:#0f2445; --red:#f85149; --red-fill:#3c1618;
+          --green:#3fb950; --green-fill:#12261e; --amber:#d29922; --amber-fill:#272115; }
+  }
+  text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif; fill: var(--fg); }
+  .bg { fill: var(--bg); }
+  .lane { fill: var(--panel); stroke: var(--grid); }
+  .title { font-size: 20px; font-weight: 600; }
+  .sub { font-size: 13px; fill: var(--muted); }
+  .h { font-size: 14px; font-weight: 600; }
+  .m { font-size: 12px; fill: var(--muted); }
+  .tick { font-size: 11px; fill: var(--muted); font-variant-numeric: tabular-nums; }
+  .axis { stroke: var(--grid); stroke-width: 1; }
+  .guide { stroke: var(--grid); stroke-width: 1; stroke-dasharray: 2 4; }
+  .step { fill: none; stroke-width: 2; }
+  .s-blue { stroke: var(--blue); } .s-red { stroke: var(--red); } .s-green { stroke: var(--green); }
+  .lbl { font-size: 11px; font-weight: 600; }
+  .t-blue { fill: var(--blue); } .t-red { fill: var(--red); } .t-green { fill: var(--green); } .t-amber { fill: var(--amber); }
+  .dot-blue { fill: var(--blue-fill); stroke: var(--blue); stroke-width: 2; }
+  .dot-red { fill: var(--red); stroke: var(--red); stroke-width: 2; }
+  .dot-green { fill: var(--green-fill); stroke: var(--green); stroke-width: 2; }
+  .ghost { fill: none; stroke: var(--muted); stroke-width: 2; stroke-dasharray: 3 3; }
+  .badge-red { fill: var(--red-fill); stroke: var(--red); }
+  .badge-green { fill: var(--green-fill); stroke: var(--green); }
+  .badge-amber { fill: var(--amber-fill); stroke: var(--amber); }
+</style>
+<defs>
+  <marker id="a-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill:var(--blue)"/></marker>
+  <marker id="a-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill:var(--red)"/></marker>
+  <marker id="a-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill:var(--green)"/></marker>
+</defs>
+
+<rect class="bg" width="1000" height="500" rx="12"/>
+<text class="title" x="32" y="42">One dropped step corrupts every later position</text>
+<text class="sub" x="32" y="66">The entity tracker sends movement as steps relative to the last position. A recording must keep all steps of an entity or none.</text>
+
+<!-- x axis -->
+<text class="tick" x="250" y="104" text-anchor="middle">x = 100.0</text>
+<text class="tick" x="410" y="104" text-anchor="middle">100.4</text>
+<text class="tick" x="570" y="104" text-anchor="middle">100.8</text>
+<text class="tick" x="730" y="104" text-anchor="middle">101.2</text>
+<text class="tick" x="890" y="104" text-anchor="middle">101.6</text>
+<line class="guide" x1="250" y1="112" x2="250" y2="470"/>
+<line class="guide" x1="410" y1="112" x2="410" y2="470"/>
+<line class="guide" x1="570" y1="112" x2="570" y2="470"/>
+<line class="guide" x1="730" y1="112" x2="730" y2="470"/>
+<line class="guide" x1="890" y1="112" x2="890" y2="470"/>
+
+<!-- Lane 1: server -->
+<rect class="lane" x="24" y="118" width="952" height="104" rx="10"/>
+<text class="h" x="44" y="160">The server sends</text>
+<text class="m" x="44" y="180">four steps of +0.4</text>
+<path class="step s-blue" d="M258 180 Q330 146 402 180" marker-end="url(#a-blue)"/>
+<path class="step s-blue" d="M418 180 Q490 146 562 180" marker-end="url(#a-blue)"/>
+<path class="step s-blue" d="M578 180 Q650 146 722 180" marker-end="url(#a-blue)"/>
+<path class="step s-blue" d="M738 180 Q810 146 882 180" marker-end="url(#a-blue)"/>
+<text class="lbl t-blue" x="330" y="150" text-anchor="middle">+0.4</text>
+<text class="lbl t-blue" x="490" y="150" text-anchor="middle">+0.4</text>
+<text class="lbl t-blue" x="650" y="150" text-anchor="middle">+0.4</text>
+<text class="lbl t-blue" x="810" y="150" text-anchor="middle">+0.4</text>
+<circle class="dot-blue" cx="250" cy="182" r="7"/>
+<circle class="dot-blue" cx="410" cy="182" r="7"/>
+<circle class="dot-blue" cx="570" cy="182" r="7"/>
+<circle class="dot-blue" cx="730" cy="182" r="7"/>
+<circle class="dot-blue" cx="890" cy="182" r="7"/>
+<rect class="badge-amber" x="588" y="194" width="124" height="20" rx="10"/>
+<text class="lbl t-amber" x="650" y="208" text-anchor="middle">above the region</text>
+
+<!-- Lane 2: filter by position -->
+<rect class="lane" x="24" y="236" width="952" height="114" rx="10"/>
+<text class="h" x="44" y="278">Filter by position</text>
+<text class="m" x="44" y="298">drops the step above</text>
+<text class="m" x="44" y="314">the region</text>
+<path class="step s-blue" d="M258 296 Q330 262 402 296" marker-end="url(#a-blue)"/>
+<path class="step s-blue" d="M418 296 Q490 262 562 296" marker-end="url(#a-blue)"/>
+<path class="step s-red" d="M578 296 Q650 262 722 296" stroke-dasharray="5 5" opacity=".55"/>
+<g transform="translate(650 279)"><path d="M-8 -8L8 8M8 -8L-8 8" stroke="var(--red)" stroke-width="3" stroke-linecap="round"/></g>
+<text class="lbl t-red" x="650" y="262" text-anchor="middle">dropped</text>
+<path class="step s-red" d="M578 300 Q650 330 722 300" marker-end="url(#a-red)"/>
+<text class="lbl t-red" x="650" y="334" text-anchor="middle">next +0.4</text>
+<circle class="dot-blue" cx="250" cy="298" r="7"/>
+<circle class="dot-blue" cx="410" cy="298" r="7"/>
+<circle class="dot-blue" cx="570" cy="298" r="7"/>
+<circle class="dot-red" cx="730" cy="298" r="7"/>
+<circle class="ghost" cx="890" cy="298" r="7"/>
+<text class="lbl t-red" x="730" y="276" text-anchor="middle">client: 101.2</text>
+<text class="m" x="890" y="276" text-anchor="middle">actual: 101.6</text>
+<rect class="badge-red" x="742" y="318" width="136" height="24" rx="12"/>
+<text class="lbl t-red" x="810" y="334" text-anchor="middle">0.4 blocks off, for good</text>
+
+<!-- Lane 3: watch boundary -->
+<rect class="lane" x="24" y="364" width="952" height="114" rx="10"/>
+<text class="h" x="44" y="406">Eyes as the boundary</text>
+<text class="m" x="44" y="426">every step of the watch</text>
+<text class="m" x="44" y="442">is kept</text>
+<path class="step s-green" d="M258 424 Q330 390 402 424" marker-end="url(#a-green)"/>
+<path class="step s-green" d="M418 424 Q490 390 562 424" marker-end="url(#a-green)"/>
+<path class="step s-green" d="M578 424 Q650 390 722 424" marker-end="url(#a-green)"/>
+<path class="step s-green" d="M738 424 Q810 390 882 424" marker-end="url(#a-green)"/>
+<circle class="dot-green" cx="250" cy="426" r="7"/>
+<circle class="dot-green" cx="410" cy="426" r="7"/>
+<circle class="dot-green" cx="570" cy="426" r="7"/>
+<circle class="dot-green" cx="730" cy="426" r="7"/>
+<circle class="dot-green" cx="890" cy="426" r="7"/>
+<rect class="badge-green" x="568" y="440" width="164" height="24" rx="12"/>
+<text class="lbl t-green" x="650" y="456" text-anchor="middle">the eye still sees the entity</text>
+<rect class="badge-green" x="822" y="440" width="136" height="24" rx="12"/>
+<text class="lbl t-green" x="890" y="456" text-anchor="middle">matches the server</text>
+</svg>

@@ -6,6 +6,11 @@ import dev.voldechse.replayframework.api.playback.PlaybackRequest;
 import dev.voldechse.replayframework.api.playback.ObserverPlacement;
 import dev.voldechse.replayframework.api.playback.PlaybackService;
 import dev.voldechse.replayframework.api.playback.PlaybackSession;
+import dev.voldechse.replayframework.api.playback.RecordedPlayer;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import net.kyori.adventure.key.Key;
+import org.bukkit.NamespacedKey;
 import dev.voldechse.replayframework.example.resourcepack.ExampleResourcePackService;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -38,7 +43,7 @@ import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.World;
 import org.bukkit.WorldCreator;
-import org.bukkit.WorldType;
+import org.bukkit.generator.ChunkGenerator;
 
 /**
  * Owns the Example-side environment around one independent replay viewer.
@@ -48,6 +53,14 @@ import org.bukkit.WorldType;
  * owns the playback session and its resources.</p>
  */
 public final class ExampleViewerEnvironment {
+
+    /**
+     * Further viewer worlds of a viewer, one per dimension other than the one
+     * of its first viewer world. A client applies chunks with the height of
+     * its own dimension, so a recorded world is watched from a viewer world
+     * of the same dimension.
+     */
+    private final Map<UUID, Map<World.Environment, World>> dimensionWorlds = new ConcurrentHashMap<>();
 
     /**
      * Immutable configuration for the Example viewer environment.
@@ -212,6 +225,50 @@ public final class ExampleViewerEnvironment {
     }
 
     /**
+     * Moves a viewer to a recorded player. When the player is in another
+     * recorded world, the viewer moves to a viewer world of that world's
+     * dimension first and the playback switches to that world.
+     *
+     * @param viewerId viewer UUID
+     * @param target the recorded player to go to
+     * @return stage completed once the viewer arrived
+     */
+    public CompletionStage<Void> goTo(UUID viewerId, RecordedPlayer target) {
+        if (viewerId == null || target == null) {
+            return failed(new NullPointerException(viewerId == null ? "viewerId" : "target"));
+        }
+        RecordedPlayer.Location location = target.location().orElse(null);
+        if (location == null) {
+            return failed(new IllegalStateException(target.name() + " is not in the replay right now"));
+        }
+        return onMain(() -> {
+            ViewerSessionRegistry.ViewerSession entry = registry.find(viewerId)
+                    .filter(candidate -> candidate.playback() != null)
+                    .orElseThrow(() -> new IllegalStateException("Viewer has no active playback"));
+            PlaybackSession session = entry.playback();
+            boolean switchWorld = !location.world().equals(session.viewedWorld());
+            World viewerWorld = switchWorld
+                    ? viewerWorldFor(entry, environmentOf(location.world()))
+                    : entry.player().getWorld();
+            Location destination = new Location(
+                    viewerWorld, location.x(), location.y(), location.z(),
+                    location.yaw(), location.pitch());
+            return entry.player()
+                    .teleportAsync(destination, PlayerTeleportEvent.TeleportCause.PLUGIN)
+                    .thenCompose(arrived -> {
+                        if (!Boolean.TRUE.equals(arrived)) {
+                            return failed(new IllegalStateException("Viewer teleport was rejected"));
+                        }
+                        // The client is in the right dimension now; only then
+                        // may the frames of the other recorded world reach it.
+                        return switchWorld
+                                ? session.viewWorld(location.world()).thenApply(ignored -> (Void) null)
+                                : CompletableFuture.<Void>completedFuture(null);
+                    });
+        }).thenCompose(Function.identity());
+    }
+
+    /**
      * Returns whether the UUID is reserved by this Example environment.
      *
      * @param viewerId viewer UUID
@@ -304,16 +361,64 @@ public final class ExampleViewerEnvironment {
         player.setFallDistance(0.0F);
     }
 
+    /**
+     * Moves the viewer to a viewer world of the viewed world's dimension when
+     * the playback started in a dimension other than the viewer's own. The
+     * viewer keeps its place; the scene is built again in the new world.
+     */
+    private void alignDimension(ViewerSessionRegistry.ViewerSession entry, PlaybackSession session) {
+        World.Environment environment = environmentOf(session.viewedWorld());
+        Player player = entry.player();
+        if (player.getWorld().getEnvironment() == environment) {
+            return;
+        }
+        Location destination = player.getLocation().clone();
+        destination.setWorld(viewerWorldFor(entry, environment));
+        player.teleportAsync(destination, PlayerTeleportEvent.TeleportCause.PLUGIN)
+                .thenCompose(arrived -> Boolean.TRUE.equals(arrived)
+                        ? session.viewWorld(session.viewedWorld())
+                        : failed(new IllegalStateException("Viewer teleport was rejected")))
+                .whenComplete((ignored, failure) -> {
+                    if (failure != null) {
+                        logFailure("viewer dimension", entry, unwrap(failure));
+                    }
+                });
+    }
+
+    /** The dimension of a recorded world, read from the live world of the same key. */
+    private World.Environment environmentOf(Key recordedWorld) {
+        NamespacedKey key = NamespacedKey.fromString(recordedWorld.asString());
+        World live = key == null ? null : plugin.getServer().getWorld(key);
+        return live == null ? World.Environment.NORMAL : live.getEnvironment();
+    }
+
+    /** The viewer world of a dimension; created the first time it is needed. */
+    private World viewerWorldFor(ViewerSessionRegistry.ViewerSession entry, World.Environment environment) {
+        World primary = Objects.requireNonNull(entry.viewerWorld(), "viewer world");
+        if (primary.getEnvironment() == environment) {
+            return primary;
+        }
+        return dimensionWorlds
+                .computeIfAbsent(entry.viewerId(), ignored -> new ConcurrentHashMap<>())
+                .computeIfAbsent(environment, ignored -> createViewerWorld(
+                        primary.getName() + "-" + environment.name().toLowerCase(Locale.ROOT),
+                        environment));
+    }
+
     private World createViewerWorld(ViewerSessionRegistry.ViewerSession entry) {
         String worldName = "replay-viewer-" + entry.viewerId().toString().replace("-", "")
                 + "-" + entry.replayId().value().toString().replace("-", "");
+        World template = Objects.requireNonNull(entry.player().getWorld(), "player.world");
+        return createViewerWorld(worldName, template.getEnvironment());
+    }
+
+    private World createViewerWorld(String worldName, World.Environment environment) {
         if (plugin.getServer().getWorld(worldName) != null) {
             throw new IllegalStateException("Viewer world name is already in use: " + worldName);
         }
-        World template = Objects.requireNonNull(entry.player().getWorld(), "player.world");
         World world = new WorldCreator(worldName)
-                .environment(template.getEnvironment())
-                .type(WorldType.FLAT)
+                .environment(environment)
+                .generator(new EmptyGenerator())
                 .generateStructures(false)
                 .createWorld();
         if (world == null) {
@@ -349,6 +454,7 @@ public final class ExampleViewerEnvironment {
                         ViewerSessionRegistry.State.ACTIVE)) {
             try {
                 registry.attachPlayback(entry, session);
+                alignDimension(entry, session);
                 session.play();
                 entry.openResult().complete(session);
             } catch (Throwable attachFailure) {
@@ -496,11 +602,17 @@ public final class ExampleViewerEnvironment {
     }
 
     private void deleteViewerWorld(ViewerSessionRegistry.ViewerSession entry) {
-        World world = entry.viewerWorld();
-        if (world == null) {
-            return;
+        Map<World.Environment, World> further = dimensionWorlds.remove(entry.viewerId());
+        if (further != null) {
+            further.values().forEach(world -> deleteViewerWorld(entry, world));
         }
+        World world = entry.viewerWorld();
+        if (world != null) {
+            deleteViewerWorld(entry, world);
+        }
+    }
 
+    private void deleteViewerWorld(ViewerSessionRegistry.ViewerSession entry, World world) {
         try {
             if (plugin.getServer().getWorld(world.getName()) != null
                     && !plugin.getServer().unloadWorld(world, false)) {
@@ -647,5 +759,19 @@ public final class ExampleViewerEnvironment {
         CompletableFuture<T> result = new CompletableFuture<>();
         result.completeExceptionally(failure);
         return result;
+    }
+
+    /**
+     * Generates no blocks. The server checks a viewer's movement against the
+     * blocks of its viewer world, which the viewer never sees; any terrain
+     * there would stop the viewer at invisible walls.
+     */
+    private static final class EmptyGenerator extends ChunkGenerator {
+
+        /** A fixed spawn, so Paper does not search the empty world for a safe one. */
+        @Override
+        public Location getFixedSpawnLocation(World world, java.util.Random random) {
+            return new Location(world, 0.5, 64.0, 0.5);
+        }
     }
 }

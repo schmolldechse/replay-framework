@@ -8,10 +8,9 @@ plugins only use the `ReplayFramework` service after it has been published.
 
 Prepare a Paper server with the following components:
 
-- Paper **26.2 or 26.3** running on **Java 26**. The runtime selects the
-  matching adapter at startup. The pinned builds are Paper 26.2 build 135 and Paper 26.3 build 244 (stable).
-- PacketEvents installed as a server plugin. The runtime declares it as a
-  required dependency.
+- Paper on **Java 26**, in a Minecraft version that has an adapter. The
+  [adapter index](adapters/README.md) lists the supported versions and
+  their pinned builds.
 - A reachable PostgreSQL database. The framework uses it for the replay
   catalog, lifecycle state, leases, and metadata revisions.
 - One artifact storage choice: Local filesystem, Amazon S3, or SFTP.
@@ -26,10 +25,9 @@ schema.
    its corresponding runtime JAR.
 2. Copy the bundled JAR from `replay-runtime-paper/build/libs/` into the
    server's `plugins/` directory.
-3. Install PacketEvents in the same directory.
-4. Start the server once. The runtime creates
+3. Start the server once. The runtime creates
    `plugins/ReplayFramework/config.json` when it is missing.
-5. Stop the server, configure PostgreSQL and the desired storage backend, then
+4. Stop the server, configure PostgreSQL and the desired storage backend, then
    start it again.
 
 The generated configuration intentionally contains development-safe Local
@@ -118,8 +116,11 @@ ReplayMetadataService metadata = framework.metadata();
 The API separates Paper-bound inputs from asynchronous work:
 
 - A `PlaybackRequest` accepts a Paper `Player` at the integration boundary.
-- Starting a recording, opening playback, catalog access, metadata access, and
-  seek/close operations return `CompletionStage` values.
+- Starting a recording, opening playback, catalog access, metadata access,
+  seek/close operations, world switches, `recordedPlayers()` and subject
+  `state(...)` return `CompletionStage` values.
+- `PlaybackSession.entities()` and `entity(int)` answer from frames already
+  played and return immediately.
 - `PlaybackSession.play()`, `pause()`, and `speed(...)` are non-blocking.
 
 Never synchronously wait for a returned stage on the server thread. When a

@@ -1,9 +1,10 @@
 package dev.voldechse.replayframework.core.playback;
 
+import dev.voldechse.replayframework.adapter.StubPlaybackBridge;
+
 import dev.voldechse.replayframework.api.playback.PlaybackSpeed;
 import dev.voldechse.replayframework.api.playback.PlaybackBufferOptions;
 import dev.voldechse.replayframework.api.playback.PlaybackStatus;
-import dev.voldechse.replayframework.adapter.PlaybackBridge;
 import dev.voldechse.replayframework.adapter.PlaybackEmissionMode;
 import dev.voldechse.replayframework.format.PacketPhase;
 import dev.voldechse.replayframework.format.RawPacketFrame;
@@ -422,7 +423,7 @@ final class PlaybackTimelineFixtureTest {
                 new byte[] {(byte) sequence});
     }
 
-    private static final class RecordingBridge implements PlaybackBridge {
+    private static final class RecordingBridge extends StubPlaybackBridge {
         private final List<Object> calls = new ArrayList<>();
         private final List<PlaybackEmissionMode> batchModes = new ArrayList<>();
         private final List<Integer> batchSizes = new ArrayList<>();
@@ -581,7 +582,10 @@ final class PlaybackTimelineFixtureTest {
                 SeekPoint checkpoint,
                 Duration endExclusive) {
             requestedBoundary = checkpoint;
-            return availability.thenApply(ignored -> deltaFrames);
+            long endNanos = endExclusive.toNanos();
+            return availability.thenApply(ignored -> deltaFrames.stream()
+                    .filter(frame -> frame.elapsedNanos() < endNanos)
+                    .toList());
         }
 
         @Override

@@ -1,0 +1,217 @@
+package dev.voldechse.replayframework.adapter.paper.v26_3.packet.clientbound.definition.chat;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import dev.voldechse.replayframework.adapter.CaptureContext;
+import dev.voldechse.replayframework.adapter.PacketDescriptor;
+import dev.voldechse.replayframework.adapter.PacketDisposition;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketRewriteResult;
+import dev.voldechse.replayframework.adapter.paper.v26_3.Paper26_3PacketRegistry;
+import dev.voldechse.replayframework.adapter.paper.v26_3.capture.Paper26_3CaptureTestState;
+import dev.voldechse.replayframework.adapter.paper.v26_3.packet.clientbound.Paper26_3ClientboundPacketCatalog;
+import dev.voldechse.replayframework.adapter.paper.v26_3.playback.Paper26_3ReplayPacketRewriter;
+import dev.voldechse.replayframework.adapter.playback.PlaybackIdentityContext;
+import dev.voldechse.replayframework.format.PacketPhase;
+import dev.voldechse.replayframework.format.RawPacketFrame;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import net.minecraft.ChatFormatting;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.network.ProtocolInfo;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.VarInt;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.Style;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.game.ClientboundSystemChatPacket;
+import net.minecraft.network.protocol.game.GameProtocols;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+
+final class Id124SystemChatPacketDefinitionTest {
+
+    private static final int PACKET_ID = 124;
+    private static final String TYPE_NAME = "play.clientbound.minecraft:system_chat";
+    private static final UUID OBSERVER_ID =
+            UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final UUID SESSION_ID =
+            UUID.fromString("00000000-0000-0000-0000-000000000002");
+
+    @BeforeAll
+    static void bootstrapMinecraftRegistries() {
+        net.minecraft.SharedConstants.tryDetectVersion();
+        net.minecraft.server.Bootstrap.bootStrap();
+    }
+
+    @Test
+    void classifiesSystemChatAsConfigurableCaptureAndSafePlayback() {
+        var definition = new Id124SystemChatPacketDefinition();
+
+        assertEquals(PACKET_ID, definition.packetId());
+        assertEquals(0x7C, Id124SystemChatPacketDefinition.PACKET_ID);
+        assertEquals("minecraft:system_chat", Id124SystemChatPacketDefinition.IDENTIFIER);
+        assertEquals(TYPE_NAME, definition.typeName());
+        assertEquals(PacketDisposition.CONFIGURABLE, definition.classification().disposition());
+        assertTrue(definition.classification().captureByDefault());
+        assertTrue(definition.classification().replayable());
+        assertFalse(definition.classification().checkpointRelevant());
+        assertEquals(
+                PacketDescriptor.PlaybackScope.SAFE,
+                definition.classification().playbackScope());
+    }
+
+    @Test
+    void registersExactlyOnceInChatDomainCatalogAndPaperRegistry() {
+        var domainMatches = ChatPacketDefinitions.definitions().stream()
+                .filter(definition -> TYPE_NAME.equals(definition.typeName()))
+                .toList();
+        var catalogMatches = Paper26_3ClientboundPacketCatalog.catalog().definitions().stream()
+                .filter(definition -> TYPE_NAME.equals(definition.typeName()))
+                .toList();
+
+        assertEquals(1, domainMatches.size());
+        assertInstanceOf(Id124SystemChatPacketDefinition.class, domainMatches.getFirst());
+        assertEquals(1, catalogMatches.size());
+        assertInstanceOf(Id124SystemChatPacketDefinition.class, catalogMatches.getFirst());
+
+        var descriptor = Paper26_3PacketRegistry.discover()
+                .find(PacketPhase.PLAY, PacketDescriptor.Direction.CLIENTBOUND, PACKET_ID)
+                .orElseThrow();
+        assertEquals(TYPE_NAME, descriptor.typeName());
+        assertEquals(PacketDisposition.CONFIGURABLE, descriptor.disposition());
+        assertTrue(descriptor.captureByDefault());
+        assertTrue(descriptor.replayable());
+        assertFalse(descriptor.checkpointRelevant());
+        assertEquals(PacketDescriptor.PlaybackScope.SAFE, descriptor.playbackScope());
+        assertTrue(Paper26_3ClientboundPacketCatalog.explicitlyClassifies(TYPE_NAME));
+    }
+
+    @Test
+    void replaysServerBroadcastsUnchanged() {
+        var definition = new Id124SystemChatPacketDefinition();
+        ClientboundSystemChatPacket death = new ClientboundSystemChatPacket(
+                Component.translatable("death.attack.fall", "Alex"), false);
+
+        PacketRewriteResult result = definition.rewrite(death, descriptor(), rewriter());
+
+        assertEquals(PacketRewriteResult.Decision.SEND, result.decision());
+        assertEquals(Optional.of(death), result.packet());
+    }
+
+    @Test
+    void neitherRecordsNorReplaysMessagesToOnePlayer() {
+        var definition = new Id124SystemChatPacketDefinition();
+        var state = Paper26_3CaptureTestState.create();
+        for (ClientboundSystemChatPacket privateMessage : new ClientboundSystemChatPacket[] {
+            new ClientboundSystemChatPacket(
+                    Component.translatable("commands.gamemode.success.self", "Creative"), false),
+            new ClientboundSystemChatPacket(Component.literal("Recording started"), false),
+            new ClientboundSystemChatPacket(
+                    Component.translatable("death.attack.fall", "Alex"), true)
+        }) {
+            assertTrue(definition.suppressesRecipientState(privateMessage, state, 0L));
+            assertEquals(
+                    PacketRewriteResult.Decision.DROP_LOCAL,
+                    definition.rewrite(privateMessage, descriptor(), rewriter()).decision());
+        }
+    }
+
+    @Test
+    void recordsServerBroadcastsOnceForTheWholeWorld() {
+        var definition = new Id124SystemChatPacketDefinition();
+        ClientboundSystemChatPacket joined = new ClientboundSystemChatPacket(
+                Component.translatable("multiplayer.player.joined", "Alex"), false);
+
+        assertFalse(definition.suppressesRecipientState(
+                joined, Paper26_3CaptureTestState.create(), 0L));
+        assertTrue(definition.worldWide());
+        assertTrue(definition.recipientCopies().identity(joined, new byte[] {1}).isPresent());
+    }
+
+    @Test
+    void nativeProtocolRoundTripsChatAndActionBarComponentsAndCaptureContext() {
+        ProtocolInfo<?> protocol = protocol();
+        Component[] components = {
+            Component.empty(),
+            Component.literal("System: Grüße, 雪, 😀"),
+            Component.literal("Maintenance")
+                    .withStyle(Style.EMPTY.withColor(ChatFormatting.GOLD).withBold(true))
+                    .append(Component.literal(" soon").withStyle(Style.EMPTY.withItalic(true))),
+            Component.translatableWithFallback(
+                    "replay.system.notice", "Notice: %s", "restart")
+        };
+
+        for (Component component : components) {
+            for (boolean overlay : new boolean[] {false, true}) {
+                ClientboundSystemChatPacket expected = new ClientboundSystemChatPacket(component, overlay);
+                ByteBuf encoded = Unpooled.buffer();
+                try {
+                    encode(protocol, encoded, expected);
+                    ByteBuf header = encoded.duplicate();
+                    assertEquals(PACKET_ID, VarInt.read(header));
+
+                    ClientboundSystemChatPacket decoded = assertInstanceOf(
+                            ClientboundSystemChatPacket.class, decode(protocol, encoded));
+                    assertEquals(component, decoded.content());
+                    assertEquals(overlay, decoded.overlay());
+                    assertFalse(encoded.isReadable());
+
+                    CaptureContext context = new Id124SystemChatPacketDefinition().captureContext(
+                            decoded, descriptor(), null,
+                            Paper26_3CaptureTestState.create(), 0L);
+                    assertEquals(Optional.of(component.getString()), context.normalizedChat());
+                    assertEquals(Optional.of(PacketDisposition.CONFIGURABLE), context.disposition());
+                } finally {
+                    encoded.release();
+                }
+            }
+        }
+    }
+
+    private static ProtocolInfo<?> protocol() {
+        return GameProtocols.CLIENTBOUND_TEMPLATE.bind(
+                RegistryFriendlyByteBuf.decorator(RegistryAccess.EMPTY));
+    }
+
+    private static Paper26_3ReplayPacketRewriter rewriter() {
+        return new Paper26_3ReplayPacketRewriter(
+                new PlaybackIdentityContext(OBSERVER_ID, SESSION_ID),
+                Set.of(OBSERVER_ID),
+                Set.of(999));
+    }
+
+    private static PacketDescriptor descriptor() {
+        return new PacketDescriptor(
+                TYPE_NAME,
+                PacketPhase.PLAY,
+                PacketDescriptor.Direction.CLIENTBOUND,
+                PACKET_ID,
+                PacketDisposition.CONFIGURABLE,
+                true,
+                true,
+                false,
+                "paper-26.3/" + TYPE_NAME,
+                PacketDescriptor.PlaybackScope.SAFE);
+    }
+
+    private static RawPacketFrame frame(byte[] payload) {
+        return new RawPacketFrame(0L, 0L, 0, PacketPhase.PLAY, PACKET_ID, payload);
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static void encode(ProtocolInfo<?> protocol, ByteBuf buffer, Packet<?> packet) {
+        ((StreamCodec) protocol.codec()).encode(buffer, packet);
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static Packet<?> decode(ProtocolInfo<?> protocol, ByteBuf buffer) {
+        return (Packet<?>) ((StreamCodec) protocol.codec()).decode(buffer);
+    }
+}

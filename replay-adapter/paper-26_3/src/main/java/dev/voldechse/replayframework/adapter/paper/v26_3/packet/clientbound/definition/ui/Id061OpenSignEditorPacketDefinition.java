@@ -1,0 +1,28 @@
+package dev.voldechse.replayframework.adapter.paper.v26_3.packet.clientbound.definition.ui;
+
+import dev.voldechse.replayframework.adapter.PacketDescriptor;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketClassification;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ClientboundPacketDefinition;
+import dev.voldechse.replayframework.adapter.paper.v26_3.playback.Paper26_3ReplayPacketRewriter;
+
+/**
+ * Captured viewer-local sign editor policy for {@code minecraft:open_sign_editor}.
+ *
+ * <p>The packet opens an editing screen for the recorded player's sign interaction.
+ * Playback drops it before decode so it cannot open an editor in the observer's
+ * local world or connection.</p>
+ */
+final class Id061OpenSignEditorPacketDefinition
+        extends ClientboundPacketDefinition<Paper26_3ReplayPacketRewriter> {
+
+    static final int PACKET_ID = 0x3D;
+    static final String IDENTIFIER = "minecraft:open_sign_editor";
+
+    Id061OpenSignEditorPacketDefinition() {
+        super(
+                PACKET_ID,
+                IDENTIFIER,
+                PacketClassification.ephemeral(
+                        PacketDescriptor.PlaybackScope.VIEWER_LOCAL));
+    }
+}

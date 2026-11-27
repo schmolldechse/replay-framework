@@ -1,6 +1,10 @@
 package dev.voldechse.replayframework.adapter.paper.v26_3.checkpoint;
 
 import dev.voldechse.replayframework.adapter.CheckpointEncoder;
+import dev.voldechse.replayframework.adapter.paper.checkpoint.CheckpointSnapshot;
+import dev.voldechse.replayframework.adapter.paper.checkpoint.PacketBlueprint;
+import dev.voldechse.replayframework.adapter.paper.checkpoint.SnapshotSource;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketCheckpointFamily;
 import dev.voldechse.replayframework.api.recording.ChunkLoadingPolicy;
 import dev.voldechse.replayframework.api.recording.CuboidRegion;
 import dev.voldechse.replayframework.api.recording.RecordingScope;
@@ -28,16 +32,18 @@ import net.minecraft.network.protocol.game.ClientboundSetDefaultSpawnPositionPac
 import net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket;
 import net.minecraft.network.protocol.game.ClientboundSetEquipmentPacket;
 import net.minecraft.network.protocol.game.ClientboundSetPassengersPacket;
-import net.minecraft.network.protocol.game.ClientboundSetTimePacket;
+import net.minecraft.network.protocol.game.ClientboundSetSimulationDistancePacket;
 import net.minecraft.network.protocol.game.ClientboundUpdateMobEffectPacket;
 import net.minecraft.network.protocol.game.ClientboundUpdateAttributesPacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
+import net.minecraft.network.protocol.game.ClientboundProjectilePowerPacket;
 import net.minecraft.server.level.ServerEntity;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.projectile.hurtingprojectile.AbstractHurtingProjectile;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.chunk.LevelChunk;
 import org.bukkit.Chunk;
@@ -51,7 +57,7 @@ import org.bukkit.craftbukkit.CraftWorld;
  * selected live state into native, detached checkpoint packet values.
  */
 public final class Paper26_3SnapshotProvider
-        implements Paper26_3CheckpointEncoder.SnapshotProvider, AutoCloseable {
+        implements SnapshotSource, AutoCloseable {
 
     private final MainThreadScheduler scheduler;
     private final Paper26_3WorldAccess worldAccess;
@@ -67,10 +73,19 @@ public final class Paper26_3SnapshotProvider
     public Paper26_3SnapshotProvider(
             JavaPlugin owner,
             Supplier<CheckpointEncoder.CapturePoint> capturePointSource) {
+        this(owner, capturePointSource, (entityId, worldKey, x, y, z) -> {});
+    }
+
+    /** Creates a provider that seeds packet-relative positions from checkpoint entities. */
+    public Paper26_3SnapshotProvider(
+            JavaPlugin owner,
+            Supplier<CheckpointEncoder.CapturePoint> capturePointSource,
+            EntityPositionSeeder entityPositionSeeder) {
         Objects.requireNonNull(owner, "owner");
         Server server = Objects.requireNonNull(owner.getServer(), "owner.server");
         this.scheduler = new BukkitMainThreadScheduler(owner, server);
-        this.worldAccess = new LivePaper26_3WorldAccess(server);
+        this.worldAccess = new LivePaper26_3WorldAccess(
+                server, Objects.requireNonNull(entityPositionSeeder, "entityPositionSeeder"));
         this.capturePointSource = capturePointSource == null
                 ? () -> new CheckpointEncoder.CapturePoint(
                         System.nanoTime(), server.getCurrentTick(), Integer.MAX_VALUE)
@@ -94,7 +109,7 @@ public final class Paper26_3SnapshotProvider
     }
 
     @Override
-    public CompletionStage<Paper26_3CheckpointEncoder.CheckpointSnapshot> snapshot(
+    public CompletionStage<CheckpointSnapshot> snapshot(
             CheckpointEncoder.CheckpointRequest request) {
         Objects.requireNonNull(request, "request");
         synchronized (this) {
@@ -106,7 +121,7 @@ public final class Paper26_3SnapshotProvider
         validateRequest(request);
 
         try {
-            CompletionStage<CompletionStage<Paper26_3CheckpointEncoder.CheckpointSnapshot>> planned =
+            CompletionStage<CompletionStage<CheckpointSnapshot>> planned =
                     scheduler.submit(() -> resolveOnMainThread(request));
             return planned.thenCompose(stage -> Objects.requireNonNull(
                     stage,
@@ -123,7 +138,7 @@ public final class Paper26_3SnapshotProvider
         }
     }
 
-    private CompletionStage<Paper26_3CheckpointEncoder.CheckpointSnapshot> resolveOnMainThread(
+    private CompletionStage<CheckpointSnapshot> resolveOnMainThread(
             CheckpointEncoder.CheckpointRequest request) {
         RecordingScope scope = request.scope();
         List<String> worlds = normalizedWorldKeys(worldAccess.worldKeys());
@@ -194,18 +209,19 @@ public final class Paper26_3SnapshotProvider
                         detachSnapshot(scope, detachedChunks)))).thenCompose(stage -> stage);
     }
 
-    private Paper26_3CheckpointEncoder.CheckpointSnapshot detachSnapshot(
+    private CheckpointSnapshot detachSnapshot(
             RecordingScope scope,
             List<ScopedChunk> chunks) {
         CheckpointEncoder.CapturePoint point = capturePointSource == null
                 ? null
                 : Objects.requireNonNull(
                         capturePointSource.get(), "capturePointSource returned null");
-        Paper26_3CheckpointEncoder.CheckpointSnapshot snapshot = Objects.requireNonNull(
+        CheckpointSnapshot snapshot = Objects.requireNonNull(
                 worldAccess.snapshot(scope, chunks), "worldAccess returned null snapshot");
         return point == null
                 ? snapshot
-                : new Paper26_3CheckpointEncoder.CheckpointSnapshot(point, snapshot.packets());
+                : new CheckpointSnapshot(
+                        java.util.Optional.of(point), snapshot.packets(), snapshot.subjects(), snapshot.blockStates());
     }
 
     private static CompletionStage<Void> allOf(List<CompletionStage<Void>> stages) {
@@ -274,8 +290,8 @@ public final class Paper26_3SnapshotProvider
 
     @FunctionalInterface
     interface MainThreadScheduler {
-        CompletionStage<CompletionStage<Paper26_3CheckpointEncoder.CheckpointSnapshot>> submit(
-                Supplier<CompletionStage<Paper26_3CheckpointEncoder.CheckpointSnapshot>> task);
+        CompletionStage<CompletionStage<CheckpointSnapshot>> submit(
+                Supplier<CompletionStage<CheckpointSnapshot>> task);
     }
 
     interface Paper26_3WorldAccess {
@@ -285,9 +301,14 @@ public final class Paper26_3SnapshotProvider
 
         CompletionStage<Void> preload(String worldKey, List<ChunkCoordinate> chunks);
 
-        Paper26_3CheckpointEncoder.CheckpointSnapshot snapshot(
+        CheckpointSnapshot snapshot(
                 RecordingScope scope,
                 List<ScopedChunk> chunks);
+    }
+
+    @FunctionalInterface
+    public interface EntityPositionSeeder {
+        void seed(int entityId, String worldKey, double x, double y, double z);
     }
 
     record ChunkCoordinate(int x, int z) {
@@ -334,10 +355,10 @@ public final class Paper26_3SnapshotProvider
         }
 
         @Override
-        public CompletionStage<CompletionStage<Paper26_3CheckpointEncoder.CheckpointSnapshot>> submit(
-                Supplier<CompletionStage<Paper26_3CheckpointEncoder.CheckpointSnapshot>> task) {
+        public CompletionStage<CompletionStage<CheckpointSnapshot>> submit(
+                Supplier<CompletionStage<CheckpointSnapshot>> task) {
             Objects.requireNonNull(task, "task");
-            CompletableFuture<CompletionStage<Paper26_3CheckpointEncoder.CheckpointSnapshot>> result =
+            CompletableFuture<CompletionStage<CheckpointSnapshot>> result =
                     new CompletableFuture<>();
             Runnable invocation = () -> {
                 try {
@@ -361,9 +382,11 @@ public final class Paper26_3SnapshotProvider
 
     private static final class LivePaper26_3WorldAccess implements Paper26_3WorldAccess {
         private final Server server;
+        private final EntityPositionSeeder entityPositionSeeder;
 
-        private LivePaper26_3WorldAccess(Server server) {
+        private LivePaper26_3WorldAccess(Server server, EntityPositionSeeder entityPositionSeeder) {
             this.server = server;
+            this.entityPositionSeeder = entityPositionSeeder;
         }
 
         @Override
@@ -394,7 +417,7 @@ public final class Paper26_3SnapshotProvider
         }
 
         @Override
-        public Paper26_3CheckpointEncoder.CheckpointSnapshot snapshot(
+        public CheckpointSnapshot snapshot(
                 RecordingScope scope,
                 List<ScopedChunk> chunks) {
             Map<String, Set<ChunkCoordinate>> selectedByWorld = new HashMap<>();
@@ -403,69 +426,88 @@ public final class Paper26_3SnapshotProvider
                         .add(new ChunkCoordinate(chunk.x(), chunk.z()));
             }
 
-            List<Paper26_3CheckpointEncoder.PacketBlueprint> packets = new ArrayList<>();
+            List<PacketBlueprint> packets = new ArrayList<>();
+            List<CheckpointSnapshot.Subject> subjects = new ArrayList<>();
+            Map<String, List<Object>> blockStates = new HashMap<>();
             for (Map.Entry<String, Set<ChunkCoordinate>> entry : selectedByWorld.entrySet()) {
                 String worldKey = entry.getKey();
                 ServerLevel level = handle(worldKey);
+                Set<ChunkCoordinate> selected = entry.getValue();
+                dev.voldechse.replayframework.adapter.paper.v26_3.argus.Paper26_3SubjectStates
+                        .snapshot(level, entity -> selected.contains(new ChunkCoordinate(
+                                entity.chunkPosition().x(), entity.chunkPosition().z())))
+                        .forEach(subject -> subjects.add(new CheckpointSnapshot.Subject(
+                                subject.subject(), List.<Object>copyOf(subject.packets()))));
                 addGlobalPackets(packets, level, worldKey);
                 for (ChunkCoordinate coordinate : entry.getValue()) {
                     LevelChunk chunk = level.getChunkIfLoaded(coordinate.x(), coordinate.z());
                     if (chunk == null) {
                         continue;
                     }
+                    blockStates.computeIfAbsent(worldKey, ignored -> new ArrayList<>()).addAll(
+                            dev.voldechse.replayframework.adapter.paper.v26_3.argus.Paper26_3BlockStates.snapshot(chunk));
                     packets.add(blueprint(
                             new ClientboundLevelChunkWithLightPacket(
                                     chunk,
                                     level.getLightEngine(),
                                     new java.util.BitSet(),
                                     new java.util.BitSet()),
-                            Paper26_3CheckpointEncoder.CheckpointPacketFamily.CHUNK_LIGHT,
+                            PacketCheckpointFamily.CHUNK_LIGHT,
                             worldKey,
                             "chunk:" + coordinate.x() + "," + coordinate.z()));
                     chunk.getBlockEntities().values().stream()
                             .map(net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket::create)
                             .forEach(packet -> packets.add(blueprint(
                                     packet,
-                                    Paper26_3CheckpointEncoder.CheckpointPacketFamily.BLOCK_ENTITY,
+                                    PacketCheckpointFamily.BLOCK_ENTITY,
                                     worldKey,
                                     "block:" + packet.getPos().getX() + ","
                                             + packet.getPos().getY() + "," + packet.getPos().getZ())));
                 }
                 addEntityPackets(packets, level, worldKey, entry.getValue());
             }
-            return new Paper26_3CheckpointEncoder.CheckpointSnapshot(packets);
+            return new CheckpointSnapshot(
+                    java.util.Optional.empty(), packets, subjects, blockStates);
         }
 
         private void addGlobalPackets(
-                List<Paper26_3CheckpointEncoder.PacketBlueprint> packets,
+                List<PacketBlueprint> packets,
                 ServerLevel level,
                 String worldKey) {
             packets.add(blueprint(
                     new ClientboundSetDefaultSpawnPositionPacket(level.getRespawnData()),
-                    Paper26_3CheckpointEncoder.CheckpointPacketFamily.DIMENSION_SPAWN,
+                    PacketCheckpointFamily.DIMENSION_SPAWN,
                     worldKey,
                     "spawn"));
             packets.add(blueprint(
                     new ClientboundChangeDifficultyPacket(
                             level.getLevelData().getDifficulty(),
                             level.getLevelData().isDifficultyLocked()),
-                    Paper26_3CheckpointEncoder.CheckpointPacketFamily.GLOBAL_STATE,
+                    PacketCheckpointFamily.GLOBAL_STATE,
                     worldKey,
                     "difficulty"));
             packets.add(blueprint(
                     new ClientboundInitializeBorderPacket(level.getWorldBorder()),
-                    Paper26_3CheckpointEncoder.CheckpointPacketFamily.GLOBAL_STATE,
+                    PacketCheckpointFamily.GLOBAL_STATE,
                     worldKey,
                     "world-border"));
             packets.add(blueprint(
-                    new ClientboundSetTimePacket(level.getLevelData().getGameTime(), Map.of()),
-                    Paper26_3CheckpointEncoder.CheckpointPacketFamily.GLOBAL_STATE,
+                    // Checkpoints need a full clock sync; live set_time packets may be deltas.
+                    level.getServer().clockManager().createFullSyncPacket(),
+                    PacketCheckpointFamily.GLOBAL_STATE,
                     worldKey,
                     "time"));
+            // PlayerList owns one server-wide value; include it in every world's scoped state.
+            packets.add(blueprint(
+                    new ClientboundSetSimulationDistancePacket(
+                            level.getServer().getPlayerList().getSimulationDistance()),
+                    PacketCheckpointFamily.GLOBAL_STATE,
+                    worldKey,
+                    "simulation-distance"));
         }
 
         private void addEntityPackets(
-                List<Paper26_3CheckpointEncoder.PacketBlueprint> packets,
+                List<PacketBlueprint> packets,
                 ServerLevel level,
                 String worldKey,
                 Set<ChunkCoordinate> chunks) {
@@ -477,13 +519,15 @@ public final class Paper26_3SnapshotProvider
                 if (!chunks.contains(coordinate)) {
                     continue;
                 }
+                entityPositionSeeder.seed(
+                        entity.getId(), worldKey, entity.getX(), entity.getY(), entity.getZ());
                 if (entity instanceof ServerPlayer player) {
                     players.add(player);
                 }
                 String targetKey = "entity:" + entity.getId();
                 packets.add(blueprint(
                         entity.getAddEntityPacket(new SnapshotServerEntity(level, entity)),
-                        Paper26_3CheckpointEncoder.CheckpointPacketFamily.ENTITY_SPAWN,
+                        PacketCheckpointFamily.ENTITY_SPAWN,
                         worldKey,
                         targetKey));
 
@@ -492,16 +536,24 @@ public final class Paper26_3SnapshotProvider
                 if (metadata != null && !metadata.isEmpty()) {
                     packets.add(blueprint(
                             new ClientboundSetEntityDataPacket(entity.getId(), List.copyOf(metadata)),
-                            Paper26_3CheckpointEncoder.CheckpointPacketFamily.ENTITY_METADATA,
+                            PacketCheckpointFamily.ENTITY_METADATA,
                             worldKey,
                             targetKey));
+                }
+                if (entity instanceof AbstractHurtingProjectile projectile) {
+                    packets.add(blueprint(
+                            new ClientboundProjectilePowerPacket(
+                                    projectile.getId(), projectile.accelerationPower),
+                            PacketCheckpointFamily.ENTITY_METADATA,
+                            worldKey,
+                            targetKey + ":projectile-power"));
                 }
                 if (entity instanceof LivingEntity living) {
                     var attributes = living.getAttributes().getSyncableAttributes();
                     if (!attributes.isEmpty()) {
                         packets.add(blueprint(
                                 new ClientboundUpdateAttributesPacket(entity.getId(), attributes),
-                                Paper26_3CheckpointEncoder.CheckpointPacketFamily.ENTITY_METADATA,
+                                PacketCheckpointFamily.ENTITY_METADATA,
                                 worldKey,
                                 targetKey + ":attributes"));
                     }
@@ -511,14 +563,14 @@ public final class Paper26_3SnapshotProvider
                     packets.add(blueprint(
                             new net.minecraft.network.protocol.game.ClientboundSetEntityLinkPacket(
                                     entity, leashable.getLeashHolder()),
-                            Paper26_3CheckpointEncoder.CheckpointPacketFamily.PASSENGERS,
+                            PacketCheckpointFamily.PASSENGERS,
                             worldKey,
                             targetKey + ":leash"));
                 }
                 if (!entity.getPassengers().isEmpty()) {
                     packets.add(blueprint(
                             new ClientboundSetPassengersPacket(entity),
-                            Paper26_3CheckpointEncoder.CheckpointPacketFamily.PASSENGERS,
+                            PacketCheckpointFamily.PASSENGERS,
                             worldKey,
                             targetKey));
                 }
@@ -534,14 +586,14 @@ public final class Paper26_3SnapshotProvider
                     if (!equipment.isEmpty()) {
                         packets.add(blueprint(
                                 new ClientboundSetEquipmentPacket(entity.getId(), equipment),
-                                Paper26_3CheckpointEncoder.CheckpointPacketFamily.EQUIPMENT,
+                                PacketCheckpointFamily.EQUIPMENT,
                                 worldKey,
                                 targetKey));
                     }
                     for (net.minecraft.world.effect.MobEffectInstance effect : living.getActiveEffects()) {
                         packets.add(blueprint(
                                 new ClientboundUpdateMobEffectPacket(entity.getId(), effect, true),
-                                Paper26_3CheckpointEncoder.CheckpointPacketFamily.RUNNING_EFFECT,
+                                PacketCheckpointFamily.RUNNING_EFFECT,
                                 worldKey,
                                 targetKey + ":effect"));
                     }
@@ -567,7 +619,7 @@ public final class Paper26_3SnapshotProvider
                 packets.add(blueprint(
                         new ClientboundPlayerInfoUpdatePacket(
                                 initializing.actions(), detachedEntries),
-                        Paper26_3CheckpointEncoder.CheckpointPacketFamily.GLOBAL_STATE,
+                        PacketCheckpointFamily.GLOBAL_STATE,
                         worldKey,
                         "players"));
             }
@@ -589,6 +641,8 @@ public final class Paper26_3SnapshotProvider
          */
         private static final class SnapshotServerEntity extends ServerEntity {
             private SnapshotServerEntity(ServerLevel level, Entity entity) {
+                // Paper 26.3 takes the update interval as an object; periodic(1) is
+                // the 26.2 interval of 1 tick.
                 super(level, entity, net.minecraft.world.entity.UpdateInterval.periodic(1), false, new Synchronizer() {
                     @Override
                     public void sendToTrackingPlayers(Packet<? super ClientGamePacketListener> packet) {
@@ -607,13 +661,13 @@ public final class Paper26_3SnapshotProvider
             }
         }
 
-        private static Paper26_3CheckpointEncoder.PacketBlueprint blueprint(
+        private static PacketBlueprint blueprint(
                 Packet<?> packet,
-                Paper26_3CheckpointEncoder.CheckpointPacketFamily family,
+                PacketCheckpointFamily family,
                 String worldKey,
                 String targetKey) {
             String descriptor = "play.clientbound." + packet.type().id();
-            return new Paper26_3CheckpointEncoder.PacketBlueprint(
+            return new PacketBlueprint(
                     descriptor,
                     family,
                     worldKey,

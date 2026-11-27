@@ -4,6 +4,7 @@ import dev.voldechse.replayframework.api.id.ReplayId;
 import dev.voldechse.replayframework.core.diagnostics.ReplayDiagnostics;
 import dev.voldechse.replayframework.format.ReplayManifest;
 import dev.voldechse.replayframework.format.ReplayManifest.ArtifactFile;
+import dev.voldechse.replayframework.format.TrackDescriptor;
 import dev.voldechse.replayframework.format.ReplayManifest.ArtifactType;
 import dev.voldechse.replayframework.format.ReplayManifestCodec;
 import dev.voldechse.replayframework.storage.ArtifactKey;
@@ -224,6 +225,7 @@ public final class ReplayArtifactPublisher {
                     request.registryFingerprint(),
                     request.formatRevision(),
                     request.durationNanos(),
+                    request.tracks().stream().map(TrackFiles::descriptor).toList(),
                     files);
             try {
                 manifestCodec.write(work.resolve(MANIFEST_PATH), manifest);
@@ -260,29 +262,54 @@ public final class ReplayArtifactPublisher {
     }
 
     private static List<ArtifactSpec> artifactSpecs(PublishRequest request) {
-        List<ArtifactSpec> specs = new ArrayList<>(
-                request.segmentFiles().size() + request.checkpointFiles().size() + 1);
-        for (int index = 0; index < request.segmentFiles().size(); index++) {
-            specs.add(new ArtifactSpec(
-                    ArtifactType.SEGMENT,
-                    String.format(Locale.ROOT, "segments/%08d.segment", index),
-                    request.segmentFiles().get(index)));
+        List<ArtifactSpec> specs = new ArrayList<>();
+        for (TrackFiles track : request.tracks()) {
+            String directory = track.descriptor().directory();
+            for (int index = 0; index < track.segmentFiles().size(); index++) {
+                specs.add(new ArtifactSpec(
+                        ArtifactType.SEGMENT,
+                        String.format(Locale.ROOT, "%s/segments/%08d.segment", directory, index),
+                        track.segmentFiles().get(index)));
+            }
+            for (int index = 0; index < track.checkpointFiles().size(); index++) {
+                specs.add(new ArtifactSpec(
+                        ArtifactType.CHECKPOINT,
+                        String.format(Locale.ROOT, "%s/checkpoints/%08d.checkpoint", directory, index),
+                        track.checkpointFiles().get(index)));
+            }
+            specs.add(new ArtifactSpec(ArtifactType.INDEX, directory + "/index.bin", track.indexFile()));
         }
-        for (int index = 0; index < request.checkpointFiles().size(); index++) {
-            specs.add(new ArtifactSpec(
-                    ArtifactType.CHECKPOINT,
-                    String.format(Locale.ROOT, "checkpoints/%08d.checkpoint", index),
-                    request.checkpointFiles().get(index)));
-        }
-        specs.add(new ArtifactSpec(ArtifactType.INDEX, "index.bin", request.indexFile()));
         return List.copyOf(specs);
     }
 
     /**
-     * Immutable input to one publication attempt.
+     * The local files of one track.
      *
-     * <p>At least an index and one checkpoint are required. A segment list may be empty for a
-     * replay whose index and checkpoint contain all required playback data.</p>
+     * @param descriptor the track
+     * @param indexFile its index
+     * @param segmentFiles its segments in playback order
+     * @param checkpointFiles its checkpoints in ordinal order; at least one
+     */
+    public record TrackFiles(
+            TrackDescriptor descriptor,
+            Path indexFile,
+            List<Path> segmentFiles,
+            List<Path> checkpointFiles) {
+
+        /** Validates and snapshots the track's files. */
+        public TrackFiles {
+            Objects.requireNonNull(descriptor, "descriptor");
+            indexFile = PublishRequest.normalizeSource(indexFile, "indexFile");
+            segmentFiles = PublishRequest.normalizeSources(segmentFiles, "segmentFiles");
+            checkpointFiles = PublishRequest.normalizeSources(checkpointFiles, "checkpointFiles");
+            if (checkpointFiles.isEmpty()) {
+                throw new IllegalArgumentException("at least one checkpoint file is required");
+            }
+        }
+    }
+
+    /**
+     * Immutable input to one publication attempt.
      *
      * @param replayId replay identity
      * @param adapterId producing adapter identifier
@@ -290,9 +317,7 @@ public final class ReplayArtifactPublisher {
      * @param registryFingerprint adapter registry fingerprint
      * @param formatRevision manifest format revision
      * @param durationNanos recorded replay duration
-     * @param indexFile local index artifact
-     * @param segmentFiles local segment artifacts in playback order
-     * @param checkpointFiles local checkpoint artifacts in checkpoint order
+     * @param tracks the replay's tracks with their files; at least one
      */
     public record PublishRequest(
             ReplayId replayId,
@@ -301,9 +326,7 @@ public final class ReplayArtifactPublisher {
             String registryFingerprint,
             int formatRevision,
             long durationNanos,
-            Path indexFile,
-            List<Path> segmentFiles,
-            List<Path> checkpointFiles) {
+            List<TrackFiles> tracks) {
 
         /** Validates and snapshots publication input. */
         public PublishRequest {
@@ -325,11 +348,9 @@ public final class ReplayArtifactPublisher {
             if (durationNanos < 0L) {
                 throw new IllegalArgumentException("durationNanos must not be negative");
             }
-            indexFile = normalizeSource(indexFile, "indexFile");
-            segmentFiles = normalizeSources(segmentFiles, "segmentFiles");
-            checkpointFiles = normalizeSources(checkpointFiles, "checkpointFiles");
-            if (checkpointFiles.isEmpty()) {
-                throw new IllegalArgumentException("at least one checkpoint file is required");
+            tracks = List.copyOf(Objects.requireNonNull(tracks, "tracks"));
+            if (tracks.isEmpty()) {
+                throw new IllegalArgumentException("at least one track is required");
             }
         }
 

@@ -1,16 +1,14 @@
 package dev.voldechse.replayframework.adapter.paper.v26_3;
 
+import dev.voldechse.replayframework.adapter.paper.protocol.ProtocolSnapshot;
 import dev.voldechse.replayframework.adapter.AdapterDescriptor;
 import dev.voldechse.replayframework.adapter.AbstractReplayAdapter;
 import dev.voldechse.replayframework.adapter.CaptureBridge;
 import dev.voldechse.replayframework.adapter.CheckpointEncoder;
-import dev.voldechse.replayframework.adapter.CheckpointSignalSource;
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
 import dev.voldechse.replayframework.adapter.PacketRegistry;
 import dev.voldechse.replayframework.adapter.PlaybackBridge;
-import java.util.Objects;
 import java.util.function.Function;
-import java.util.concurrent.CopyOnWriteArrayList;
 import org.bukkit.entity.Player;
 
 /**
@@ -25,7 +23,7 @@ public final class Paper26_3ReplayAdapter extends AbstractReplayAdapter {
 
     private static final String ADAPTER_ID = "paper-26.3";
     private static final String MINECRAFT_VERSION = "26.3";
-    private static final int ADAPTER_FORMAT_REVISION = 3;
+    private static final int ADAPTER_FORMAT_REVISION = 5;
 
     /**
      * Creates a verified adapter with its runtime ports injected.
@@ -40,30 +38,28 @@ public final class Paper26_3ReplayAdapter extends AbstractReplayAdapter {
             CaptureBridge captureBridge,
             CheckpointEncoder checkpointEncoder,
             Function<Player, PlaybackBridge> playbackFactory) {
-        this(captureBridge, checkpointEncoder, playbackFactory, new Paper26_3CheckpointSignals());
-    }
-
-    /** Creates a verified adapter with an explicit semantic signal source. */
-    public Paper26_3ReplayAdapter(
-            CaptureBridge captureBridge,
-            CheckpointEncoder checkpointEncoder,
-            Function<Player, PlaybackBridge> playbackFactory,
-            CheckpointSignalSource checkpointSignals) {
-        this(discover(), captureBridge, checkpointEncoder, playbackFactory, checkpointSignals);
+        this(discover(), captureBridge, checkpointEncoder, playbackFactory);
     }
 
     private Paper26_3ReplayAdapter(
             Components components,
             CaptureBridge captureBridge,
             CheckpointEncoder checkpointEncoder,
-            Function<Player, PlaybackBridge> playbackFactory,
-            CheckpointSignalSource checkpointSignals) {
+            Function<Player, PlaybackBridge> playbackFactory) {
         super(components.descriptor(), components.registry(), captureBridge,
-                checkpointEncoder, checkpointSignals, playbackFactory);
+                checkpointEncoder, playbackFactory);
+    }
+
+    @Override
+    public dev.voldechse.replayframework.adapter.SceneObservation sceneObservation() {
+        return captureBridge() instanceof
+                        dev.voldechse.replayframework.adapter.paper.capture.PaperCaptureBridge bridge
+                ? bridge.sceneObservation()
+                : dev.voldechse.replayframework.adapter.SceneObservation.none();
     }
 
     private static Components discover() {
-        Paper26_3ProtocolIntrospector.ProtocolSnapshot snapshot =
+        ProtocolSnapshot snapshot =
                 new Paper26_3ProtocolIntrospector().inspect();
         if (!MINECRAFT_VERSION.equals(snapshot.minecraftVersion())) {
             throw new IncompatibleAdapterException(
@@ -76,35 +72,4 @@ public final class Paper26_3ReplayAdapter extends AbstractReplayAdapter {
 
     private record Components(AdapterDescriptor descriptor, PacketRegistry registry) {}
 
-    /** Adapter-local signal source used by the 26.3 capture hooks. */
-    static final class Paper26_3CheckpointSignals implements CheckpointSignalSource.Emitter {
-        private final CopyOnWriteArrayList<CheckpointSignalListener> listeners =
-                new CopyOnWriteArrayList<>();
-
-        @Override
-        public void install(CheckpointSignalListener candidate) {
-            Objects.requireNonNull(candidate, "listener");
-            if (!listeners.contains(candidate)) {
-                // The adapter source is a fan-out because overlapping replay
-                // sessions each own an independent scheduler/listener.
-                listeners.add(candidate);
-            }
-        }
-
-        @Override
-        public void uninstall(CheckpointSignalListener candidate) {
-            Objects.requireNonNull(candidate, "listener");
-            listeners.remove(candidate);
-        }
-
-        @Override
-        public void emitDimensionChange(long captureTimeNanos, long serverTick) {
-            if (serverTick < 0L) {
-                throw new IllegalArgumentException("serverTick must not be negative");
-            }
-            for (CheckpointSignalListener current : listeners) {
-                current.onDimensionChange(captureTimeNanos, serverTick);
-            }
-        }
-    }
 }

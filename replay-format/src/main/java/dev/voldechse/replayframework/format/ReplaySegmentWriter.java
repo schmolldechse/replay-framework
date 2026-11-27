@@ -36,6 +36,7 @@ public final class ReplaySegmentWriter implements AutoCloseable {
     private final Path target;
     private final Path framePath;
     private final String adapterId;
+    private final ReplayFrameCodec.Encoder encoder;
     private OutputStream frameOutput;
     private State state = State.OPEN;
     private boolean hasLastFrame;
@@ -52,11 +53,14 @@ public final class ReplaySegmentWriter implements AutoCloseable {
      *
      * @param target final segment path
      * @param adapterId adapter that produced the frames
+     * @param track the track the segment belongs to
      * @throws IOException when the temporary stream cannot be opened
      * @throws IllegalArgumentException for an invalid adapter id or target
      */
-    public ReplaySegmentWriter(Path target, String adapterId) throws IOException {
+    public ReplaySegmentWriter(Path target, String adapterId, TrackDescriptor track)
+            throws IOException {
         Objects.requireNonNull(target, "target");
+        this.encoder = new ReplayFrameCodec.Encoder(Objects.requireNonNull(track, "track"));
         Objects.requireNonNull(adapterId, "adapterId");
         if (adapterId.isEmpty()) {
             throw new IllegalArgumentException("adapterId must not be empty");
@@ -105,14 +109,14 @@ public final class ReplaySegmentWriter implements AutoCloseable {
         Objects.requireNonNull(frame, "frame");
         validateOrder(frame);
 
-        long encodedLength = ReplayFrameCodec.encodedRecordLength(frame);
+        long encodedLength = encoder.encodedLength(frame);
         long nextUncompressedLength = addLength(uncompressedLength, encodedLength);
         if (frameCount == Long.MAX_VALUE) {
             throw new IllegalArgumentException("frameCount overflow");
         }
 
         try {
-            ReplayFrameCodec.writeRecord(frameOutput, frame);
+            encoder.write(frameOutput, frame);
         } catch (IOException exception) {
             abortAfterFailure(exception);
             throw exception;

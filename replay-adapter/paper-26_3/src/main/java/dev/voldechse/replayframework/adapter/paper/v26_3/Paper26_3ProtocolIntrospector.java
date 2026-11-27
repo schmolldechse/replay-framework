@@ -2,6 +2,8 @@ package dev.voldechse.replayframework.adapter.paper.v26_3;
 
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
+import dev.voldechse.replayframework.adapter.paper.protocol.ProtocolPacket;
+import dev.voldechse.replayframework.adapter.paper.protocol.ProtocolSnapshot;
 import dev.voldechse.replayframework.format.PacketPhase;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -29,7 +31,7 @@ import net.minecraft.network.protocol.status.StatusProtocols;
  */
 final class Paper26_3ProtocolIntrospector {
 
-    private static final String CODEC_PREFIX = "paper-26.3/";
+    private static final String CODEC_PREFIX = Paper26_3PacketRegistry.CODEC_PREFIX;
 
     /**
      * Inspects the current Paper protocol metadata and every clientbound packet list.
@@ -42,19 +44,19 @@ final class Paper26_3ProtocolIntrospector {
             WorldVersion version = Objects.requireNonNull(
                     currentVersion(),
                     "Paper current version");
-            String minecraftVersion = requireStableText(version.name(), "minecraftVersion");
+            String minecraftVersion = ProtocolSnapshot.requireStableText(version.name(), "minecraftVersion");
             int protocolVersion = version.protocolVersion();
             if (protocolVersion < 0) {
                 throw incompatible("Paper protocol version is negative", null);
             }
 
-            List<PacketType> packets = new ArrayList<>();
+            List<ProtocolPacket> packets = new ArrayList<>();
             collect(packets, StatusProtocols.CLIENTBOUND_TEMPLATE.details(), ConnectionProtocol.STATUS);
             collect(packets, LoginProtocols.CLIENTBOUND_TEMPLATE.details(), ConnectionProtocol.LOGIN);
             collect(packets, ConfigurationProtocols.CLIENTBOUND_TEMPLATE.details(), ConnectionProtocol.CONFIGURATION);
             collect(packets, GameProtocols.CLIENTBOUND_TEMPLATE.details(), ConnectionProtocol.PLAY);
-            packets.sort(Comparator.comparingInt((PacketType packet) -> packet.phase().wireCode())
-                    .thenComparingInt(PacketType::packetId));
+            packets.sort(Comparator.comparingInt((ProtocolPacket packet) -> packet.phase().wireCode())
+                    .thenComparingInt(ProtocolPacket::packetId));
             validatePacketSet(packets);
             return new ProtocolSnapshot(minecraftVersion, protocolVersion, packets);
         } catch (IncompatibleAdapterException exception) {
@@ -70,7 +72,7 @@ final class Paper26_3ProtocolIntrospector {
     }
 
     private static void collect(
-            List<PacketType> packets,
+            List<ProtocolPacket> packets,
             ProtocolInfo.Details details,
             ConnectionProtocol expectedProtocol) {
         Objects.requireNonNull(packets, "packets");
@@ -82,7 +84,7 @@ final class Paper26_3ProtocolIntrospector {
         details.listPackets((packetType, packetId) -> packets.add(normalize(phase, packetType, packetId)));
     }
 
-    private static PacketType normalize(
+    private static ProtocolPacket normalize(
             PacketPhase phase,
             net.minecraft.network.protocol.PacketType<?> packetType,
             int packetId) {
@@ -96,12 +98,12 @@ final class Paper26_3ProtocolIntrospector {
             throw incompatible("Paper registry contains a packet without an identifier", null);
         }
         String typeIdentifier = packetType.id().toString();
-        requireStableText(typeIdentifier, "packet type identifier");
-        String typeName = requireStableText(
+        ProtocolSnapshot.requireStableText(typeIdentifier, "packet type identifier");
+        String typeName = ProtocolSnapshot.requireStableText(
                 phase.name().toLowerCase(java.util.Locale.ROOT) + ".clientbound." + typeIdentifier,
                 "packet type name");
-        String codecKey = requireStableText(CODEC_PREFIX + typeName, "packet codec key");
-        return new PacketType(
+        String codecKey = ProtocolSnapshot.requireStableText(CODEC_PREFIX + typeName, "packet codec key");
+        return new ProtocolPacket(
                 phase,
                 PacketDescriptor.Direction.CLIENTBOUND,
                 typeName,
@@ -109,10 +111,10 @@ final class Paper26_3ProtocolIntrospector {
                 codecKey);
     }
 
-    private static void validatePacketSet(List<PacketType> packets) {
+    private static void validatePacketSet(List<ProtocolPacket> packets) {
         Set<String> packetIds = new HashSet<>();
         Set<String> typeNames = new HashSet<>();
-        for (PacketType packet : packets) {
+        for (ProtocolPacket packet : packets) {
             if (!packetIds.add(packet.phase().name() + ':' + packet.packetId())) {
                 throw incompatible("Paper registry contains a duplicate packet ID in " + packet.phase(), null);
             }
@@ -135,55 +137,9 @@ final class Paper26_3ProtocolIntrospector {
         };
     }
 
-    private static String requireStableText(String value, String field) {
-        if (value == null || value.isEmpty()) {
-            throw incompatible("Paper registry contains an empty " + field, null);
-        }
-        for (int index = 0; index < value.length(); index++) {
-            char character = value.charAt(index);
-            if (Character.isWhitespace(character) || Character.isISOControl(character)) {
-                throw incompatible("Paper registry contains an invalid " + field, null);
-            }
-        }
-        return value;
-    }
-
     private static IncompatibleAdapterException incompatible(String message, Throwable cause) {
         return cause == null
                 ? new IncompatibleAdapterException(message)
                 : new IncompatibleAdapterException(message, cause);
-    }
-
-    record ProtocolSnapshot(
-            String minecraftVersion,
-            int protocolVersion,
-            List<PacketType> clientboundPackets) {
-
-        ProtocolSnapshot {
-            minecraftVersion = requireStableText(minecraftVersion, "minecraftVersion");
-            if (protocolVersion < 0) {
-                throw incompatible("snapshot protocol version is negative", null);
-            }
-            Objects.requireNonNull(clientboundPackets, "clientboundPackets");
-            clientboundPackets = List.copyOf(clientboundPackets);
-        }
-    }
-
-    record PacketType(
-            PacketPhase phase,
-            PacketDescriptor.Direction direction,
-            String typeName,
-            int packetId,
-            String codecKey) {
-
-        PacketType {
-            Objects.requireNonNull(phase, "phase");
-            Objects.requireNonNull(direction, "direction");
-            typeName = requireStableText(typeName, "typeName");
-            if (packetId < 0) {
-                throw incompatible("snapshot packet ID is negative", null);
-            }
-            codecKey = requireStableText(codecKey, "codecKey");
-        }
     }
 }

@@ -20,17 +20,17 @@ class ReplayManifestCodecTest {
     void encodeIsDeterministicAndRoundTripsCanonicalManifest() throws Exception {
         ReplayManifest.ArtifactFile segment = new ReplayManifest.ArtifactFile(
                 ReplayManifest.ArtifactType.SEGMENT,
-                "segments/00000000.segment",
+                "tracks/0/segments/00000000.segment",
                 32L,
                 SHA);
         ReplayManifest.ArtifactFile index = new ReplayManifest.ArtifactFile(
                 ReplayManifest.ArtifactType.INDEX,
-                "index.bin",
+                "tracks/0/index.bin",
                 18L,
                 SHA);
         ReplayManifest.ArtifactFile checkpoint = new ReplayManifest.ArtifactFile(
                 ReplayManifest.ArtifactType.CHECKPOINT,
-                "checkpoints/00000000.checkpoint",
+                "tracks/0/checkpoints/00000000.checkpoint",
                 44L,
                 SHA);
         ReplayManifest first = new ReplayManifest(
@@ -40,6 +40,7 @@ class ReplayManifestCodecTest {
                 "registry-ä",
                 ReplayManifest.CURRENT_FORMAT_REVISION,
                 30_000L,
+                List.of(TrackDescriptor.global(0)),
                 List.of(segment, checkpoint, index));
         ReplayManifest second = new ReplayManifest(
                 first.replayId(),
@@ -48,6 +49,7 @@ class ReplayManifestCodecTest {
                 first.registryFingerprint(),
                 first.formatRevision(),
                 first.durationNanos(),
+                first.tracks(),
                 List.of(index, segment, checkpoint));
         ReplayManifestCodec codec = new ReplayManifestCodec(new GsonBuilder().create());
 
@@ -69,31 +71,34 @@ class ReplayManifestCodecTest {
         assertThrows(
                 IllegalArgumentException.class,
                 () -> new ReplayManifest(
-                        "not-a-uuid", "paper-26.2", 775, "registry", ReplayManifest.CURRENT_FORMAT_REVISION, 0L, List.of()));
+                        "not-a-uuid", "paper-26.2", 775, "registry", ReplayManifest.CURRENT_FORMAT_REVISION, 0L, List.of(), List.of()));
         assertThrows(
                 IllegalArgumentException.class,
                 () -> new ReplayManifest(
                         "123e4567-e89b-12d3-a456-426614174000",
                         "paper-26.2", 775, "registry", ReplayManifest.CURRENT_FORMAT_REVISION, 0L,
+                        List.of(TrackDescriptor.global(0)),
                         List.of(new ReplayManifest.ArtifactFile(
                                 ReplayManifest.ArtifactType.INDEX,
-                                "/index.bin", 1L, SHA))));
+                                "/tracks/0/index.bin", 1L, SHA))));
         assertThrows(
                 IllegalArgumentException.class,
                 () -> new ReplayManifest(
                         "123e4567-e89b-12d3-a456-426614174000",
                         "paper-26.2", 775, "registry", ReplayManifest.CURRENT_FORMAT_REVISION, 0L,
+                        List.of(TrackDescriptor.global(0)),
                         List.of(new ReplayManifest.ArtifactFile(
                                 ReplayManifest.ArtifactType.INDEX,
-                                "../index.bin", 1L, SHA))));
+                                "tracks/../index.bin", 1L, SHA))));
         assertThrows(
                 IllegalArgumentException.class,
                 () -> new ReplayManifest(
                         "123e4567-e89b-12d3-a456-426614174000",
                         "paper-26.2", 775, "registry", ReplayManifest.CURRENT_FORMAT_REVISION, 0L,
+                        List.of(TrackDescriptor.global(0)),
                         List.of(new ReplayManifest.ArtifactFile(
                                 ReplayManifest.ArtifactType.INDEX,
-                                "index.bin", 1L, SHA.toUpperCase()))));
+                                "tracks/0/index.bin", 1L, SHA.toUpperCase()))));
     }
 
     @Test
@@ -104,15 +109,16 @@ class ReplayManifestCodecTest {
                 + "\"adapterId\":\"paper-26.2\","
                 + "\"protocolVersion\":775,"
                 + "\"registryFingerprint\":\"registry\","
-                + "\"formatRevision\":3,"
+                + "\"formatRevision\":5,"
                 + "\"durationNanos\":0,"
+                + "\"tracks\":[],"
                 + "\"files\":[]"
                 + "}";
 
         assertEquals(validJson, new String(codec.encode(codec.decode(validJson.getBytes(StandardCharsets.UTF_8))), StandardCharsets.UTF_8));
         assertThrows(
                 CorruptReplayArtifactException.class,
-                () -> codec.decode(validJson.replace("\"formatRevision\":3", "\"formatRevision\":2")
+                () -> codec.decode(validJson.replace("\"formatRevision\":5", "\"formatRevision\":4")
                         .getBytes(StandardCharsets.UTF_8)));
         assertThrows(
                 CorruptReplayArtifactException.class,
@@ -128,8 +134,9 @@ class ReplayManifestCodecTest {
                 + "\"adapterId\":\"paper-26.2\","
                 + "\"protocolVersion\":775,"
                 + "\"registryFingerprint\":\"registry\","
-                + "\"formatRevision\":3,"
+                + "\"formatRevision\":4,"
                 + "\"durationNanos\":0,"
+                + "\"tracks\":[],"
                 + "\"files\":[]"
                 + "}";
         byte[] malformed = json.getBytes(StandardCharsets.UTF_8);

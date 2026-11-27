@@ -65,6 +65,7 @@ class ExampleItemModelsTest {
                       {"action":"FORWARD","slot":2,"material":"CLOCK","model":"replay_example:forward"},
                       {"action":"RESTART","slot":3,"material":"CLOCK","model":"replay_example:restart"},
                       {"action":"SPEED_CYCLE","slot":4,"material":"CLOCK","model":"replay_example:speed_1","speedModels":{"0.25":"replay_example:speed_0_25","0.5":"replay_example:speed_0_5","1":"replay_example:speed_1","2":"replay_example:speed_2","4":"replay_example:speed_4"}},
+                      {"action":"PLAYERS","slot":6,"material":"PLAYER_HEAD"},
                       {"action":"LEAVE","slot":8,"material":"BARRIER","model":"replay_example:leave"}
                     ]
                   }

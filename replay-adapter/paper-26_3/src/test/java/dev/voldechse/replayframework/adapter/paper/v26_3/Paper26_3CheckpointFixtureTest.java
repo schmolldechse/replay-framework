@@ -1,16 +1,19 @@
 package dev.voldechse.replayframework.adapter.paper.v26_3;
 
+import dev.voldechse.replayframework.adapter.paper.checkpoint.CheckpointAssembler;
+import dev.voldechse.replayframework.adapter.paper.v26_3.packet.clientbound.Paper26_3ClientboundPacketCatalog;
+
 import dev.voldechse.replayframework.adapter.PacketDescriptor;
 import dev.voldechse.replayframework.adapter.PacketDisposition;
 import dev.voldechse.replayframework.adapter.PacketRegistry;
 import dev.voldechse.replayframework.adapter.CheckpointEncoder;
-import dev.voldechse.replayframework.adapter.CaptureBridge;
 import dev.voldechse.replayframework.adapter.IncompatibleAdapterException;
-import dev.voldechse.replayframework.api.recording.BlockPosition;
-import dev.voldechse.replayframework.api.recording.CuboidRegion;
 import dev.voldechse.replayframework.api.recording.RecordingScope;
-import dev.voldechse.replayframework.adapter.paper.v26_3.capture.Paper26_3SyntheticStateCollector;
-import dev.voldechse.replayframework.adapter.paper.v26_3.checkpoint.Paper26_3CheckpointEncoder;
+import dev.voldechse.replayframework.adapter.paper.checkpoint.CheckpointAssembler;
+import dev.voldechse.replayframework.adapter.paper.checkpoint.CheckpointSnapshot;
+import dev.voldechse.replayframework.adapter.paper.checkpoint.EncodedPacket;
+import dev.voldechse.replayframework.adapter.paper.checkpoint.PacketBlueprint;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketCheckpointFamily;
 import dev.voldechse.replayframework.format.PacketPhase;
 import dev.voldechse.replayframework.format.RawPacketFrame;
 import dev.voldechse.replayframework.format.ReplayCheckpoint;
@@ -31,10 +34,10 @@ import net.kyori.adventure.key.Key;
 import net.minecraft.network.PacketListener;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.PacketType;
-import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
@@ -42,6 +45,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 final class Paper26_3CheckpointFixtureTest {
+    @BeforeAll
+    static void bootstrapPaperRegistries() {
+        net.minecraft.SharedConstants.tryDetectVersion();
+        net.minecraft.server.Bootstrap.bootStrap();
+        net.minecraft.server.Bootstrap.validate();
+    }
+
     private static final Packet<PacketListener> TEST_PACKET = new Packet<>() {
         @Override
         public PacketType<? extends Packet<PacketListener>> type() {
@@ -65,29 +75,30 @@ final class Paper26_3CheckpointFixtureTest {
                 metadata.descriptor().typeName(), metadata.packetId(),
                 attributes.descriptor().typeName(), attributes.packetId());
 
-        List<Paper26_3CheckpointEncoder.PacketBlueprint> packets = new ArrayList<>();
+        List<PacketBlueprint> packets = new ArrayList<>();
         for (int entityId = 48; entityId >= 1; entityId--) {
             packets.add(blueprint(
                     "minecraft:update_attributes",
-                    Paper26_3CheckpointEncoder.CheckpointPacketFamily.ENTITY_METADATA,
+                    PacketCheckpointFamily.ENTITY_METADATA,
                     "minecraft:world",
                     "entity:" + entityId + ":attributes"));
             packets.add(blueprint(
                     "minecraft:set_entity_data",
-                    Paper26_3CheckpointEncoder.CheckpointPacketFamily.ENTITY_METADATA,
+                    PacketCheckpointFamily.ENTITY_METADATA,
                     "minecraft:world",
                     "entity:" + entityId));
         }
 
         List<String> encodedTargets = new ArrayList<>();
-        Paper26_3CheckpointEncoder encoder = new Paper26_3CheckpointEncoder(
+        CheckpointAssembler encoder = new CheckpointAssembler(
                 registry,
+                Paper26_3ClientboundPacketCatalog.catalog(),
                 ignored -> CompletableFuture.completedFuture(
-                        new Paper26_3CheckpointEncoder.CheckpointSnapshot(packets)),
+                        new CheckpointSnapshot(packets)),
                 blueprint -> {
                     encodedTargets.add(blueprint.targetKey());
                     int packetId = packetIds.get(blueprint.descriptorTypeName());
-                    return new Paper26_3CheckpointEncoder.EncodedPacket(
+                    return new EncodedPacket(
                             blueprint.descriptorTypeName(),
                             PacketPhase.PLAY,
                             PacketDescriptor.Direction.CLIENTBOUND,
@@ -117,7 +128,7 @@ final class Paper26_3CheckpointFixtureTest {
     @Test
     void encodesAllCheckpointFamiliesInStableOrder(@TempDir Path temporaryDirectory) throws Exception {
         List<DescriptorSpec> specifications = List.of(
-                descriptor("minecraft:login", 1),
+                descriptor("minecraft:set_default_spawn_position", 1),
                 descriptor("minecraft:level_chunk_with_light", 2),
                 descriptor("minecraft:block_entity_data", 3),
                 descriptor("minecraft:set_time", 4),
@@ -134,24 +145,25 @@ final class Paper26_3CheckpointFixtureTest {
             packetIds.put(specification.descriptor().typeName(), specification.packetId());
         }
 
-        Paper26_3CheckpointEncoder.CheckpointSnapshot snapshot =
-                new Paper26_3CheckpointEncoder.CheckpointSnapshot(
+        CheckpointSnapshot snapshot =
+                new CheckpointSnapshot(
                         new CheckpointEncoder.CapturePoint(150L, 8L, 4),
                         List.of(
-                        blueprint("minecraft:update_mob_effect", Paper26_3CheckpointEncoder.CheckpointPacketFamily.RUNNING_EFFECT, "minecraft:world", "entity:9"),
-                        blueprint("minecraft:set_equipment", Paper26_3CheckpointEncoder.CheckpointPacketFamily.EQUIPMENT, "minecraft:world", "entity:9"),
-                        blueprint("minecraft:add_entity", Paper26_3CheckpointEncoder.CheckpointPacketFamily.ENTITY_SPAWN, "minecraft:world", "entity:9"),
-                        blueprint("minecraft:block_entity_data", Paper26_3CheckpointEncoder.CheckpointPacketFamily.BLOCK_ENTITY, "minecraft:world", "block:1,64,1"),
-                        blueprint("minecraft:login", Paper26_3CheckpointEncoder.CheckpointPacketFamily.DIMENSION_SPAWN, "minecraft:world", "spawn"),
-                        blueprint("minecraft:set_entity_data", Paper26_3CheckpointEncoder.CheckpointPacketFamily.ENTITY_METADATA, "minecraft:world", "entity:9"),
-                        blueprint("minecraft:set_time", Paper26_3CheckpointEncoder.CheckpointPacketFamily.GLOBAL_STATE, "minecraft:world", "time"),
-                        blueprint("minecraft:set_passengers", Paper26_3CheckpointEncoder.CheckpointPacketFamily.PASSENGERS, "minecraft:world", "entity:9"),
-                        blueprint("minecraft:level_chunk_with_light", Paper26_3CheckpointEncoder.CheckpointPacketFamily.CHUNK_LIGHT, "minecraft:world", "chunk:0,0")));
+                        blueprint("minecraft:update_mob_effect", PacketCheckpointFamily.RUNNING_EFFECT, "minecraft:world", "entity:9"),
+                        blueprint("minecraft:set_equipment", PacketCheckpointFamily.EQUIPMENT, "minecraft:world", "entity:9"),
+                        blueprint("minecraft:add_entity", PacketCheckpointFamily.ENTITY_SPAWN, "minecraft:world", "entity:9"),
+                        blueprint("minecraft:block_entity_data", PacketCheckpointFamily.BLOCK_ENTITY, "minecraft:world", "block:1,64,1"),
+                        blueprint("minecraft:set_default_spawn_position", PacketCheckpointFamily.DIMENSION_SPAWN, "minecraft:world", "spawn"),
+                        blueprint("minecraft:set_entity_data", PacketCheckpointFamily.ENTITY_METADATA, "minecraft:world", "entity:9"),
+                        blueprint("minecraft:set_time", PacketCheckpointFamily.GLOBAL_STATE, "minecraft:world", "time"),
+                        blueprint("minecraft:set_passengers", PacketCheckpointFamily.PASSENGERS, "minecraft:world", "entity:9"),
+                        blueprint("minecraft:level_chunk_with_light", PacketCheckpointFamily.CHUNK_LIGHT, "minecraft:world", "chunk:0,0")));
 
-        Paper26_3CheckpointEncoder encoder = new Paper26_3CheckpointEncoder(
+        CheckpointAssembler encoder = new CheckpointAssembler(
                 registry,
+                Paper26_3ClientboundPacketCatalog.catalog(),
                 ignored -> CompletableFuture.completedFuture(snapshot),
-                blueprint -> new Paper26_3CheckpointEncoder.EncodedPacket(
+                blueprint -> new EncodedPacket(
                         blueprint.descriptorTypeName(),
                         PacketPhase.PLAY,
                         PacketDescriptor.Direction.CLIENTBOUND,
@@ -201,10 +213,14 @@ final class Paper26_3CheckpointFixtureTest {
         assertTrue(capture.initializationFrames().stream()
                 .allMatch(frame -> frame.elapsedNanos() == 50L && frame.serverTick() == 8L));
 
+        dev.voldechse.replayframework.format.TrackDescriptor track = checkpoint.initializationFrames()
+                .getFirst().world()
+                .map(world -> dev.voldechse.replayframework.format.TrackDescriptor.world(1, world))
+                .orElse(dev.voldechse.replayframework.format.TrackDescriptor.global(0));
         Path checkpointPath = temporaryDirectory.resolve("initial.rfc");
-        new ReplayCheckpointWriter(checkpointPath, Paper26_3CheckpointEncoder.ADAPTER_ID)
+        new ReplayCheckpointWriter(checkpointPath, "paper-26.3", track)
                 .write(checkpoint);
-        ReplayCheckpoint decoded = new ReplayCheckpointReader().read(checkpointPath);
+        ReplayCheckpoint decoded = new ReplayCheckpointReader().read(checkpointPath, track);
         assertEquals(checkpoint.ordinal(), decoded.ordinal());
         assertEquals(checkpoint.elapsedNanos(), decoded.elapsedNanos());
         assertEquals(checkpoint.initializationFrames(), decoded.initializationFrames());
@@ -214,71 +230,7 @@ final class Paper26_3CheckpointFixtureTest {
         Path truncatedPath = temporaryDirectory.resolve("initial-truncated.rfc");
         Files.write(truncatedPath, truncated);
         assertThrows(CorruptReplayArtifactException.class,
-                () -> new ReplayCheckpointReader().read(truncatedPath));
-    }
-
-    @Test
-    void emitsOnlyUnobservedStateChangesInsideTheRecordingScope() {
-        PacketDescriptor descriptor = descriptor("minecraft:block_update", 11).descriptor();
-        PacketRegistry registry = PacketRegistry.of(List.of(descriptor));
-        RecordingScope scope = RecordingScope.builder()
-                .addRegion(new CuboidRegion(
-                        Key.key("minecraft:world"),
-                        new BlockPosition(0, 0, 0),
-                        new BlockPosition(15, 255, 15)))
-                .build();
-
-        Paper26_3SyntheticStateCollector collector = new Paper26_3SyntheticStateCollector(
-                registry,
-                scope,
-                packet -> new Paper26_3SyntheticStateCollector.ObservedStateKey(
-                        packet.serverTick(),
-                        Paper26_3CheckpointEncoder.CheckpointPacketFamily.BLOCK_ENTITY,
-                        "minecraft:world",
-                        "block:1,64,1"),
-                delta -> new Paper26_3SyntheticStateCollector.SyntheticStatePacket(
-                        delta.captureTimeNanos(),
-                        delta.serverTick(),
-                        PacketPhase.PLAY,
-                        delta.packetId(),
-                        delta.family(),
-                        delta.worldKey(),
-                        delta.targetKey(),
-                        delta.position(),
-                        delta.payload()));
-
-        collector.observe(new CaptureBridge.CapturePacket(
-                100L,
-                4L,
-                0,
-                PacketPhase.PLAY,
-                11,
-                new byte[]{7}));
-
-        Paper26_3SyntheticStateCollector.StateDelta observed = stateDelta(
-                101L, 4L, "block:1,64,1", new BlockPosition(1, 64, 1));
-        assertTrue(collector.collect(observed).isEmpty());
-
-        Paper26_3SyntheticStateCollector.StateDelta unobserved = stateDelta(
-                102L, 4L, "block:2,64,2", new BlockPosition(2, 64, 2));
-        List<Paper26_3SyntheticStateCollector.SyntheticStatePacket> emitted =
-                collector.collect(unobserved);
-        assertEquals(1, emitted.size());
-        assertEquals("block:2,64,2", emitted.get(0).targetKey());
-        assertArrayEquals(new byte[]{2}, emitted.get(0).payload());
-
-        byte[] mutablePayload = emitted.get(0).payload();
-        mutablePayload[0] = 99;
-        assertArrayEquals(new byte[]{2}, emitted.get(0).payload());
-        assertTrue(collector.collect(unobserved).isEmpty());
-
-        Paper26_3SyntheticStateCollector.StateDelta nextTick = stateDelta(
-                200L, 5L, "block:2,64,2", new BlockPosition(2, 64, 2));
-        assertEquals(1, collector.collect(nextTick).size());
-
-        Paper26_3SyntheticStateCollector.StateDelta outsideScope = stateDelta(
-                201L, 5L, "block:20,64,20", new BlockPosition(20, 64, 20));
-        assertTrue(collector.collect(outsideScope).isEmpty());
+                () -> new ReplayCheckpointReader().read(truncatedPath, track));
     }
 
     @Test
@@ -287,10 +239,11 @@ final class Paper26_3CheckpointFixtureTest {
                 descriptor("minecraft:block_changed_ack", 12).descriptor()));
 
         assertThrows(IncompatibleAdapterException.class,
-                () -> new Paper26_3CheckpointEncoder(
+                () -> new CheckpointAssembler(
                         registry,
+                        Paper26_3ClientboundPacketCatalog.catalog(),
                         ignored -> CompletableFuture.completedFuture(
-                                new Paper26_3CheckpointEncoder.CheckpointSnapshot(List.of())),
+                                new CheckpointSnapshot(List.of())),
                         ignored -> null,
                         directExecutor()));
     }
@@ -315,33 +268,17 @@ final class Paper26_3CheckpointFixtureTest {
                         "test/" + typeName));
     }
 
-    private static Paper26_3CheckpointEncoder.PacketBlueprint blueprint(
+    private static PacketBlueprint blueprint(
             String typeName,
-            Paper26_3CheckpointEncoder.CheckpointPacketFamily family,
+            PacketCheckpointFamily family,
             String worldKey,
             String targetKey) {
-        return new Paper26_3CheckpointEncoder.PacketBlueprint(
+        return new PacketBlueprint(
                 "play.clientbound." + typeName,
                 family,
                 worldKey,
                 targetKey,
                 TEST_PACKET);
-    }
-
-    private static Paper26_3SyntheticStateCollector.StateDelta stateDelta(
-            long captureTimeNanos,
-            long serverTick,
-            String targetKey,
-            BlockPosition position) {
-        return new Paper26_3SyntheticStateCollector.StateDelta(
-                captureTimeNanos,
-                serverTick,
-                Paper26_3CheckpointEncoder.CheckpointPacketFamily.BLOCK_ENTITY,
-                "minecraft:world",
-                targetKey,
-                position,
-                11,
-                new byte[]{(byte) position.x()});
     }
 
     private record DescriptorSpec(String typeName, int packetId, PacketDescriptor descriptor) {

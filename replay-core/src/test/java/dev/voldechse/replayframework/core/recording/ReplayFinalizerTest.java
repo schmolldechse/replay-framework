@@ -62,6 +62,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 final class ReplayFinalizerTest {
@@ -89,10 +90,30 @@ final class ReplayFinalizerTest {
                     RecordingStatus.FINALIZING,
                     RecordingStatus.AVAILABLE), fixture.repository.transitions);
             assertEquals(List.of(new SeekPoint(0L, 0, 0, 0L)),
-                    new ReplayIndexReader().read(fixture.workspace.resolve("index.bin")).points());
+                    new ReplayIndexReader().read(fixture.workspace.resolve("tracks/0/index.bin")).points());
         } finally {
             fixture.close();
         }
+    }
+
+    @Test
+    void acceptsATrackThatOnlyCheckpointsContain() {
+        ReplayFinalizer.validateSeekPoints(List.of(
+                new SeekPoint(0L, 0, 0, 0L),
+                new SeekPoint(30_000_000_000L, 1, 0, 0L),
+                new SeekPoint(60_000_000_000L, 2, 0, 0L)), 0, 3);
+    }
+
+    @Test
+    void rejectsASeekPointIntoASegmentOfATrackWithoutSegments() {
+        assertThrows(ReplayFinalizer.ArtifactValidationException.class,
+                () -> ReplayFinalizer.validateSeekPoints(List.of(
+                        new SeekPoint(0L, 0, 0, 0L),
+                        new SeekPoint(30_000_000_000L, 1, 0, 128L)), 0, 2));
+        assertThrows(ReplayFinalizer.ArtifactValidationException.class,
+                () -> ReplayFinalizer.validateSeekPoints(List.of(
+                        new SeekPoint(0L, 0, 0, 0L),
+                        new SeekPoint(30_000_000_000L, 1, 1, 0L)), 1, 2));
     }
 
     @Test
@@ -116,7 +137,7 @@ final class ReplayFinalizerTest {
                     fixture.replayId,
                     ArtifactKey.of("manifest.json")).toCompletableFuture().join());
             assertTrue(Files.isRegularFile(
-                    fixture.workspace.resolve("checkpoints/00000000.checkpoint")));
+                    fixture.workspace.resolve("tracks/0/checkpoints/00000000.checkpoint")));
         } finally {
             fixture.close();
         }
@@ -310,7 +331,10 @@ final class ReplayFinalizerTest {
                             ignored -> workspace),
                     finalizer,
                     leaseManager,
-                    Runnable::run);
+                    Runnable::run,
+                    event -> {
+                    },
+                    new dev.voldechse.replayframework.core.diagnostics.ReplayDiagnostics());
             coordinatorRef.set(coordinator);
         }
 

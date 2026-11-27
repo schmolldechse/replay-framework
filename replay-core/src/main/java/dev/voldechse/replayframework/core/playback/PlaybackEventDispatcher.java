@@ -76,6 +76,23 @@ final class PlaybackEventDispatcher implements ReplayEventPublisher {
         delegate.playbackBufferChanged(sessionId, replayId, viewerId, snapshot);
     }
 
+    void entityInteracted(
+            PlaybackSessionId sessionId,
+            ReplayId replayId,
+            UUID viewerId,
+            dev.voldechse.replayframework.adapter.playback.ViewerInteractions.EntityInteraction interaction) {
+        delegate.playbackEntityInteracted(
+                sessionId, replayId, viewerId, interaction.entity(), interaction.attack(), interaction.hand());
+    }
+
+    void blockInteracted(
+            PlaybackSessionId sessionId,
+            ReplayId replayId,
+            UUID viewerId,
+            dev.voldechse.replayframework.adapter.playback.ViewerInteractions.BlockInteraction interaction) {
+        delegate.playbackBlockInteracted(sessionId, replayId, viewerId, interaction);
+    }
+
     void completed(
             PlaybackSessionId sessionId,
             ReplayId replayId,

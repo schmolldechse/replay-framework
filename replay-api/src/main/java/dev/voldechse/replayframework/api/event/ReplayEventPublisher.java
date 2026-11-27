@@ -42,7 +42,9 @@ public interface ReplayEventPublisher {
                     PlaybackSeeked,
                     PlaybackBufferChanged,
                     RecordingCompleted,
-                    PlaybackCompleted {
+                    PlaybackCompleted,
+                    PlaybackEntityInteracted,
+                    PlaybackBlockInteracted {
         /**
          * Returns the event creation instant.
          *
@@ -300,6 +302,72 @@ public interface ReplayEventPublisher {
                 throw new IllegalArgumentException(
                         "only FAILED playback may carry a failure code");
             }
+        }
+    }
+
+    /**
+     * Event for a viewer clicking an entity of the replay.
+     *
+     * @param sessionId playback session identifier
+     * @param replayId replay identifier
+     * @param viewerId viewer UUID
+     * @param entity what the scene shows of the clicked entity
+     * @param attack whether the viewer attacked instead of using it
+     * @param hand the hand the viewer used
+     * @param occurredAt event timestamp
+     */
+    record PlaybackEntityInteracted(
+            PlaybackSessionId sessionId,
+            ReplayId replayId,
+            UUID viewerId,
+            dev.voldechse.replayframework.api.playback.RecordedEntity entity,
+            boolean attack,
+            org.bukkit.inventory.EquipmentSlot hand,
+            Instant occurredAt) implements ReplayEvent {
+        /** Validates the event values. */
+        public PlaybackEntityInteracted {
+            Objects.requireNonNull(sessionId, "sessionId");
+            Objects.requireNonNull(replayId, "replayId");
+            Objects.requireNonNull(viewerId, "viewerId");
+            Objects.requireNonNull(entity, "entity");
+            Objects.requireNonNull(hand, "hand");
+            Objects.requireNonNull(occurredAt, "occurredAt");
+        }
+    }
+
+    /**
+     * Event for a viewer clicking a block of the replay with recorded state,
+     * such as a chest. Query its contents with
+     * {@link dev.voldechse.replayframework.api.playback.PlaybackSession#container}.
+     *
+     * @param sessionId playback session identifier
+     * @param replayId replay identifier
+     * @param viewerId viewer UUID
+     * @param world the recorded world of the block
+     * @param position the block's position
+     * @param block the block's type, such as {@code minecraft:chest}
+     * @param hand the hand the viewer used
+     * @param occurredAt event timestamp
+     */
+    record PlaybackBlockInteracted(
+            PlaybackSessionId sessionId,
+            ReplayId replayId,
+            UUID viewerId,
+            net.kyori.adventure.key.Key world,
+            dev.voldechse.replayframework.api.recording.BlockPosition position,
+            net.kyori.adventure.key.Key block,
+            org.bukkit.inventory.EquipmentSlot hand,
+            Instant occurredAt) implements ReplayEvent {
+        /** Validates the event values. */
+        public PlaybackBlockInteracted {
+            Objects.requireNonNull(sessionId, "sessionId");
+            Objects.requireNonNull(replayId, "replayId");
+            Objects.requireNonNull(viewerId, "viewerId");
+            Objects.requireNonNull(world, "world");
+            Objects.requireNonNull(position, "position");
+            Objects.requireNonNull(block, "block");
+            Objects.requireNonNull(hand, "hand");
+            Objects.requireNonNull(occurredAt, "occurredAt");
         }
     }
 

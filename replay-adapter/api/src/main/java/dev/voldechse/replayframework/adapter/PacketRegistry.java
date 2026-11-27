@@ -66,6 +66,11 @@ public interface PacketRegistry {
     /**
      * Returns the deterministic SHA-256 registry fingerprint.
      *
+     * <p>It covers what reading stored packets depends on: phase, direction,
+     * packet ID, type name and codec of every packet. Capture, checkpoint and
+     * playback policy are left out, because playback always applies the
+     * current policy; changing it must not lock out existing replays.</p>
+     *
      * @return lowercase 64-character SHA-256 digest
      */
     String fingerprint();
@@ -172,12 +177,7 @@ final class DefaultPacketRegistry implements PacketRegistry {
             canonical.append(descriptor.direction().wireCode()).append('\n');
             canonical.append(descriptor.packetId()).append('\n');
             canonical.append(descriptor.typeName()).append('\n');
-            canonical.append(descriptor.disposition().name()).append('\n');
-            canonical.append(descriptor.captureByDefault()).append('\n');
-            canonical.append(descriptor.replayable()).append('\n');
-            canonical.append(descriptor.checkpointRelevant()).append('\n');
             canonical.append(descriptor.codecKey()).append('\n');
-            canonical.append(descriptor.playbackScope().name()).append('\n');
             canonical.append('\n');
         }
 

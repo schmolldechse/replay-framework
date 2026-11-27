@@ -28,8 +28,19 @@ dependencies {
     testRuntimeOnly(libs.junit.platform.launcher)
 }
 
+// Each adapter compiles against one Paper dev bundle; the development server
+// runs the same build (D9 in CLAUDE.md).
+val serverMinecraftVersion = providers.gradleProperty("minecraftVersion").orElse("26.2").get()
+val pinnedPaperBuilds = mapOf(
+    "26.2" to libs.versions.paper262.get(),
+    "26.3" to libs.versions.paper263.get(),
+)
+
 tasks.runServer {
-    minecraftVersion(providers.gradleProperty("minecraftVersion").orElse("26.3").get())
+    minecraftVersion(serverMinecraftVersion)
+    pinnedPaperBuilds[serverMinecraftVersion]?.let { devBundle ->
+        build(devBundle.substringAfter(".build.").substringBefore("-").toInt())
+    }
 }
 
 tasks.processResources {

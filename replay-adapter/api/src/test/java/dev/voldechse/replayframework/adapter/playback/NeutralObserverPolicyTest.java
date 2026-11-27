@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 class NeutralObserverPolicyTest {
 
     @Test
-    void recordedChatPresentationIsConnectionLocalWithoutChangingDescriptorScope() {
+    void identifiesRecordedChatPresentationPackets() {
         assertTrue(NeutralObserverPolicy.isRecordedChatPresentation("minecraft:player_chat"));
         assertTrue(NeutralObserverPolicy.isRecordedChatPresentation("minecraft:system_chat"));
         assertTrue(NeutralObserverPolicy.isRecordedChatPresentation("minecraft:disguised_chat"));

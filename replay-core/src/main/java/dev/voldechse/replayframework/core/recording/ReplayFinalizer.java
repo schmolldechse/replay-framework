@@ -13,6 +13,7 @@ import dev.voldechse.replayframework.format.ReplayIndex;
 import dev.voldechse.replayframework.format.ReplayIndexWriter;
 import dev.voldechse.replayframework.format.ReplayManifest;
 import dev.voldechse.replayframework.format.SeekPoint;
+import dev.voldechse.replayframework.format.TrackKind;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -38,6 +39,9 @@ import java.util.concurrent.Executor;
  * transition.</p>
  */
 final class ReplayFinalizer implements RecordingCoordinator.FinalizationHandler {
+    private static final System.Logger LOGGER =
+            System.getLogger(ReplayFinalizer.class.getName());
+
 
     private final ReplayRepository replayRepository;
     private final ReplayArtifactPublisher artifactPublisher;
@@ -250,37 +254,56 @@ final class ReplayFinalizer implements RecordingCoordinator.FinalizationHandler 
     private PreparedArtifacts prepareArtifactsSynchronously(
             DefaultRecordingSession session,
             RecordingSegmentAppender.RecordingArtifacts artifacts) {
-        List<Path> checkpoints = artifacts.checkpointFiles();
-        if (checkpoints.isEmpty() || checkpoints.size() != artifacts.checkpointCount()) {
-            throw new ArtifactValidationException("checkpoint artifact count is inconsistent");
+        if (artifacts.tracks().isEmpty()
+                || artifacts.tracks().getFirst().descriptor().kind() != TrackKind.GLOBAL) {
+            throw new ArtifactValidationException("a recording starts with its global track");
         }
-        if (artifacts.segmentFiles().size() != artifacts.segmentCount()) {
+        Path workspace = artifacts.workspace().toAbsolutePath().normalize();
+        long segments = 0L;
+        List<ReplayArtifactPublisher.TrackFiles> tracks = new java.util.ArrayList<>();
+        long bytes = 0L;
+        for (int position = 0; position < artifacts.tracks().size(); position++) {
+            TrackWriter.TrackArtifacts track = artifacts.tracks().get(position);
+            if (track.descriptor().id() != position) {
+                throw new ArtifactValidationException("track ids must follow their order");
+            }
+            if (track.checkpointFiles().size() != artifacts.checkpointCount()) {
+                throw new ArtifactValidationException("checkpoint artifact count is inconsistent");
+            }
+            Path trackDirectory = workspace.resolve(track.descriptor().directory()).normalize();
+            if (!trackDirectory.startsWith(workspace)) {
+                throw new ArtifactValidationException("track directory escapes workspace");
+            }
+            validateArtifactList(track.checkpointFiles(), "checkpoints", "checkpoint",
+                    session.replayId(), trackDirectory);
+            validateArtifactList(track.segmentFiles(), "segments", "segment",
+                    session.replayId(), trackDirectory);
+            validateSeekPoints(track.seekPoints(), track.segmentFiles().size(),
+                    track.checkpointFiles().size());
+            segments += track.segmentFiles().size();
+
+            Path indexFile = trackDirectory.resolve("index.bin").normalize();
+            if (Files.exists(indexFile, LinkOption.NOFOLLOW_LINKS)) {
+                throw new ArtifactValidationException("index.bin already exists");
+            }
+            try {
+                indexWriter.write(indexFile, ReplayIndex.of(track.seekPoints()));
+                bytes = Math.addExact(bytes, totalBytes(
+                        track.segmentFiles(), track.checkpointFiles(), indexFile));
+            } catch (IOException | ArithmeticException failure) {
+                throw new ArtifactValidationException("could not create replay index", failure);
+            }
+            tracks.add(new ReplayArtifactPublisher.TrackFiles(
+                    track.descriptor(), indexFile, track.segmentFiles(), track.checkpointFiles()));
+        }
+        if (segments != artifacts.segmentCount()) {
             throw new ArtifactValidationException("segment artifact count is inconsistent");
         }
-
-        Path initialCheckpoint = validateArtifactList(
-                checkpoints, "checkpoints", "checkpoint", session.replayId());
-        Path workspace = requireWorkspace(initialCheckpoint);
-        validateArtifactList(checkpoints, "checkpoints", "checkpoint", session.replayId(), workspace);
-        validateArtifactList(artifacts.segmentFiles(), "segments", "segment", session.replayId(), workspace);
-        validateSeekPoints(artifacts.seekPoints(), artifacts.segmentFiles().size(), checkpoints.size());
-
-        Path indexFile = workspace.resolve("index.bin").normalize();
-        if (!indexFile.startsWith(workspace)
-                || Files.exists(indexFile, LinkOption.NOFOLLOW_LINKS)) {
-            throw new ArtifactValidationException("index.bin already exists or escapes workspace");
+        if (session.request().budget().maxPendingUploadBytes().isPresent()
+                && bytes > session.request().budget().maxPendingUploadBytes().getAsLong()) {
+            throw new StorageBudgetException("pending upload budget exceeded");
         }
-        try {
-            indexWriter.write(indexFile, ReplayIndex.of(artifacts.seekPoints()));
-            long bytes = totalBytes(artifacts.segmentFiles(), artifacts.checkpointFiles(), indexFile);
-            if (session.request().budget().maxPendingUploadBytes().isPresent()
-                    && bytes > session.request().budget().maxPendingUploadBytes().getAsLong()) {
-                throw new StorageBudgetException("pending upload budget exceeded");
-            }
-        } catch (IOException | ArithmeticException failure) {
-            throw new ArtifactValidationException("could not create replay index", failure);
-        }
-        return new PreparedArtifacts(workspace, indexFile);
+        return new PreparedArtifacts(workspace, tracks);
     }
 
     private static long totalBytes(List<Path> segmentFiles, List<Path> checkpointFiles, Path indexFile)
@@ -311,9 +334,7 @@ final class ReplayFinalizer implements RecordingCoordinator.FinalizationHandler 
                     descriptor.registryFingerprint(),
                     descriptor.adapterFormatRevision(),
                     artifacts.durationNanos(),
-                    prepared.indexFile(),
-                    artifacts.segmentFiles(),
-                    artifacts.checkpointFiles());
+                    prepared.tracks());
         } catch (Throwable failure) {
             fail(session, result, ReplayFailureCode.CORRUPT_DATA,
                     "publisher request", failure);
@@ -399,6 +420,7 @@ final class ReplayFinalizer implements RecordingCoordinator.FinalizationHandler 
             String stage,
             Throwable cause) {
         String description = diagnostic(session, stage, cause);
+        LOGGER.log(System.Logger.Level.ERROR, description + ", code=" + code, cause);
         transitionToFailed(session.replayId(), code, description)
                 .whenCompleteAsync((ignored, transitionFailure) -> {
                     session.markFinalizerFailed(code, description);
@@ -474,21 +496,6 @@ final class ReplayFinalizer implements RecordingCoordinator.FinalizationHandler 
         }
     }
 
-    private static Path validateArtifactList(
-            List<Path> sources,
-            String directory,
-            String extension,
-            dev.voldechse.replayframework.api.id.ReplayId replayId) {
-        Path first = null;
-        for (int index = 0; index < sources.size(); index++) {
-            Path normalized = validateArtifact(sources.get(index), null, directory, extension, index, replayId);
-            if (first == null) {
-                first = normalized;
-            }
-        }
-        return first;
-    }
-
     private static void validateArtifactList(
             List<Path> sources,
             String directory,
@@ -527,18 +534,13 @@ final class ReplayFinalizer implements RecordingCoordinator.FinalizationHandler 
         return normalized;
     }
 
-    private static Path requireWorkspace(Path initialCheckpoint) {
-        Path checkpoints = initialCheckpoint.getParent();
-        Path workspace = checkpoints == null ? null : checkpoints.getParent();
-        if (workspace == null
-                || !"checkpoints".equals(checkpoints.getFileName().toString())
-                || !initialCheckpoint.getFileName().toString().equals("00000000.checkpoint")) {
-            throw new ArtifactValidationException("initial checkpoint does not define a workspace");
-        }
-        return workspace.toAbsolutePath().normalize();
-    }
-
-    private static void validateSeekPoints(
+    /**
+     * Checks that every seek point of a track references artifacts that exist.
+     * A track without segments, such as the state track of a subject that only
+     * checkpoints contain, anchors each checkpoint at segment 0, offset 0,
+     * as playback expects.
+     */
+    static void validateSeekPoints(
             List<SeekPoint> seekPoints,
             int segmentCount,
             int checkpointCount) {
@@ -549,7 +551,7 @@ final class ReplayFinalizer implements RecordingCoordinator.FinalizationHandler 
         for (SeekPoint point : seekPoints) {
             if (point.checkpointOrdinal() >= checkpointCount
                     || (segmentCount == 0
-                    ? !point.equals(seekPoints.getFirst())
+                    ? point.segmentOrdinal() != 0 || point.frameOffset() != 0L
                     : point.segmentOrdinal() >= segmentCount)) {
                 throw new ArtifactValidationException("seek point references a missing artifact");
             }
@@ -580,10 +582,10 @@ final class ReplayFinalizer implements RecordingCoordinator.FinalizationHandler 
         return current;
     }
 
-    private record PreparedArtifacts(Path workspace, Path indexFile) {
+    private record PreparedArtifacts(Path workspace, List<ReplayArtifactPublisher.TrackFiles> tracks) {
     }
 
-    private static final class ArtifactValidationException extends RuntimeException {
+    static final class ArtifactValidationException extends RuntimeException {
         private ArtifactValidationException(String message) {
             super(message);
         }

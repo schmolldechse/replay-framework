@@ -81,6 +81,64 @@ public interface PlaybackSession {
     CompletionStage<PlaybackSnapshot> seekBy(Duration delta);
 
     /**
+     * Returns every player of the replay with its location at the current
+     * playback position, across all recorded worlds. Players in worlds the
+     * viewer does not watch are read from those worlds' recordings, so the
+     * result is asynchronous.
+     */
+    CompletionStage<java.util.List<RecordedPlayer>> recordedPlayers();
+
+    /**
+     * Returns the recorded world the viewer watches. A replay can span several
+     * worlds; the viewer's client shows one of them at a time.
+     */
+    net.kyori.adventure.key.Key viewedWorld();
+
+    /**
+     * Switches the viewer to another recorded world and builds its scene at
+     * the current position, as a seek does. The viewer is not moved: the
+     * caller places the viewer in a world whose dimension matches the
+     * recorded one before switching, because the client applies chunks with
+     * the height of its own dimension.
+     *
+     * @param world a recorded world
+     */
+    CompletionStage<PlaybackSnapshot> viewWorld(net.kyori.adventure.key.Key world);
+
+    /**
+     * Returns the state of a subject at the current position, such as a
+     * player's inventory or the content of a chested llama. Empty when the
+     * subject is not part of the replay at this position.
+     *
+     * @param subject a player or an entity of the replay
+     */
+    CompletionStage<java.util.Optional<SubjectState>> state(RecordedSubject subject);
+
+    /**
+     * Returns the state of a block at the current position, such as the
+     * contents of a chest, barrel, furnace or hopper, as a {@link SubjectState}
+     * with a {@link SubjectState#CONTAINER} section. Both halves of a double
+     * chest are returned as one container of 54 slots. Empty when the
+     * recording has no such block at this position.
+     *
+     * @param world the recorded world
+     * @param position the block's position
+     */
+    CompletionStage<java.util.Optional<SubjectState>> container(
+            net.kyori.adventure.key.Key world, dev.voldechse.replayframework.api.recording.BlockPosition position);
+
+    /**
+     * Returns what the scene shows of an entity the viewer's client knows by
+     * the given ID, for example the entity a viewer clicked.
+     *
+     * @param clientEntityId the entity ID on the viewer's client
+     */
+    java.util.Optional<RecordedEntity> entity(int clientEntityId);
+
+    /** Returns every entity of the viewed world at the current position. */
+    java.util.List<RecordedEntity> entities();
+
+    /**
      * Closes this session and releases internal playback resources. Repeated
      * calls are idempotent.
      *

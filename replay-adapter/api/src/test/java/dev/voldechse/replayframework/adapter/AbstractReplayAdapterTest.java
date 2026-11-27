@@ -54,7 +54,7 @@ class AbstractReplayAdapterTest {
 
     private ReplayAdapter adapter(String fingerprint, Function<Player, PlaybackBridge> factory) {
         return new AbstractReplayAdapter(new AdapterDescriptor("fixture", 1, 3, fingerprint),
-                registry, capture, checkpoints, CheckpointSignalSource.noop(), factory) {};
+                registry, capture, checkpoints, factory) {};
     }
 
     private static Player viewer() {
@@ -62,7 +62,7 @@ class AbstractReplayAdapterTest {
                 (proxy, method, args) -> { throw new AssertionError("adapter composition mutated or read player state: " + method); });
     }
 
-    private static final class Bridge implements PlaybackBridge {
+    private static final class Bridge extends StubPlaybackBridge {
         private PlaybackIdentityContext identity;
         public void setIdentityContext(PlaybackIdentityContext context) { identity = context; }
         public void send(RawPacketFrame frame) {}

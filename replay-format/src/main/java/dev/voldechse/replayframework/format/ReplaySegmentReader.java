@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Strict reader for revision-three replay segments.
+ * Strict reader for replay segments of one track.
  */
 public final class ReplaySegmentReader {
 
@@ -26,13 +26,16 @@ public final class ReplaySegmentReader {
      * Reads and fully validates one segment.
      *
      * @param source segment path
+     * @param track the track the segment belongs to; supplies the world of its frames
      * @return complete decoded segment
      * @throws IOException when the source cannot be opened or read
      * @throws CorruptReplaySegmentException when the source is not valid
      */
-    public DecodedSegment read(Path source)
+    public DecodedSegment read(Path source, TrackDescriptor track)
             throws IOException, CorruptReplaySegmentException {
         Objects.requireNonNull(source, "source");
+        ReplayFrameCodec.Decoder decoder = new ReplayFrameCodec.Decoder(
+                Objects.requireNonNull(track, "track"));
         try (InputStream file = new BufferedInputStream(Files.newInputStream(source))) {
             SegmentHeader header = readHeader(file);
             try (ZstdInputStream compressed = new ZstdInputStream(file).setContinuous(false)) {
@@ -48,7 +51,7 @@ public final class ReplaySegmentReader {
                         long frameOffset = body.count();
                         RawPacketFrame frame;
                         try {
-                            frame = ReplayFrameCodec.readRecord(body);
+                            frame = decoder.read(body);
                         } catch (CorruptReplayArtifactException exception) {
                             throw corrupt("could not decode the segment frame record", exception);
                         }
@@ -257,11 +260,6 @@ public final class ReplaySegmentReader {
             List<RawPacketFrame> frames,
             List<Long> frameOffsets) {
 
-        /** Preserves the original construction API for callers with decoded frames. */
-        public DecodedSegment(SegmentHeader header, List<RawPacketFrame> frames) {
-            this(header, frames, offsetsFor(frames));
-        }
-
         public DecodedSegment {
             Objects.requireNonNull(header, "header");
             Objects.requireNonNull(frames, "frames");
@@ -281,18 +279,6 @@ public final class ReplaySegmentReader {
                 }
                 previous = offset;
             }
-        }
-
-        private static List<Long> offsetsFor(List<RawPacketFrame> frames) {
-            Objects.requireNonNull(frames, "frames");
-            List<Long> offsets = new ArrayList<>(frames.size());
-            long offset = 0L;
-            for (RawPacketFrame frame : frames) {
-                offsets.add(offset);
-                offset = Math.addExact(
-                        offset, ReplayFrameCodec.encodedRecordLength(frame));
-            }
-            return offsets;
         }
     }
 

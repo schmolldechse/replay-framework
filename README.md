@@ -1,96 +1,89 @@
 # Replay Framework
 
-Replay Framework is a modular Java framework for recording and playing back
-Minecraft Paper server activity. It captures server-side events as raw,
-version-bound Minecraft network packets, persists replay artifacts in a
-configurable storage backend, and maintains a PostgreSQL replay catalog.
+Replay Framework records what happens on a Paper server as Minecraft network
+packets and plays it back to any player, with its own timeline per viewer.
+Recordings are stored in a configurable storage backend and listed in a
+PostgreSQL catalog with typed, revisioned metadata.
 
-The framework is designed for plugin developers. It provides a public Java API
-for creating recordings, opening independent viewer timelines, querying the
-catalog, and managing typed replay metadata. It deliberately does **not**
-provide a fixed GUI, command tree, hotbar, resource pack, or player-state
-policy. Those integration concerns belong to the consuming plugin; the
-included example plugin demonstrates one possible implementation.
+The framework is a library for plugin developers. It provides a public Java
+API for starting recordings, opening playback, querying the catalog and
+inspecting a replay's players, entities and inventories. It does not provide
+a fixed GUI, command tree, hotbar, resource pack or player-state policy; the
+included example plugin shows one way to build them.
+
+## How it works
+
+![Capture with eyes and player connections, merge into one scene per world, store in tracks, persist to storage and catalog, and play back on independent viewer timelines.](docs/images/overview.svg)
+
+- **Argus** gives every recording its own virtual observers. The server
+  sends them chunks and entities like it does to players, but no player,
+  plugin or player count can see them. A recording therefore does not
+  depend on who is online, and nobody is missing from it, not even the
+  recorded players themselves.
+- **Tracks** keep a recording's data apart: one global track, one track per
+  world and one per subject with private state, such as a player's inventory
+  or the chest of a llama. Playback reads only what the viewer watches.
+- **Playback** rebuilds the scene from checkpoints and packet deltas on each
+  viewer's own timeline, with seeking, five speeds and buffering against
+  remote storage.
 
 ## Highlights
 
-- Server-side packet capture with scoped recordings and configurable policies.
-- Replay artifacts stored in Local, Amazon S3, or SFTP storage.
-- PostgreSQL catalog with Flyway migrations, typed extensible metadata, and a
-  complete metadata revision history.
-- Independent playback timelines for each viewer, including pause, restart,
-  absolute and relative seeking, and 0.25x, 0.5x, 1x, 2x, and 4x speeds.
-- Checkpoint-based replay reconstruction and configurable playback buffering.
-- A public asynchronous Java API; no HTTP or REST API is exposed.
+- Region recordings that run without any player present, and world
+  recordings that follow players through every dimension.
+- Inventories, held items, health and experience of players, and the
+  inventories of villagers, minecarts, chested animals and more, at any
+  point of a replay.
+- Entity queries and click events for replay entities, for building
+  inspection menus.
+- Independent viewer timelines with pause, restart, absolute and relative
+  seeking, and 0.25x to 4x speed.
+- Replay artifacts in Local, Amazon S3 or SFTP storage, verified by digest.
+- A PostgreSQL catalog with Flyway migrations, typed extensible metadata and
+  a complete revision history.
+- An asynchronous Java API; no HTTP or REST API.
 
 ## Support boundary
 
-The runtime supports **Paper 26.2 and 26.3** on **Java 26**. It selects the
-matching adapter when the server starts; one runtime JAR contains both. Paper
-The verified build targets are Paper 26.2 build 135 and Paper 26.3 build 244 (stable). Replay content contains
-raw protocol packets and is tied to the adapter, protocol version, and packet
-registry that produced it. A replay is not a portable video file or a
-cross-version format.
+The runtime runs on **Java 26** and supports every Paper version that has a
+version adapter; the [adapter index](docs/adapters/README.md) lists them with
+their pinned builds. At startup the runtime picks the adapter whose Minecraft
+version matches the server. A replay contains raw protocol packets and is
+tied to the adapter, protocol version and packet registry that produced it;
+it is not a portable video and does not play on another Minecraft version.
+Further versions are supported by adding an adapter that implements the
+[version contract](docs/virtual-observer.md#version-contract).
 
-The runtime plugin requires [PacketEvents](https://github.com/retrooper/packetevents)
-as a Paper server dependency. PostgreSQL is required for the catalog and
-metadata, even when replay artifacts use Local storage.
+The runtime needs no other server plugin. It requires a PostgreSQL database,
+even when artifacts use Local storage.
 
 ## Documentation
 
-Start here:
+Using the framework:
 
-- [Getting started](docs/getting-started.md) — install and configure the runtime
-  and connect a Paper plugin.
-- [Recording](docs/recording.md) — create scoped recordings and handle their
-  lifecycle.
-- [Playback](docs/playback.md) — open and control a viewer-specific timeline.
-- [Metadata](docs/metadata.md) — register typed fields, apply revisions, and
-  query the catalog.
-- [Configuration](docs/configuration.md) — configure PostgreSQL, artifact
-  storage, recording, and playback resources.
-- [Architecture](docs/architecture.md) — understand the module layout and the
-  recording-to-playback data flow.
+| Guide | Contents |
+|---|---|
+| [Getting started](docs/getting-started.md) | install the runtime and connect a plugin |
+| [Recording](docs/recording.md) | scopes, participants, observers, budgets and the recording lifecycle |
+| [Playback](docs/playback.md) | viewer sessions, timeline control, worlds, players and entities |
+| [Metadata](docs/metadata.md) | typed fields, revisions and catalog queries |
+| [Configuration](docs/configuration.md) | PostgreSQL, artifact storage and resource limits |
 
-## Build
+How it is built:
 
-The project is a Gradle Kotlin DSL multi-project build. Build the Paper runtime
-with:
-
-```powershell
-.\gradlew.bat :replay-runtime-paper:jar
-```
-
-Use the bundled runtime artifact produced in
-`replay-runtime-paper/build/libs/` as the server plugin. Build the example
-integration independently when needed:
-
-```powershell
-.\gradlew.bat :replay-example-plugin:jar
-```
-
-The local `runServer` task uses the newest adapter, 26.3, by default. Set
-`-PminecraftVersion=26.2` to start a 26.2 development server instead.
-
-The relevant modules are:
-
-| Module | Responsibility |
-| --- | --- |
-| `replay-api` | Stable public Java API for plugin integrations. |
-| `replay-runtime-paper` | Paper plugin that composes and publishes the framework. |
-| `replay-core` | Recording, playback, artifact, metadata, and catalog orchestration. |
-| `replay-adapter:paper-26_2` | Paper 26.2 packet capture, checkpoints, and playback bridge. |
-| `replay-adapter:paper-26_3` | Paper 26.3 packet capture, checkpoints, and playback bridge. |
-| `replay-format` | Packet segment, checkpoint, index, and manifest codecs. |
-| `replay-storage:*` | Local, S3, and SFTP artifact storage implementations. |
-| `replay-database:postgresql` | PostgreSQL repositories, Flyway migrations, and metadata persistence. |
-| `replay-example-plugin` | A reference integration with commands, browser, hotbar, and viewer policy. |
+| Document | Contents |
+|---|---|
+| [Architecture](docs/architecture.md) | modules and the data flow from capture to playback |
+| [Argus: virtual observers](docs/virtual-observer.md) | eyes, their placement, scene merging and ambient sources |
+| [Recording tracks](docs/recording-tracks.md) | track kinds, subjects, checkpoints, file format and the state API |
+| [Capture source policy](docs/capture-source-policy.md) | which packet comes from which source, and how copies are merged |
+| [Packet definition layout](docs/packet-definition-layout.md) | naming and placement of per-packet definitions |
+| [Version adapters](docs/adapters/README.md) | the supported versions, what an adapter implements, and one document per adapter with the policy of every packet |
 
 ## Public API at a glance
 
-After the runtime has completed its asynchronous bootstrap, consuming plugins
-obtain one `ReplayFramework` facade from Paper's service manager. It exposes
-five focused services:
+After the runtime has completed its asynchronous bootstrap, plugins obtain
+one `ReplayFramework` facade from Paper's service manager:
 
 ```java
 ReplayFramework framework = Bukkit.getServicesManager().load(ReplayFramework.class);
@@ -102,29 +95,84 @@ ReplayMetadataService metadata = framework.metadata();
 ReplayEventPublisher events = framework.events();
 ```
 
-All operations that can perform I/O return `CompletionStage`. Do not block the
-Paper server thread with `join()` or `get()`; continue the operation
-asynchronously and schedule any Bukkit-only work back to the server thread.
-The [Getting started](docs/getting-started.md) guide describes lifecycle-safe
-service discovery.
+A recording that follows two players through every world, and a viewer
+inspecting one of them later:
+
+```java
+RecordingRequest request = RecordingRequest.builder()
+        .title("Speedrun")
+        .description("Any%, two players")
+        .scope(RecordingScope.builder().build())
+        .participants(Set.of(runner.getUniqueId(), partner.getUniqueId()))
+        .capturePolicy(CapturePolicy.builder().build())
+        .budget(framework.defaults().recordingBudget())
+        .options(framework.defaults().recordingOptions())
+        .build();
+framework.recordings().start(request);
+
+// later, in a playback session
+session.state(RecordedSubject.player(runnerId)).thenAccept(state ->
+        state.ifPresent(found -> found.vitals().ifPresent(vitals -> { /* health, food */ })));
+```
+
+Every operation that can perform I/O returns a `CompletionStage`. Do not
+block the server thread with `join()` or `get()`; schedule Bukkit work back
+onto the server thread. [Getting started](docs/getting-started.md) shows
+lifecycle-safe service discovery.
+
+## Build
+
+The project is a Gradle Kotlin DSL multi-project build. Build the Paper
+runtime with:
+
+```powershell
+.\gradlew.bat :replay-runtime-paper:jar
+```
+
+Use the bundled artifact from `replay-runtime-paper/build/libs/` as the
+server plugin. Build the example integration with:
+
+```powershell
+.\gradlew.bat :replay-example-plugin:jar
+```
+
+The `runServer` task starts a local Paper development server; choose the
+version with `-PminecraftVersion=<version>` (see the
+[adapter index](docs/adapters/README.md)).
+
+| Module | Responsibility |
+| --- | --- |
+| `replay-api` | stable public Java API for plugin integrations |
+| `replay-runtime-paper` | Paper plugin that composes and publishes the framework |
+| `replay-core` | recording, tracks, playback, artifact, metadata and catalog orchestration |
+| `replay-adapter:api` | contract between the core and a version adapter |
+| `replay-adapter:paper-common` | version-independent Paper parts: Argus, definition catalogs, recipient copies and state, and the shared capture, playback and checkpoint bridges |
+| `replay-adapter:paper-<version>` | one module per Minecraft version: its packet definitions, codecs, eye, world snapshots and the hooks the shared bridges call ([index](docs/adapters/README.md)) |
+| `replay-format` | track, segment, checkpoint, index and manifest codecs |
+| `replay-storage:*` | Local, S3 and SFTP artifact storage |
+| `replay-database:postgresql` | PostgreSQL repositories, Flyway migrations and metadata persistence |
+| `replay-example-plugin` | a reference integration with commands, browser, hotbar, menus and viewer worlds |
 
 ## Design principles
 
-- **Public API only:** integrations use `replay-api`; core, adapter, storage,
-  and database implementation types remain internal.
+- **Public API only:** integrations use `replay-api`; core, adapter, storage
+  and database types remain internal.
+- **Packets as the source:** recordings consist of the packets the server
+  builds, captured from observers and connections, never reconstructed from
+  Bukkit events.
 - **Integrity first:** a replay reaches `AVAILABLE` only after its artifacts
-  have been finalized and published. Queue overflow, corruption, storage
-  errors, adapter errors, and interrupted work result in `FAILED`.
-- **Viewer isolation:** each playback session has its own timeline, speed, seek
-  state, and resource budgets.
-- **Explicit integration:** the framework owns replay mechanics, while the
-  consuming plugin owns permissions, menus, hotbars, resource packs, and the
-  player's normal-state restoration.
+  have been finalized, verified and published. Queue overflow, corruption,
+  storage errors, adapter errors and interrupted work result in `FAILED`.
+- **Viewer isolation:** each playback session has its own timeline, speed,
+  seek state, identity space and resource budgets.
+- **Explicit integration:** the framework owns replay mechanics; the
+  consuming plugin owns permissions, menus, hotbars, resource packs, viewer
+  worlds and the restoration of the player's normal state.
 
 ## Example integration
 
-`replay-example-plugin` is intentionally not part of the runtime contract. It
-shows how a plugin can provide a `/replay` command tree, an inventory browser,
-a playback hotbar, a resource pack, and a protected viewer environment on top
-of the public API. Use it as a reference rather than as a required user
-interface.
+`replay-example-plugin` is not part of the runtime contract. It provides a
+`/replay` command tree, an inventory browser, a playback hotbar, a resource
+pack, one viewer world per dimension, a players menu that follows a recorded
+player into any world, and an inventory view of players and entities that
+opens on right-click. Use it as a reference rather than a required interface.

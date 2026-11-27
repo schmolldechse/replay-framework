@@ -60,8 +60,8 @@ public interface CheckpointEncoder {
             long recordingStartCaptureTimeNanos) {
 
         /**
-         * Compatibility constructor for initial checkpoints and external
-         * adapters that do not yet report an actual capture barrier.
+         * Creates a request before the recording has a start time, as for the
+         * initial checkpoint, whose capture defines that start.
          */
         public CheckpointRequest(
                 RecordingScope scope,
@@ -106,8 +106,34 @@ public interface CheckpointEncoder {
         }
     }
 
-    /** Immutable checkpoint frames paired with their actual capture barrier. */
-    record CheckpointCapture(CapturePoint point, List<RawPacketFrame> initializationFrames) {
+    /**
+     * Immutable checkpoint frames paired with their actual capture barrier.
+     *
+     * @param point the barrier the state was detached at
+     * @param initializationFrames the scene: what a client needs to join it
+     * @param subjects the complete state of every subject in the scope at the
+     *                 barrier; each becomes the checkpoint of its state track
+     * @param blockStates the state of every block in the scope with state the
+     *                    scene does not show, per world; each becomes the
+     *                    checkpoint of that world's block state track
+     */
+    record CheckpointCapture(
+            CapturePoint point,
+            List<RawPacketFrame> initializationFrames,
+            List<SubjectState> subjects,
+            List<BlockStates> blockStates) {
+
+        /** A capture of the scene alone. */
+        public CheckpointCapture(CapturePoint point, List<RawPacketFrame> initializationFrames) {
+            this(point, initializationFrames, List.of(), List.of());
+        }
+
+        /** A capture of the scene and the subjects. */
+        public CheckpointCapture(
+                CapturePoint point, List<RawPacketFrame> initializationFrames, List<SubjectState> subjects) {
+            this(point, initializationFrames, subjects, List.of());
+        }
+
         public CheckpointCapture {
             Objects.requireNonNull(point, "point");
             Objects.requireNonNull(initializationFrames, "initializationFrames");
@@ -116,6 +142,35 @@ public interface CheckpointEncoder {
                 copied.add(Objects.requireNonNull(frame, "initializationFrames contains null"));
             }
             initializationFrames = List.copyOf(copied);
+            subjects = List.copyOf(Objects.requireNonNull(subjects, "subjects"));
+            blockStates = List.copyOf(Objects.requireNonNull(blockStates, "blockStates"));
+        }
+    }
+
+    /**
+     * The state of the blocks of one world at a checkpoint barrier.
+     *
+     * @param world the world key
+     * @param frames one or more packets per block, stamped with the barrier
+     */
+    record BlockStates(String world, List<RawPacketFrame> frames) {
+        public BlockStates {
+            Objects.requireNonNull(world, "world");
+            frames = List.copyOf(Objects.requireNonNull(frames, "frames"));
+        }
+    }
+
+    /**
+     * The complete state of one subject at a checkpoint barrier.
+     *
+     * @param subject the subject
+     * @param frames the packets a client needs to know the subject's state,
+     *               stamped with the barrier; they belong to no world
+     */
+    record SubjectState(CaptureSubject subject, List<RawPacketFrame> frames) {
+        public SubjectState {
+            Objects.requireNonNull(subject, "subject");
+            frames = List.copyOf(Objects.requireNonNull(frames, "frames"));
         }
     }
 
@@ -124,8 +179,6 @@ public interface CheckpointEncoder {
         /** Initial state before the first captured delta. */
         INITIAL,
         /** Periodic state used to bound seek reconstruction. */
-        PERIODIC,
-        /** State required after a dimension transition. */
-        DIMENSION_CHANGE
+        PERIODIC
     }
 }

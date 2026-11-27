@@ -159,6 +159,29 @@ public final class ReplayEventDispatcher implements ReplayEventPublisher, AutoCl
                 Instant.now()));
     }
 
+    /** Publishes a viewer's interaction with a replay entity. */
+    public void playbackEntityInteracted(
+            PlaybackSessionId sessionId,
+            ReplayId replayId,
+            UUID viewerId,
+            dev.voldechse.replayframework.api.playback.RecordedEntity entity,
+            boolean attack,
+            org.bukkit.inventory.EquipmentSlot hand) {
+        publish(new ReplayEventPublisher.PlaybackEntityInteracted(
+                sessionId, replayId, viewerId, entity, attack, hand, Instant.now()));
+    }
+
+    /** Publishes a viewer's click on a block of the replay with recorded state. */
+    public void playbackBlockInteracted(
+            PlaybackSessionId sessionId,
+            ReplayId replayId,
+            UUID viewerId,
+            dev.voldechse.replayframework.adapter.playback.ViewerInteractions.BlockInteraction interaction) {
+        publish(new ReplayEventPublisher.PlaybackBlockInteracted(
+                sessionId, replayId, viewerId, interaction.world(), interaction.position(),
+                interaction.block(), interaction.hand(), Instant.now()));
+    }
+
     @Override
     public void close() {
         if (closed.compareAndSet(false, true)) {

@@ -1,6 +1,7 @@
 package dev.voldechse.replayframework.core.recording;
 
 import dev.voldechse.replayframework.adapter.CheckpointEncoder;
+import dev.voldechse.replayframework.adapter.TestContexts;
 import dev.voldechse.replayframework.api.recording.RecordingScope;
 import dev.voldechse.replayframework.core.capture.CapturedPacket;
 import dev.voldechse.replayframework.format.PacketPhase;
@@ -29,14 +30,6 @@ final class CheckpointSchedulerTest {
 
         assertEquals(10L, request.elapsedNanos());
         assertEquals(CheckpointEncoder.CheckpointKind.PERIODIC, request.kind());
-    }
-
-    @Test
-    void deduplicatesDimensionChangeAtTheSamePointAsPeriodicRequest() {
-        CheckpointScheduler scheduler = scheduler(Duration.ofNanos(10));
-
-        assertTrue(scheduler.dueForFrame(packet(10L, 4L)).isPresent());
-        assertTrue(scheduler.dueForDimensionChange(10L, 4L).isEmpty());
     }
 
     @Test
@@ -81,6 +74,7 @@ final class CheckpointSchedulerTest {
                 0,
                 PacketPhase.PLAY,
                 1,
-                new byte[] {1});
+                new byte[] {1},
+                TestContexts.plain());
     }
 }

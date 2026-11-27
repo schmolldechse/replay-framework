@@ -11,7 +11,6 @@ public abstract class AbstractReplayAdapter implements ReplayAdapter {
     private final PacketRegistry packetRegistry;
     private final CaptureBridge captureBridge;
     private final CheckpointEncoder checkpointEncoder;
-    private final CheckpointSignalSource checkpointSignals;
     private final Function<Player, PlaybackBridge> playbackFactory;
 
     protected AbstractReplayAdapter(
@@ -19,13 +18,11 @@ public abstract class AbstractReplayAdapter implements ReplayAdapter {
             PacketRegistry packetRegistry,
             CaptureBridge captureBridge,
             CheckpointEncoder checkpointEncoder,
-            CheckpointSignalSource checkpointSignals,
             Function<Player, PlaybackBridge> playbackFactory) {
         this.descriptor = Objects.requireNonNull(descriptor, "descriptor");
         this.packetRegistry = Objects.requireNonNull(packetRegistry, "packetRegistry");
         this.captureBridge = Objects.requireNonNull(captureBridge, "captureBridge");
         this.checkpointEncoder = Objects.requireNonNull(checkpointEncoder, "checkpointEncoder");
-        this.checkpointSignals = Objects.requireNonNull(checkpointSignals, "checkpointSignals");
         this.playbackFactory = Objects.requireNonNull(playbackFactory, "playbackFactory");
         verifyDescriptorAndRegistry();
     }
@@ -48,11 +45,6 @@ public abstract class AbstractReplayAdapter implements ReplayAdapter {
     @Override
     public final CheckpointEncoder checkpointEncoder() {
         return checkpointEncoder;
-    }
-
-    @Override
-    public final CheckpointSignalSource checkpointSignals() {
-        return checkpointSignals;
     }
 
     @Override

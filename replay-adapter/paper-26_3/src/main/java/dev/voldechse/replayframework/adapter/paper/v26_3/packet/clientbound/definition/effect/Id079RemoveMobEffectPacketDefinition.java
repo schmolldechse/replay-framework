@@ -1,0 +1,73 @@
+package dev.voldechse.replayframework.adapter.paper.v26_3.packet.clientbound.definition.effect;
+
+import dev.voldechse.replayframework.adapter.PacketDescriptor;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketClassification;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.RebuildingPacketDefinition;
+import dev.voldechse.replayframework.adapter.paper.packet.clientbound.ValueRewriteResult;
+import dev.voldechse.replayframework.adapter.paper.v26_3.playback.Paper26_3ReplayPacketRewriter;
+import java.util.Objects;
+import net.minecraft.core.Holder;
+import net.minecraft.network.protocol.game.ClientboundRemoveMobEffectPacket;
+import net.minecraft.world.effect.MobEffect;
+
+/**
+ * Complete read/rewrite/rebuild contract for {@code minecraft:remove_mob_effect}.
+ *
+ * <p>The entity ID targets the replay entity whose status effect is removed.
+ * The effect itself is a registry-bound holder, so retain it for the native
+ * registry-aware codec instead of replacing it with a version-specific ID.</p>
+ */
+final class Id079RemoveMobEffectPacketDefinition extends RebuildingPacketDefinition<
+        Paper26_3ReplayPacketRewriter,
+        ClientboundRemoveMobEffectPacket,
+        Id079RemoveMobEffectPacketDefinition.Value> {
+
+    static final int PACKET_ID = 0x4F;
+    static final String IDENTIFIER = "minecraft:remove_mob_effect";
+
+    Id079RemoveMobEffectPacketDefinition() {
+        super(
+                PACKET_ID,
+                IDENTIFIER,
+                PacketClassification.stateful(
+                        PacketDescriptor.PlaybackScope.REWRITE_IDENTITIES),
+                ClientboundRemoveMobEffectPacket.class);
+    }
+
+    @Override
+    public java.util.Optional<
+            dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketCheckpointFamily> checkpointFamily() {
+        return java.util.Optional.of(
+                dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketCheckpointFamily.RUNNING_EFFECT);
+    }
+
+    @Override
+    protected Value read(ClientboundRemoveMobEffectPacket packet) {
+        return new Value(packet.entityId(), packet.effect());
+    }
+
+    @Override
+    protected ValueRewriteResult<Value> rewrite(
+            Value value,
+            Paper26_3ReplayPacketRewriter context) {
+        return ValueRewriteResult.send(
+                new Value(context.mapEntityId(value.entityId()), value.effect()));
+    }
+
+    @Override
+    protected ClientboundRemoveMobEffectPacket rebuild(Value value) {
+        return new ClientboundRemoveMobEffectPacket(value.entityId(), value.effect());
+    }
+
+    record Value(int entityId, Holder<MobEffect> effect) {
+
+        Value {
+            Objects.requireNonNull(effect, "effect");
+        }
+    }
+
+    @Override
+    public dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketDistribution distribution() {
+        return dev.voldechse.replayframework.adapter.paper.packet.clientbound.PacketDistribution.BROADCAST;
+    }
+}

@@ -3,9 +3,10 @@ package dev.voldechse.replayframework.adapter.playback;
 import java.util.Set;
 
 /**
- * Replay packets that belong to the recorded player's connection, not the
- * observed scene. Live server packets in these families must still reach the
- * observer. NMS-specific payload filtering remains inside each adapter.
+ * Replay packets that affect the viewer's own connection-local state. Live
+ * server packets in these families must still reach the observer. Recorded
+ * chat can be transformed into a connection-independent presentation by an
+ * adapter before it is sent during playback.
  */
 public final class NeutralObserverPolicy {
     private NeutralObserverPolicy() {}
@@ -32,7 +33,7 @@ public final class NeutralObserverPolicy {
         return identifier.startsWith("minecraft:") && LOCAL.contains(identifier.substring(10));
     }
 
-    /** Returns whether a packet presents chat received by the recorded connection. */
+    /** Returns whether an identifier is chat presentation from the recorded connection. */
     public static boolean isRecordedChatPresentation(String identifier) {
         return identifier.startsWith("minecraft:")
                 && RECORDED_CHAT.contains(identifier.substring(10));

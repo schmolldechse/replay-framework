@@ -1,16 +1,17 @@
 package dev.voldechse.replayframework.core.recording;
 
+import dev.voldechse.replayframework.adapter.TestContexts;
 import dev.voldechse.replayframework.api.recording.ReplayBudget;
 import dev.voldechse.replayframework.api.recording.ReplayCompletionReason;
 import dev.voldechse.replayframework.api.recording.ReplayFailureCode;
 import dev.voldechse.replayframework.adapter.CheckpointEncoder;
-import dev.voldechse.replayframework.adapter.CheckpointSignalSource;
 import dev.voldechse.replayframework.core.capture.CapturedPacket;
 import dev.voldechse.replayframework.format.PacketPhase;
 import dev.voldechse.replayframework.format.RawPacketFrame;
 import dev.voldechse.replayframework.format.ReplayCheckpoint;
 import dev.voldechse.replayframework.format.ReplayCheckpointReader;
 import dev.voldechse.replayframework.format.ReplaySegmentReader;
+import dev.voldechse.replayframework.format.TrackDescriptor;
 import java.time.Duration;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -25,6 +26,8 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 final class RecordingBudgetAndRotationTest {
+
+    private static final TrackDescriptor GLOBAL = TrackDescriptor.global(0);
 
     @Test
     void selectsTheFirstMatchingSessionBudgetAfterTheCompleteUnit() {
@@ -87,14 +90,14 @@ final class RecordingBudgetAndRotationTest {
 
         List<RawPacketFrame> frames = new ArrayList<>();
         ReplaySegmentReader reader = new ReplaySegmentReader();
-        for (Path segment : artifacts.segmentFiles()) {
-            frames.addAll(reader.read(segment).frames());
+        for (Path segment : artifacts.tracks().getFirst().segmentFiles()) {
+            frames.addAll(reader.read(segment, GLOBAL).frames());
         }
         assertEquals(3, frames.size());
         assertEquals(List.of(0, 1, 2), frames.stream().map(RawPacketFrame::sequence).toList());
-        assertEquals(1, artifacts.checkpointFiles().size());
+        assertEquals(1, artifacts.tracks().getFirst().checkpointFiles().size());
         assertEquals(0, new ReplayCheckpointReader()
-                .read(artifacts.checkpointFiles().get(0)).ordinal());
+                .read(artifacts.tracks().getFirst().checkpointFiles().get(0), GLOBAL).ordinal());
     }
 
     @Test
@@ -147,8 +150,7 @@ final class RecordingBudgetAndRotationTest {
                 queue,
                 new ReplayCheckpoint(0, 0L, List.of()),
                 ReplayBudget.builder().maxSegmentBytes(1).build(),
-                scheduler,
-                CheckpointSignalSource.noop(),
+                scheduler,
                 reason -> {
                 },
                 (code, cause) -> {
@@ -162,16 +164,16 @@ final class RecordingBudgetAndRotationTest {
 
         assertEquals(2L, artifacts.checkpointCount());
         assertEquals(2L, artifacts.packetCount());
-        assertEquals(List.of(0, 1), artifacts.checkpointFiles().stream()
+        assertEquals(List.of(0, 1), artifacts.tracks().getFirst().checkpointFiles().stream()
                 .map(path -> {
                     try {
-                        return new ReplayCheckpointReader().read(path).ordinal();
+                        return new ReplayCheckpointReader().read(path, GLOBAL).ordinal();
                     } catch (Exception failure) {
                         throw new AssertionError(failure);
                     }
                 }).toList());
-        assertEquals(0, artifacts.seekPoints().get(artifacts.seekPoints().size() - 1).segmentOrdinal());
-        assertTrue(artifacts.seekPoints().get(artifacts.seekPoints().size() - 1).frameOffset() > 0L);
+        assertEquals(0, artifacts.tracks().getFirst().seekPoints().get(artifacts.tracks().getFirst().seekPoints().size() - 1).segmentOrdinal());
+        assertTrue(artifacts.tracks().getFirst().seekPoints().get(artifacts.tracks().getFirst().seekPoints().size() - 1).frameOffset() > 0L);
     }
 
     @Test
@@ -179,11 +181,11 @@ final class RecordingBudgetAndRotationTest {
             throws Exception {
         SessionPacketQueue queue = new SessionPacketQueue(1024);
         queue.enqueue(new CapturedPacket(
-                10L, 10L, 0, PacketPhase.PLAY, 1, new byte[] {1}));
+                10L, 10L, 0, PacketPhase.PLAY, 1, new byte[] {1}, TestContexts.plain()));
         queue.enqueue(new CapturedPacket(
-                12L, 12L, 0, PacketPhase.PLAY, 1, new byte[] {2}));
+                12L, 12L, 0, PacketPhase.PLAY, 1, new byte[] {2}, TestContexts.plain()));
         queue.enqueue(new CapturedPacket(
-                18L, 18L, 0, PacketPhase.PLAY, 1, new byte[] {3}));
+                18L, 18L, 0, PacketPhase.PLAY, 1, new byte[] {3}, TestContexts.plain()));
         queue.closeForEnqueue();
 
         CheckpointEncoder encoder = new CheckpointEncoder() {
@@ -219,8 +221,7 @@ final class RecordingBudgetAndRotationTest {
                 queue,
                 new ReplayCheckpoint(0, 0L, List.of()),
                 ReplayBudget.builder().maxSegmentBytes(1024).build(),
-                scheduler,
-                CheckpointSignalSource.noop(),
+                scheduler,
                 reason -> {
                 },
                 (code, cause) -> {
@@ -232,14 +233,14 @@ final class RecordingBudgetAndRotationTest {
         appender.runWriterLoop();
         RecordingSegmentAppender.RecordingArtifacts artifacts = appender.finishForFinalization();
         ReplayCheckpoint checkpoint = new ReplayCheckpointReader()
-                .read(artifacts.checkpointFiles().get(1));
+                .read(artifacts.tracks().getFirst().checkpointFiles().get(1), GLOBAL);
         assertEquals(15L, checkpoint.elapsedNanos());
 
-        var checkpointPoint = artifacts.seekPoints().stream()
+        var checkpointPoint = artifacts.tracks().getFirst().seekPoints().stream()
                 .filter(point -> point.checkpointOrdinal() == 1 && point.elapsedNanos() == 15L)
                 .findFirst()
                 .orElseThrow();
-        var firstPostCheckpointDelta = artifacts.seekPoints().stream()
+        var firstPostCheckpointDelta = artifacts.tracks().getFirst().seekPoints().stream()
                 .filter(point -> point.checkpointOrdinal() == 1 && point.elapsedNanos() == 18L)
                 .findFirst()
                 .orElseThrow();
@@ -269,7 +270,7 @@ final class RecordingBudgetAndRotationTest {
         appender.runWriterLoop();
 
         RawPacketFrame decoded = new ReplaySegmentReader()
-                .read(appender.finishForFinalization().segmentFiles().get(0))
+                .read(appender.finishForFinalization().tracks().getFirst().segmentFiles().get(0), GLOBAL)
                 .frames().get(0);
         assertArrayEquals(payload, decoded.payload());
     }
@@ -318,8 +319,7 @@ final class RecordingBudgetAndRotationTest {
                 queue,
                 new ReplayCheckpoint(0, 0L, List.of()),
                 budget,
-                scheduler,
-                CheckpointSignalSource.noop(),
+                scheduler,
                 budgetStop,
                 failure,
                 artifacts -> {
@@ -329,7 +329,7 @@ final class RecordingBudgetAndRotationTest {
     private static CapturedPacket packet(long captureTimeNanos, int sequence, byte[] payload) {
         return new CapturedPacket(
                 captureTimeNanos, sequence, sequence,
-                PacketPhase.PLAY, 1, payload);
+                PacketPhase.PLAY, 1, payload, TestContexts.plain());
     }
 
     private static RawPacketFrame frame(long elapsedNanos, byte[] payload) {

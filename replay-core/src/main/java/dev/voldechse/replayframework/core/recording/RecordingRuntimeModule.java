@@ -56,7 +56,9 @@ public final class RecordingRuntimeModule extends AbstractModule {
     @Provides
     @Singleton
     RecordingCoordinator.ScopeResolver provideScopeResolver() {
-        return request -> java.util.concurrent.CompletableFuture.completedFuture(
+        return request -> {
+            boolean observed = adapter.sceneObservation().observes(request.scope());
+            return java.util.concurrent.CompletableFuture.completedFuture(
                 new ResolvedRecordingScope(
                         request.scope(),
                         0L,
@@ -64,7 +66,9 @@ public final class RecordingRuntimeModule extends AbstractModule {
                         request.scope().regions(),
                         CapturePolicy.builder().build(),
                         request.participants(),
-                        packet -> acceptsScope(request.scope(), packet)));
+                        packet -> acceptsOrigin(observed, packet)
+                                && acceptsScope(request.scope(), packet)));
+        };
     }
 
     @Provides
@@ -213,13 +217,33 @@ public final class RecordingRuntimeModule extends AbstractModule {
         return new RecordingRuntimeLifecycle(replayAdapter, captureRouter, coordinator);
     }
 
-    private static boolean acceptsScope(
+    /**
+     * A recording takes its scene from the virtual observers the adapter
+     * places for its scope. Packets no observer receives belong to every
+     * recording.
+     */
+    static boolean acceptsOrigin(
+            boolean observed,
+            dev.voldechse.replayframework.core.capture.CapturedPacket packet) {
+        return switch (packet.context().origin()) {
+            case PLAYER_ONLY -> true;
+            case OBSERVER -> observed;
+        };
+    }
+
+    static boolean acceptsScope(
             RecordingScope requested,
             dev.voldechse.replayframework.core.capture.CapturedPacket packet) {
         if (requested.worlds().isEmpty() && requested.regions().isEmpty()) {
             return true;
         }
         var context = packet.context();
+        if (context.origin() == dev.voldechse.replayframework.adapter.CaptureOrigin.OBSERVER) {
+            // The observers of this recording were placed for this scope. What
+            // they see is the recording; dropping single packets by position
+            // would break relative entity movement.
+            return true;
+        }
         Key world = context.world().orElse(null);
         if (world == null) {
             return false;
@@ -229,6 +253,9 @@ public final class RecordingRuntimeModule extends AbstractModule {
         }
         if (requested.regions().isEmpty()) {
             return true;
+        }
+        if (context.worldWide()) {
+            return requested.regions().stream().anyMatch(region -> region.world().equals(world));
         }
         var position = context.position().orElse(null);
         if (position == null) {

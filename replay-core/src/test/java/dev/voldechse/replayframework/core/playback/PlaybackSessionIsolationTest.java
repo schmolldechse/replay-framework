@@ -1,5 +1,7 @@
 package dev.voldechse.replayframework.core.playback;
 
+import dev.voldechse.replayframework.adapter.StubPlaybackBridge;
+
 import com.google.gson.Gson;
 import dev.voldechse.replayframework.adapter.AdapterDescriptor;
 import dev.voldechse.replayframework.adapter.CheckpointEncoder;
@@ -206,7 +208,7 @@ final class PlaybackSessionIsolationTest {
             public void close() {
             }
         };
-        PlaybackBridge bridge = new PlaybackBridge() {
+        PlaybackBridge bridge = new StubPlaybackBridge() {
             @Override
             public void setIdentityContext(dev.voldechse.replayframework.adapter.playback.PlaybackIdentityContext context) {
                 java.util.Objects.requireNonNull(context);
@@ -254,6 +256,23 @@ final class PlaybackSessionIsolationTest {
                 PlaybackStatus.PAUSED,
                 timeline.restart().toCompletableFuture().join().status());
 
+        timeline.closeAsync().toCompletableFuture().join();
+    }
+
+    @Test
+    void viewingAnotherWorldRebuildsTheViewAtTheSamePosition() {
+        TrackingBridge bridge = new TrackingBridge();
+        PlaybackTimeline timeline = timeline(new TrackingPlaybackData(), bridge);
+        timeline.prepare().toCompletableFuture().join();
+        timeline.seekTo(Duration.ofSeconds(5L)).toCompletableFuture().join();
+        int resets = bridge.resetCount.get();
+
+        PlaybackSnapshot snapshot = timeline.viewWorld(net.kyori.adventure.key.Key.key("minecraft:the_nether"))
+                .toCompletableFuture().join();
+
+        assertEquals(Duration.ofSeconds(5L), snapshot.position());
+        assertEquals(net.kyori.adventure.key.Key.key("minecraft:the_nether"), timeline.viewedWorld());
+        assertEquals(resets + 1, bridge.resetCount.get());
         timeline.closeAsync().toCompletableFuture().join();
     }
 
@@ -389,6 +408,45 @@ final class PlaybackSessionIsolationTest {
             }
 
             @Override
+            public CompletionStage<List<dev.voldechse.replayframework.api.playback.RecordedPlayer>> recordedPlayers() {
+                return CompletableFuture.completedFuture(List.of());
+            }
+
+            @Override
+            public CompletionStage<java.util.Optional<dev.voldechse.replayframework.api.playback.SubjectState>> state(
+                    dev.voldechse.replayframework.api.playback.RecordedSubject subject) {
+                return CompletableFuture.completedFuture(java.util.Optional.empty());
+            }
+
+            @Override
+            public CompletionStage<java.util.Optional<dev.voldechse.replayframework.api.playback.SubjectState>> container(
+                    net.kyori.adventure.key.Key world,
+                    dev.voldechse.replayframework.api.recording.BlockPosition position) {
+                return CompletableFuture.completedFuture(java.util.Optional.empty());
+            }
+
+            @Override
+            public java.util.Optional<dev.voldechse.replayframework.api.playback.RecordedEntity> entity(
+                    int clientEntityId) {
+                return java.util.Optional.empty();
+            }
+
+            @Override
+            public List<dev.voldechse.replayframework.api.playback.RecordedEntity> entities() {
+                return List.of();
+            }
+
+            @Override
+            public net.kyori.adventure.key.Key viewedWorld() {
+                return net.kyori.adventure.key.Key.key("minecraft:overworld");
+            }
+
+            @Override
+            public CompletionStage<PlaybackSnapshot> viewWorld(net.kyori.adventure.key.Key world) {
+                return CompletableFuture.completedFuture(snapshot);
+            }
+
+            @Override
             public CompletionStage<PlaybackSnapshot> close() {
                 return CompletableFuture.completedFuture(snapshot);
             }
@@ -449,7 +507,9 @@ final class PlaybackSessionIsolationTest {
                 Runnable::run,
                 Runnable::run,
                 new PlaybackCoordinator(),
-                dispatcher);
+                dispatcher,
+                new dev.voldechse.replayframework.core.diagnostics.ReplayDiagnostics(),
+                (viewer, candidates) -> CompletableFuture.completedFuture(null));
     }
 
     private static org.bukkit.entity.Player viewer(UUID viewerId) {
@@ -583,8 +643,20 @@ final class PlaybackSessionIsolationTest {
         }
     }
 
-    private static final class TrackingBridge implements PlaybackBridge {
+    private static final class TrackingBridge extends StubPlaybackBridge {
         private final AtomicInteger closeCount = new AtomicInteger();
+        private final AtomicInteger resetCount = new AtomicInteger();
+        private volatile String viewedWorld;
+
+        @Override
+        public void viewWorld(String recordedWorld) {
+            viewedWorld = recordedWorld;
+        }
+
+        @Override
+        public java.util.Optional<String> viewedWorld() {
+            return java.util.Optional.ofNullable(viewedWorld);
+        }
 
         @Override
 
@@ -603,6 +675,7 @@ final class PlaybackSessionIsolationTest {
 
         @Override
         public void resetView() {
+            resetCount.incrementAndGet();
         }
 
         @Override

@@ -1,0 +1,132 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 540" width="1000" height="540" role="img" aria-labelledby="t d">
+<title id="t">Two eyes, one scene</title>
+<desc id="d">An entity walks through the overlapping views of eye A and eye B. Eye A gains it first and its spawn is published with a count of one. Eye B gains it too; the count rises to two and B's spawn bundle is dropped. Both eyes receive the same movement packet object, which is published once. Eye A loses the entity; the count drops to one and nothing is published. Eye B loses it; the count reaches zero and the removal is published.</desc>
+<style>
+  svg { --bg:#ffffff; --panel:#f6f8fa; --fg:#1f2328; --muted:#59636e; --grid:#d1d9e0; --on:#ffffff;
+        --blue:#0969da; --blue-fill:#ddf4ff; --violet:#8250df; --violet-fill:#fbefff;
+        --green:#1a7f37; --green-fill:#dafbe1; --amber:#9a6700; }
+  @media (prefers-color-scheme: dark) {
+    svg { --bg:#0d1117; --panel:#151b23; --fg:#f0f6fc; --muted:#9198a1; --grid:#3d444d; --on:#0d1117;
+          --blue:#4493f8; --blue-fill:#0f2445; --violet:#ab7df8; --violet-fill:#231a3a;
+          --green:#3fb950; --green-fill:#12261e; --amber:#d29922; }
+  }
+  text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif; fill: var(--fg); }
+  .bg { fill: var(--bg); }
+  .panel { fill: var(--panel); stroke: var(--grid); }
+  .title { font-size: 20px; font-weight: 600; }
+  .sub { font-size: 13px; fill: var(--muted); }
+  .h { font-size: 14px; font-weight: 600; }
+  .row { font-size: 13px; font-weight: 600; }
+  .m { font-size: 12px; fill: var(--muted); }
+  .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; font-size: 11.5px; fill: var(--muted); }
+  .view-a { fill: var(--blue); fill-opacity: .08; stroke: var(--blue); stroke-width: 2; }
+  .view-b { fill: var(--violet); fill-opacity: .08; stroke: var(--violet); stroke-width: 2; }
+  .path { fill: none; stroke: var(--fg); stroke-width: 2; stroke-dasharray: 1 6; stroke-linecap: round; }
+  .n { fill: var(--fg); }
+  .n-t { fill: var(--on); font-size: 12px; font-weight: 700; }
+  .eye-white { fill: var(--bg); stroke-width: 2; }
+  .chip-a { fill: var(--blue); } .chip-b { fill: var(--violet); }
+  .chip-off { fill: none; stroke: var(--grid); stroke-width: 1.5; }
+  .chip-t { fill: var(--on); font-size: 11px; font-weight: 700; }
+  .chip-t-off { fill: var(--muted); font-size: 11px; font-weight: 700; }
+  .count { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .pub { fill: var(--green-fill); stroke: var(--green); }
+  .pub-t { fill: var(--green); font-size: 12px; font-weight: 600; }
+  .drop { fill: none; stroke: var(--grid); stroke-width: 1.5; }
+  .drop-t { fill: var(--muted); font-size: 12px; font-weight: 600; }
+  .sep { stroke: var(--grid); }
+</style>
+
+<rect class="bg" width="1000" height="540" rx="12"/>
+<text class="title" x="32" y="42">Two eyes, one scene</text>
+<text class="sub" x="32" y="66">Argus counts how many eyes hold each entity and chunk, and compares broadcast packets by object identity. Overlap never duplicates anything.</text>
+
+<!-- Spatial panel -->
+<rect class="panel" x="24" y="88" width="456" height="428" rx="10"/>
+<circle class="view-a" cx="175" cy="300" r="128"/>
+<circle class="view-b" cx="320" cy="300" r="128"/>
+<text class="h" x="95" y="150" style="fill:var(--blue)">view of eye A</text>
+<text class="h" x="330" y="150" style="fill:var(--violet)">view of eye B</text>
+
+<!-- eyes -->
+<g transform="translate(175 392)"><path class="eye-white" style="stroke:var(--blue)" d="M-14 0Q0 -12 14 0Q0 12 -14 0Z"/><circle r="4.5" style="fill:var(--blue)"/></g>
+<text class="m" x="175" y="420" text-anchor="middle">eye A</text>
+<g transform="translate(320 392)"><path class="eye-white" style="stroke:var(--violet)" d="M-14 0Q0 -12 14 0Q0 12 -14 0Z"/><circle r="4.5" style="fill:var(--violet)"/></g>
+<text class="m" x="320" y="420" text-anchor="middle">eye B</text>
+
+<!-- entity path -->
+<path class="path" d="M78 300 C120 300 160 292 192 286 C230 279 262 272 304 266 C350 260 400 258 456 256"/>
+<g transform="translate(66 300)"><rect x="-9" y="-9" width="18" height="18" rx="4" style="fill:var(--amber)"/><rect x="-4" y="-4" width="8" height="8" rx="1" style="fill:var(--bg)"/></g>
+<text class="m" x="66" y="330" text-anchor="middle">entity</text>
+
+<g class="n"><circle cx="100" cy="299" r="11"/><text class="n-t" x="100" y="303" text-anchor="middle">1</text></g>
+<g class="n"><circle cx="194" cy="286" r="11"/><text class="n-t" x="194" y="290" text-anchor="middle">2</text></g>
+<g class="n"><circle cx="248" cy="276" r="11"/><text class="n-t" x="248" y="280" text-anchor="middle">3</text></g>
+<g class="n"><circle cx="304" cy="266" r="11"/><text class="n-t" x="304" y="270" text-anchor="middle">4</text></g>
+<g class="n"><circle cx="450" cy="256" r="11"/><text class="n-t" x="450" y="260" text-anchor="middle">5</text></g>
+
+<text class="m" x="44" y="480">The tracker of each eye sends the entity on its own.</text>
+<text class="m" x="44" y="498">The scene decides what the recording receives.</text>
+
+<!-- Event list -->
+<text class="m" x="568" y="108">event</text>
+<text class="m" x="790" y="108">eyes holding it</text>
+<text class="m" x="960" y="108" text-anchor="end">recording</text>
+
+<!-- row helper: y = 120 + i*76 -->
+<!-- 1 -->
+<g transform="translate(500 120)">
+  <g class="n"><circle cx="22" cy="30" r="11"/><text class="n-t" x="22" y="34" text-anchor="middle">1</text></g>
+  <text class="row" x="46" y="26">Eye A gains the entity</text>
+  <text class="mono" x="46" y="44">add_entity + data, one bundle</text>
+  <circle class="chip-a" cx="300" cy="30" r="11"/><text class="chip-t" x="300" y="34" text-anchor="middle">A</text>
+  <circle class="chip-off" cx="328" cy="30" r="11"/><text class="chip-t-off" x="328" y="34" text-anchor="middle">B</text>
+  <text class="count" x="352" y="36">1</text>
+  <rect class="pub" x="374" y="18" width="86" height="24" rx="12"/><text class="pub-t" x="417" y="34" text-anchor="middle">published</text>
+  <line class="sep" x1="10" y1="66" x2="466" y2="66"/>
+</g>
+<!-- 2 -->
+<g transform="translate(500 196)">
+  <g class="n"><circle cx="22" cy="30" r="11"/><text class="n-t" x="22" y="34" text-anchor="middle">2</text></g>
+  <text class="row" x="46" y="26">Eye B gains it too</text>
+  <text class="mono" x="46" y="44">the whole bundle is dropped</text>
+  <circle class="chip-a" cx="300" cy="30" r="11"/><text class="chip-t" x="300" y="34" text-anchor="middle">A</text>
+  <circle class="chip-b" cx="328" cy="30" r="11"/><text class="chip-t" x="328" y="34" text-anchor="middle">B</text>
+  <text class="count" x="352" y="36">2</text>
+  <rect class="drop" x="374" y="18" width="86" height="24" rx="12"/><text class="drop-t" x="417" y="34" text-anchor="middle">dropped</text>
+  <line class="sep" x1="10" y1="66" x2="466" y2="66"/>
+</g>
+<!-- 3 -->
+<g transform="translate(500 272)">
+  <g class="n"><circle cx="22" cy="30" r="11"/><text class="n-t" x="22" y="34" text-anchor="middle">3</text></g>
+  <text class="row" x="46" y="26">Both receive one movement</text>
+  <text class="mono" x="46" y="44">move_entity_pos, same object twice</text>
+  <circle class="chip-a" cx="300" cy="30" r="11"/><text class="chip-t" x="300" y="34" text-anchor="middle">A</text>
+  <circle class="chip-b" cx="328" cy="30" r="11"/><text class="chip-t" x="328" y="34" text-anchor="middle">B</text>
+  <text class="count" x="352" y="36">2</text>
+  <rect class="pub" x="374" y="18" width="86" height="24" rx="12"/><text class="pub-t" x="417" y="34" text-anchor="middle">once</text>
+  <line class="sep" x1="10" y1="66" x2="466" y2="66"/>
+</g>
+<!-- 4 -->
+<g transform="translate(500 348)">
+  <g class="n"><circle cx="22" cy="30" r="11"/><text class="n-t" x="22" y="34" text-anchor="middle">4</text></g>
+  <text class="row" x="46" y="26">Eye A loses it</text>
+  <text class="mono" x="46" y="44">remove_entities from A</text>
+  <circle class="chip-off" cx="300" cy="30" r="11"/><text class="chip-t-off" x="300" y="34" text-anchor="middle">A</text>
+  <circle class="chip-b" cx="328" cy="30" r="11"/><text class="chip-t" x="328" y="34" text-anchor="middle">B</text>
+  <text class="count" x="352" y="36">1</text>
+  <rect class="drop" x="374" y="18" width="86" height="24" rx="12"/><text class="drop-t" x="417" y="34" text-anchor="middle">dropped</text>
+  <line class="sep" x1="10" y1="66" x2="466" y2="66"/>
+</g>
+<!-- 5 -->
+<g transform="translate(500 424)">
+  <g class="n"><circle cx="22" cy="30" r="11"/><text class="n-t" x="22" y="34" text-anchor="middle">5</text></g>
+  <text class="row" x="46" y="26">Eye B loses it</text>
+  <text class="mono" x="46" y="44">remove_entities from B</text>
+  <circle class="chip-off" cx="300" cy="30" r="11"/><text class="chip-t-off" x="300" y="34" text-anchor="middle">A</text>
+  <circle class="chip-off" cx="328" cy="30" r="11"/><text class="chip-t-off" x="328" y="34" text-anchor="middle">B</text>
+  <text class="count" x="352" y="36">0</text>
+  <rect class="pub" x="374" y="18" width="86" height="24" rx="12"/><text class="pub-t" x="417" y="34" text-anchor="middle">published</text>
+</g>
+<text class="m" x="510" y="516">The recording receives spawn, movement and removal exactly once.</text>
+</svg>

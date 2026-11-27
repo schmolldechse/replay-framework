@@ -164,3 +164,6 @@ replay_pid*
 # Local Superpowers task specifications and implementation plans
 /docs/superpowers/specs/
 /docs/superpowers/plans/
+
+# Minecraft logs written by tests that bootstrap the server
+/replay-adapter/*/logs/

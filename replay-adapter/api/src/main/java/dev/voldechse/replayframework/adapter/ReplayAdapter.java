@@ -41,11 +41,11 @@ public interface ReplayAdapter {
     CheckpointEncoder checkpointEncoder();
 
     /**
-     * Returns adapter-verified semantic checkpoint signals. Legacy adapters
-     * without such a source use the safe no-op default.
+     * Returns the adapter's virtual-observer source. Adapters that only
+     * capture player connections keep the default.
      */
-    default CheckpointSignalSource checkpointSignals() {
-        return CheckpointSignalSource.noop();
+    default SceneObservation sceneObservation() {
+        return SceneObservation.none();
     }
 
     /**
@@ -78,7 +78,6 @@ public interface ReplayAdapter {
         PacketRegistry registry = Objects.requireNonNull(packetRegistry(), "packetRegistry");
         Objects.requireNonNull(captureBridge(), "captureBridge");
         Objects.requireNonNull(checkpointEncoder(), "checkpointEncoder");
-        Objects.requireNonNull(checkpointSignals(), "checkpointSignals");
         String registryFingerprint = Objects.requireNonNull(
                 registry.fingerprint(), "registry.fingerprint");
         if (!adapterDescriptor.registryFingerprint().equals(registryFingerprint)) {
